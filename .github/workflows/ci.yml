@@ -81,3 +81,12 @@ jobs:
             echo "source-only skill archive contains CLI sources, Cargo files, or build artifacts" >&2
             exit 1
           fi
+
+      - name: Test source installer
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n install.sh
+          sh -n tests/install.sh
+          make test-install

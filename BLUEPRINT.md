@@ -45,7 +45,7 @@ Markdown is an authoring input. `sok-report.json` is the structured source of tr
 
 - Development checkout: run the CLI with Cargo or `make build`.
 - Local Codex installation: run `make install`.
-- Tagged release: pair the skill archive with the matching platform CLI archive.
+- User testing: `install.sh` downloads a selected Git ref, builds the Rust CLI locally, and installs it with the portable skill sources.
 - Plugin distribution: package the skill and tested CLI assets behind a Codex plugin manifest and marketplace entry.
 
 ## Development Priorities

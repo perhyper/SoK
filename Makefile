@@ -1,4 +1,4 @@
-.PHONY: fmt test vet build package clean install
+.PHONY: fmt test test-install vet build package clean install
 
 CLI_MANIFEST := cli/Cargo.toml
 CLI_BINARY := cli/target/release/sok
@@ -9,6 +9,9 @@ fmt:
 
 test:
 	cargo test --manifest-path $(CLI_MANIFEST) --locked
+
+test-install: build
+	sh tests/install.sh
 
 vet:
 	cargo clippy --manifest-path $(CLI_MANIFEST) --locked --all-targets -- -D warnings

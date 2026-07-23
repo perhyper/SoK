@@ -25,79 +25,27 @@ SoK currently maps one target field per run. The CLI's initial domain profile is
 
 ## Installation
 
-A complete SoK installation is one Codex skill directory containing `SKILL.md`, its support files, and the platform CLI at `bin/sok` (`bin/sok.exe` on Windows). Install from source when developing SoK, or pair the skill archive with a prebuilt CLI from a tagged release.
-
-### Build and Install from Source
-
-This path requires stable Rust, Cargo, and `make`:
+The macOS/Linux installer requires Rust with Cargo, `curl`, and `tar`. It downloads `main`, builds the CLI locally, and installs the skill to `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge`.
 
 ```bash
-git clone https://github.com/perhyper/SoK.git
-cd SoK
-cargo --version
-make install
+curl -fsSL https://raw.githubusercontent.com/perhyper/SoK/main/install.sh | sh
 ```
 
-By default, `make install` builds the release CLI and replaces only `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge`. Set `CODEX_HOME` before running the command to use another Codex home directory.
-
-On macOS, install Rust with Homebrew if `cargo` is unavailable:
+To test a branch, tag, or commit:
 
 ```bash
-brew install rust
+REF=your-branch
+curl -fsSL https://raw.githubusercontent.com/perhyper/SoK/main/install.sh |
+  sh -s -- --ref "$REF"
 ```
 
-### Install a Prebuilt Release
-
-This path does not require Rust. Download two assets from the same GitHub Release:
-
-- `structure-of-knowledge-vX.Y.Z.tar.gz` or `.zip`, which contains the skill sources.
-- `sok-vX.Y.Z-<platform>.tar.gz` or `.zip`, which contains the matching CLI.
-
-Use the platform label that matches the target machine:
-
-| System | Platform label |
-| --- | --- |
-| Apple Silicon macOS | `darwin-arm64` |
-| Intel macOS | `darwin-amd64` |
-| ARM64 Linux | `linux-arm64` |
-| x86-64 Linux | `linux-amd64` |
-| ARM64 Windows | `windows-arm64` |
-| x86-64 Windows | `windows-amd64` |
-
-After extracting both archives, copy `structure-of-knowledge/` into `${CODEX_HOME:-$HOME/.codex}/skills/`, then place the extracted `sok` executable in `structure-of-knowledge/bin/sok`. Remove or rename an existing installation first so stale files are not retained.
-
-For example, on macOS or Linux:
-
-```bash
-VERSION=vX.Y.Z
-PLATFORM=darwin-arm64
-SKILLS_DIR="${CODEX_HOME:-$HOME/.codex}/skills"
-
-mkdir -p "$SKILLS_DIR"
-cp -R structure-of-knowledge "$SKILLS_DIR/"
-mkdir -p "$SKILLS_DIR/structure-of-knowledge/bin"
-install -m 0755 "sok-${VERSION}-${PLATFORM}/sok" \
-  "$SKILLS_DIR/structure-of-knowledge/bin/sok"
-```
-
-On Windows, put `sok.exe` at `%CODEX_HOME%\skills\structure-of-knowledge\bin\sok.exe`; when `CODEX_HOME` is unset, use `%USERPROFILE%\.codex`.
-
-The release workflow builds Windows archives, but the end-to-end Windows installation flow has not yet been manually validated.
-
-### Verify the Installation
-
-On macOS or Linux:
+Rerun the installer to update. From a repository checkout, use `make install`. Set `CODEX_HOME` to change the destination. Windows automated installation is not yet supported.
 
 ```bash
 SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge"
-test -f "$SKILL_DIR/SKILL.md"
 "$SKILL_DIR/bin/sok" --version
 "$SKILL_DIR/bin/sok" --help
 ```
-
-The version output should end with `(rust)`, and the help output should begin with `SoK agent CLI`. The installed skill becomes available to Codex on a subsequent turn; start a new session if the client has not refreshed its skill list.
-
-To update a source installation, update the repository checkout and run `make install` again.
 
 ## Local Development
 
@@ -106,7 +54,7 @@ The repository keeps the two deliverables separate:
 - `structure-of-knowledge/` contains only the portable Codex skill, agent metadata, and reference documents.
 - `cli/` is the Rust crate.
 - `cli/target/` is generated build output and is not tracked.
-- `bin/sok` exists only inside an installed skill or a platform-specific release package.
+- `bin/sok` exists only inside an installed skill.
 
 Run the CLI from source:
 
@@ -136,6 +84,7 @@ Available Make targets:
 ```bash
 make fmt
 make test
+make test-install
 make vet
 make build
 make package
@@ -393,10 +342,6 @@ The Codex skill defines agent behavior. The repository also includes implementat
 - `cli/src`: Rust CLI for agent workspaces, source manifests, access audits, safe downloads, scaffolds, and handoff briefs.
 
 This keeps SoK extensible beyond a single prompt: CLI workflows, web reports, evaluation benchmarks, source-ingestion tools, and visualization apps can share the same contracts.
-
-## Release
-
-GitHub Actions runs Rust checks on pushes and pull requests. Pushing a `v*` tag publishes platform-specific CLI archives and source-only skill archives.
 
 ## License
 
