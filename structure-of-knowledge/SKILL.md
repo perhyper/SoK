@@ -44,6 +44,7 @@ For a narrow answer, use this file and load only the reference that matches the 
 3. Extract the structure of knowledge.
    - Name the field's generative questions, core objects, representations, transformations, methods, standards of evidence, canonical examples, and failure modes.
    - Separate substantive structure (concepts, models, claims, objects) from syntactic structure (how the field warrants, disputes, and revises claims).
+   - Treat foundations as structurally central, not necessarily easy. A foundation may be a method, notation, tool, dataset, institution, standard, or debate practice.
    - For formal domains, capture proof techniques, canonical constructions, counterexample practices, classification problems, and problem-list traditions.
    - For empirical or infrastructure-bound domains, capture instruments, measurement regimes, data products, collaborations, uncertainty/statistical practices, and review infrastructures.
    - Distinguish prerequisites from recurring fundamental ideas. A prerequisite is needed before a topic; a fundamental idea returns throughout the spiral at higher sophistication.

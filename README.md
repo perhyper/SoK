@@ -315,18 +315,6 @@ A substantial SoK package usually includes:
 - JSON report: `sok-report.json`, the structured source of truth for validation, rendering, and downstream tooling.
 - HTML report: a self-contained public view rendered only from validated `human_report` JSON.
 
-## Design Notes
-
-- The scaffold should preserve field structure, evidence boundaries, and source roles. Downstream tools can then simplify, specialize, translate, or reformat it for a target audience.
-- Foundations are not always easy. In some fields, a foundation may be a method, notation, tool, dataset, institution, standard, or debate style.
-- Current claims require dates and sources. Durable foundations and frontier claims should not be mixed without marking the difference.
-- Source recommendations must be actionable. Books should include publisher or ISBN where available and a library or purchase route. Papers should include DOI, arXiv ID, or stable URL. Paid or paywalled sources need visible price estimates or `budget unknown; library preferred`.
-- Source-role coverage is not a fixed quota. Require orientation, foundation, method/warrant, and sequence evidence for most substantial tasks, then add or waive frontier, dataset, standard, infrastructure, primary-corpus, or canonical-case roles with rationale.
-- Source-role requirements are intended to be decided from the field, goal, and reviewed evidence. They are categorical requirements, not numeric weights. The current release does not implement a dynamic weighting engine.
-- Different fields require different structures. Some need prerequisite graphs, some need debate networks, and some need instrument-data-governance pipelines.
-- A good SoK-derived artifact connects concepts, evidence, sources, and next actions into an explicit structure.
-- Graph views are selected from structured `relations` and `visual_views`; Mermaid diagrams are optional inspection aids, not a required runtime or source of authority.
-
 ## Non-Skill Specifications
 
 The Codex skill defines agent behavior. The repository also includes implementation-neutral specifications:
