@@ -76,6 +76,8 @@ install -m 0755 "sok-${VERSION}-${PLATFORM}/sok" \
 
 On Windows, put `sok.exe` at `%CODEX_HOME%\skills\structure-of-knowledge\bin\sok.exe`; when `CODEX_HOME` is unset, use `%USERPROFILE%\.codex`.
 
+The release workflow builds Windows archives, but the end-to-end Windows installation flow has not yet been manually validated.
+
 ### Verify the Installation
 
 On macOS or Linux:
