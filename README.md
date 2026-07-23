@@ -2,11 +2,11 @@
 
 *warning: this project is yet to be completed, so the codes and documents currently may be quite rough. 
 
-Structure of Knowledge, or SoK, is a Codex skill and orchestration harness for building a reusable knowledge scaffold from an unfamiliar field. It guides an agent in mapping the field's organizing questions, concepts, representations, methods, evidence standards, source layers, dependencies, and frontier. The CLI provides deterministic scaffolding, validation, and rendering.
+Structure of Knowledge, or SoK, is a Codex skill and orchestration harness for turning an unfamiliar field into a reusable knowledge scaffold: field structure, source layers, evidence standards, visual maps, and next-step task plans.
 
-SoK grew from a practical need: researchers, agents, and independent learners need a disciplined way to enter unfamiliar fields. It also reflects a public-access motivation: rigorous structures of knowledge should be usable without depending on a formal educational institution. The output is a structured intermediate artifact, not only a curriculum or report. People and downstream tools can adapt it for learning, research, writing, curriculum design, and visualization.
+SoK was originally developed for research-oriented field mapping. Its more general role is to produce a structured intermediate artifact that other agents, research systems, writing tools, curriculum tools, or visualization layers can adapt for many audiences and formats.
 
-The method is inspired by Jerome Bruner and the structure-of-knowledge curriculum tradition. SoK decomposes a domain into the ideas and inquiry practices that organize it, then recomposes them into a navigable scaffold. It borrows this process as a design method. It does not claim to implement educational theory or evaluate learning outcomes.
+The core scaffold idea is inspired by pedagogical ideas of Jerome Bruner and the structure-of-knowledge curriculum tradition: decompose a domain into the concepts, representations, methods, and warrants that make it intelligible, then recompose that structure into a scaffold for learning, research, and downstream generation.
 
 ## Purpose
 
