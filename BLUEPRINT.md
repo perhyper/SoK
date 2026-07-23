@@ -14,7 +14,7 @@ SoK's scaffold idea is inspired by Jerome Bruner and the structure-of-knowledge 
 
 - `structure-of-knowledge/SKILL.md`: agent workflow, trigger conditions, and quality gates.
 - `structure-of-knowledge/references/`: research, output, and collaboration protocols loaded as needed.
-- `structure-of-knowledge/src/`: Rust CLI for scaffolds, handoffs, source manifests, evidence ingestion, validation, and rendering.
+- `cli/src/`: Rust CLI for scaffolds, handoffs, source manifests, evidence ingestion, validation, and rendering.
 - `specs/sok-harness.yaml`: implementation-neutral stage and command contract.
 - `specs/sok-report.schema.json`: JSON-first report contract.
 - `reports/examples/`: bounded scaffold, evidence, JSON, and HTML-pipeline fixtures.

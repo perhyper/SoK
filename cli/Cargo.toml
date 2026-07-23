@@ -2,7 +2,7 @@
 name = "sok"
 version = "0.2.0"
 edition = "2021"
-description = "Structure of Knowledge agent CLI"
+description = "Rust CLI for the Structure of Knowledge agent skill"
 license = "MIT"
 
 [[bin]]

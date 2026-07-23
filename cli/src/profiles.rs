@@ -1,3 +1,5 @@
+//! Domain-profile starters used by the Rust CLI.
+
 pub(crate) struct ScaffoldProfile {
     pub(crate) classification: &'static str,
     pub(crate) profile_hypothesis: &'static str,

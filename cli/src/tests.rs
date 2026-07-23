@@ -7,6 +7,74 @@ use std::sync::Arc;
 use std::thread;
 
 #[test]
+fn version_identifies_the_rust_cli() {
+    let version = version_string();
+    assert!(version.starts_with("sok "));
+    assert!(version.ends_with(" (rust)"));
+}
+
+#[test]
+fn agent_docs_resolve_and_verify_the_rust_cli() {
+    let skill = fs::read_to_string(repo_path("structure-of-knowledge/SKILL.md")).unwrap();
+    let collaboration = fs::read_to_string(repo_path(
+        "structure-of-knowledge/references/agent-collaboration.md",
+    ))
+    .unwrap();
+
+    for document in [&skill, &collaboration] {
+        assert_contains(
+            document,
+            "${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok",
+        );
+        assert_contains(document, "--version");
+        assert_contains(document, "(rust)");
+        assert_contains(document, "cli/target/release/sok");
+        assert_contains(document, "<command> --help");
+        assert_contains(document, "header-only");
+        assert_not_contains(document, "cd structure-of-knowledge");
+    }
+}
+
+#[test]
+fn every_documented_command_supports_immediate_help() {
+    for command in [
+        "init",
+        "brief",
+        "scaffold",
+        "handoff-report",
+        "source-template",
+        "audit-sources",
+        "download-sources",
+        "ingest",
+        "export-json",
+        "lint",
+        "validate-report",
+        "render-html",
+        "specificity",
+    ] {
+        assert_eq!(
+            run_cli(vec![command.to_string(), "--help".to_string()]).unwrap(),
+            0,
+            "{command} --help should succeed"
+        );
+        assert_eq!(
+            run_cli(vec!["help".to_string(), command.to_string()]).unwrap(),
+            0,
+            "help {command} should succeed"
+        );
+    }
+    assert_eq!(
+        run_cli(vec![
+            "ingest".to_string(),
+            "last".to_string(),
+            "--help".to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+}
+
+#[test]
 fn require_field_rejects_blank_values() {
     for field in ["", "   ", "\n\t"] {
         assert!(require_field(field).is_err());
@@ -179,15 +247,17 @@ fn brief_tasks_and_specificity_match_existing_contract() {
 }
 
 #[test]
-fn source_csv_and_json_manifests_load() {
+fn source_template_is_header_only_and_csv_json_manifests_load() {
     let dir = tempfile::tempdir().unwrap();
     let csv_path = dir.path().join("sources.csv");
     write_sources_csv(&csv_path).unwrap();
     let sources = load_sources(&csv_path).unwrap();
-    assert_eq!(sources.len(), 1);
-    assert_eq!(sources[0].title, "Example open paper or official notes");
-    assert_eq!(sources[0].access_status, "open_access");
-    assert_eq!(sources[0].access_route, "Official open URL");
+    assert!(sources.is_empty());
+    let template = fs::read_to_string(&csv_path).unwrap();
+    assert_eq!(template.lines().count(), 1);
+    assert_contains(&template, "title,type,identifier,url,date,access_status");
+    assert_not_contains(&template, "example.org");
+    assert_not_contains(&template, "Replace this row");
 
     let tsv_path = dir.path().join("sources.tsv");
     fs::write(
@@ -447,7 +517,12 @@ fn ingest_last_accepts_manifest_alias_and_requires_input_and_output_flags() {
     let dir = tempfile::tempdir().unwrap();
     let manifest = dir.path().join("sources.csv");
     let output = dir.path().join("evidence.jsonl");
-    write_sources_csv(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+Open Paper,review_article,doi:10.0000/open,https://example.test/open,2024-01-02,open_access,Official URL,$0,CC BY,foundation,Explains the method.,Read before module 1,Reviewed metadata only\n",
+    )
+    .unwrap();
 
     run_cli(vec![
         "ingest".to_string(),
@@ -522,7 +597,12 @@ fn export_json_from_generated_scaffold_keeps_internal_context_private() {
         "| Profile hypothesis | SENTINEL_INTERNAL_ASSUMPTION: ",
     );
     fs::write(&scaffold_path, scaffold).unwrap();
-    write_sources_csv(&sources_path).unwrap();
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+Open Topology Notes,notes,https://example.test/topology,https://example.test/topology,2024-01-02,open_access,Official URL,$0,CC BY,foundation,Introduces the field vocabulary.,Read before module 1,Metadata fixture\n",
+    )
+    .unwrap();
     ingest_last_manifest(
         &sources_path.display().to_string(),
         &evidence_path.display().to_string(),

@@ -7,8 +7,7 @@
 
 # Build and release artifacts
 dist/
-structure-of-knowledge/bin/
-structure-of-knowledge/target/
+cli/target/
 
 # Coverage/test outputs
 coverage.out

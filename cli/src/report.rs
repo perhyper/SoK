@@ -1,3 +1,5 @@
+//! Structured report conversion, validation, and rendering.
+
 use crate::{load_sources, source_access, Source};
 use anyhow::{bail, Context, Result};
 use chrono::{Duration, NaiveDate, SecondsFormat, Utc};

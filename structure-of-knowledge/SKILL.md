@@ -68,10 +68,31 @@ For a narrow answer, use this file and load only the reference that matches the 
 
 ## Helper Script
 
-Use the Rust CLI for agent-facing workspaces, source manifests, access audits, scaffolds, and safe downloads:
+Use the Rust CLI when the task creates an agent workspace, scaffold, source manifest, evidence ledger, validated JSON report, or rendered HTML. Do not invoke it for a narrow conceptual answer that does not need an artifact.
+
+Before the first CLI call, resolve and verify the executable. If the current workspace contains `cli/Cargo.toml`, prefer the repository build so the CLI matches the checked-out sources. Otherwise use the installed skill.
+
+From an installed skill:
 
 ```bash
-"${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok" init \
+SOK_CLI="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok"
+"$SOK_CLI" --version
+```
+
+The output must end with `(rust)`. Do not fall back to a Go binary or look for Cargo sources inside the installed skill. From a repository checkout:
+
+```bash
+make build
+SOK_CLI="$PWD/cli/target/release/sok"
+"$SOK_CLI" --version
+```
+
+On Windows, use `%CODEX_HOME%\skills\structure-of-knowledge\bin\sok.exe` (or `%USERPROFILE%\.codex\skills\structure-of-knowledge\bin\sok.exe` when `CODEX_HOME` is unset) and require the same `(rust)` version marker.
+
+Use the resolved path consistently:
+
+```bash
+"$SOK_CLI" init \
   --field "computational neuroscience" \
   --learner "software engineer new to neuroscience" \
   --goal "build a source-backed path into the field" \
@@ -80,14 +101,16 @@ Use the Rust CLI for agent-facing workspaces, source manifests, access audits, s
   --out /tmp/sok-computational-neuroscience
 ```
 
-From a repository checkout, run `make build` once and use `structure-of-knowledge/bin/sok`.
+Before using an unfamiliar command, run `"$SOK_CLI" <command> --help` (or `"$SOK_CLI" ingest last --help`) and follow the displayed flags. Do not infer required flags from command names.
+
+If the verified Rust CLI is unavailable, report that limitation instead of silently using a stale executable. The installed skill keeps only the compiled executable at `bin/sok`; Rust sources live separately under `cli/`.
 
 Useful subcommands:
 
 - `brief`: create an agent handoff brief.
 - `scaffold`: create a domain-aware SoK Markdown starter inferred from field type.
 - `handoff-report`: wrap a scaffold in next-agent instructions for completing a polished human-reader report.
-- `source-template`: create a source manifest.
+- `source-template`: create a header-only source manifest; add real source rows before `ingest last`.
 - `audit-sources`: verify access metadata and curricular roles.
 - `download-sources`: download only sources with default-allowed access statuses by default.
 - `ingest last`: normalize the current run's source manifest into cataloged evidence JSONL without treating it as reviewed claim support.
@@ -101,5 +124,5 @@ The CLI is not a substitute for research. It provides a stable execution frame s
 
 Recommended bounded lanes:
 
-- Scaffold lane: create or receive scaffold Markdown, maintain `sources.csv`, optionally run `sok ingest last`, run `sok lint --stage scaffold`, then `sok export-json --stage scaffold`. This JSON may contain `internal_context`; do not present it as a finished report and do not render it to HTML.
-- Final-report lane: complete a canonical human report Markdown file, review evidence into JSONL entries, run `sok lint --stage final`, `sok export-json --stage final`, `sok validate-report --strict`, then `sok render-html`. Only this lane produces human-facing HTML.
+- Scaffold lane: create or receive scaffold Markdown, maintain `sources.csv`, optionally run `"$SOK_CLI" ingest last`, run `"$SOK_CLI" lint --stage scaffold`, then `"$SOK_CLI" export-json --stage scaffold`. This JSON may contain `internal_context`; do not present it as a finished report and do not render it to HTML.
+- Final-report lane: complete a canonical human report Markdown file, review evidence into JSONL entries, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, then `"$SOK_CLI" render-html`. Only this lane produces human-facing HTML.

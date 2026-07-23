@@ -1,3 +1,5 @@
+//! Core implementation for the Rust SoK CLI.
+
 mod profiles;
 pub mod report;
 
@@ -15,11 +17,16 @@ use std::time::Duration;
 
 const SCHEMA_VERSION: &str = "sok-agent-pack-v0.3";
 
-const SOURCE_FIELDS: [&str; 12] = [
+pub fn version_string() -> String {
+    format!("sok {} (rust)", env!("CARGO_PKG_VERSION"))
+}
+
+const SOURCE_FIELDS: [&str; 13] = [
     "title",
     "type",
     "identifier",
     "url",
+    "date",
     "access_status",
     "access_route",
     "budget_estimate",
@@ -136,9 +143,29 @@ pub fn run_cli(args: Vec<String>) -> Result<i32> {
         return Ok(2);
     }
 
+    if args
+        .get(1)
+        .is_some_and(|arg| matches!(arg.as_str(), "-h" | "--help" | "help"))
+    {
+        print_command_usage(&args[0])?;
+        return Ok(0);
+    }
+
     match args[0].as_str() {
-        "-h" | "--help" | "help" => {
+        "-h" | "--help" => {
             print_usage();
+            Ok(0)
+        }
+        "help" => {
+            if let Some(command) = args.get(1) {
+                print_command_usage(command)?;
+            } else {
+                print_usage();
+            }
+            Ok(0)
+        }
+        "-V" | "--version" | "version" => {
+            println!("{}", version_string());
             Ok(0)
         }
         "init" => run_init(&args[1..]).map(|_| 0),
@@ -165,12 +192,16 @@ pub fn print_usage() {
 Usage:
   sok <command> [options]
 
+Global options:
+  -h, --help        Show this help.
+  -V, --version     Show the CLI version and implementation.
+
 Commands:
   init              Create an agent workspace.
   brief             Generate an agent handoff brief.
   scaffold          Generate an agent-facing SoK report scaffold.
   handoff-report    Generate a next-agent brief for completing a human-reader report from a scaffold.
-  source-template   Create a source manifest CSV template.
+  source-template   Create a header-only source manifest CSV template.
   audit-sources     Audit source access metadata.
   download-sources  Download legally accessible open/free sources from a manifest.
   ingest last       Normalize a current source manifest into cataloged evidence JSONL; overwrites --output.
@@ -181,6 +212,99 @@ Commands:
   specificity       Generate a concreteness checklist for an underspecified domain task.
 
 Run "sok <command> -h" for command options."#
+    );
+}
+
+fn print_command_usage(command: &str) -> Result<()> {
+    match command {
+        "init" => print_init_usage(),
+        "brief" => print_brief_usage(),
+        "scaffold" => print_scaffold_usage(),
+        "handoff-report" => print_handoff_report_usage(),
+        "source-template" => print_source_template_usage(),
+        "audit-sources" => print_audit_sources_usage(),
+        "download-sources" => print_download_sources_usage(),
+        "ingest" => print_ingest_usage(),
+        "export-json" => print_export_json_usage(),
+        "lint" => print_lint_usage(),
+        "validate-report" => print_validate_report_usage(),
+        "render-html" => print_render_html_usage(),
+        "specificity" => print_specificity_usage(),
+        command => bail!("unknown command {command:?}"),
+    }
+    Ok(())
+}
+
+fn print_init_usage() {
+    println!(
+        r#"Usage:
+  sok init --field <field> --out <directory> [--learner <description>] [--goal <goal>] [--mode research|textbook|model-tuning|curriculum] [--weeks <number>] [--output-format <format>]
+
+Creates an agent workspace with a brief, task list, report scaffold, header-only source manifest, and working directories."#
+    );
+}
+
+fn print_brief_usage() {
+    println!(
+        r#"Usage:
+  sok brief --field <field> [--learner <description>] [--goal <goal>] [--mode research|textbook|model-tuning|curriculum] [--weeks <number>] [--output-format <format>] [--output <brief.md>]
+
+Writes the brief to --output or prints it to standard output."#
+    );
+}
+
+fn print_scaffold_usage() {
+    println!(
+        r#"Usage:
+  sok scaffold --field <field> [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <scaffold.md>]
+
+Writes a provisional, domain-aware report scaffold to --output or prints it to standard output."#
+    );
+}
+
+fn print_handoff_report_usage() {
+    println!(
+        r#"Usage:
+  sok handoff-report --scaffold <scaffold.md> [--field <field>] [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <handoff.md>]
+  sok handoff-report --field <field> [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <handoff.md>]
+
+Uses the supplied scaffold when present; otherwise creates one from --field. Writes to --output or standard output."#
+    );
+}
+
+fn print_source_template_usage() {
+    println!(
+        r#"Usage:
+  sok source-template --output <sources.csv>
+
+Creates a header-only source manifest. Add real source rows before ingesting it; the template never inserts placeholder evidence."#
+    );
+}
+
+fn print_audit_sources_usage() {
+    println!(
+        r#"Usage:
+  sok audit-sources --manifest <sources.csv|sources.tsv|sources.json> [--strict]
+
+Checks source identity, access, and curricular-role metadata. --strict returns an error when problems are found."#
+    );
+}
+
+fn print_download_sources_usage() {
+    println!(
+        r#"Usage:
+  sok download-sources --manifest <sources.csv|sources.tsv|sources.json> --out-dir <directory> [--allow-status <comma-separated-statuses>] [--include-unknown] [--dry-run] [--max-mb <number>] [--timeout <seconds>]
+
+Downloads only sources allowed by access status. Inspect a --dry-run before permitting network downloads."#
+    );
+}
+
+fn print_specificity_usage() {
+    println!(
+        r#"Usage:
+  sok specificity --field <field> [--output <checklist.md>]
+
+Writes a domain-task specificity checklist to --output or prints it to standard output."#
     );
 }
 
@@ -1394,20 +1518,6 @@ pub fn write_sources_csv<P: AsRef<Path>>(path: P) -> Result<()> {
     let file = File::create(path).with_context(|| format!("create {}", path.display()))?;
     let mut writer = csv::Writer::from_writer(file);
     writer.write_record(SOURCE_FIELDS)?;
-    writer.write_record([
-        "Example open paper or official notes",
-        "paper",
-        "DOI/arXiv/ISBN/URL",
-        "https://example.org/source.pdf",
-        "open_access",
-        "Official open URL",
-        "$0",
-        "unknown",
-        "orientation",
-        "Explain the curricular role, not just the topic.",
-        "Read before Module 1 as an organizer.",
-        "Replace this row with real sources.",
-    ])?;
     writer.flush()?;
     Ok(())
 }
@@ -1618,7 +1728,10 @@ fn download_one(
 ) -> Result<()> {
     let mut response = client
         .get(raw_url)
-        .header(USER_AGENT, "SoK-Agent-CLI/0.3")
+        .header(
+            USER_AGENT,
+            format!("SoK-Agent-CLI/{}", env!("CARGO_PKG_VERSION")),
+        )
         .send()?;
     if !response.status().is_success() {
         bail!("HTTP {}", response.status().as_u16());

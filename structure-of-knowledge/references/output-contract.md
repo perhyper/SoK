@@ -14,7 +14,7 @@ A full SoK answer should contain:
 8. Visual package: graph views selected from structured concepts, claims, sources, curriculum steps, frontier/debate items, and relations when useful.
 9. Quality notes: assumptions, source limits, waived source-role rationale, and what should be verified next.
 
-For delegated agent work, also produce an agent packet when useful: `agent-brief.md`, `tasks.md`, `sources.csv`, `report.md`, `downloads/`, `notes/`, and `logs/`. Use `cargo run --bin sok -- init` from the skill folder to generate these files.
+For delegated agent work, also produce an agent packet when useful: `agent-brief.md`, `tasks.md`, `sources.csv`, `report.md`, `downloads/`, `notes/`, and `logs/`. Use `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok init` from an installed skill, or run `cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- init` from a repository checkout.
 
 Keep agent scaffolds and human-reader reports separate. Scaffolds may expose learner profile, original goal, assumptions, placeholders, and quality-gate notes. Human-reader reports should hide that machinery, surface only interpretation-relevant scope notes, and replace scaffold placeholders with researched sources or remove them. Use `sok scaffold` for the first artifact and `sok handoff-report` when passing the scaffold to a next agent for report completion.
 

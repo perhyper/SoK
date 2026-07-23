@@ -65,13 +65,27 @@ jobs:
           package_dir="dist/${name}"
           mkdir -p "$package_dir"
 
-          cd structure-of-knowledge
+          crate_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' cli/Cargo.toml | head -n 1)"
+          spec_version="$(sed -n 's/^version: //p' specs/sok-harness.yaml | head -n 1)"
+          test -n "$crate_version"
+          test "$crate_version" = "$spec_version"
+          if [ "$GITHUB_REF_NAME" != "v$crate_version" ]; then
+            echo "release tag $GITHUB_REF_NAME does not match CLI version v$crate_version" >&2
+            exit 1
+          fi
+
+          cd cli
           cargo build --release --locked --target "${{ matrix.target }}" --bin sok
           cd ..
 
-          cp "structure-of-knowledge/target/${{ matrix.target }}/release/${{ matrix.binary }}" "$package_dir/"
+          cp "cli/target/${{ matrix.target }}/release/${{ matrix.binary }}" "$package_dir/"
           cp README.md "$package_dir/"
           cp LICENSE "$package_dir/"
+          test -f "$package_dir/${{ matrix.binary }}"
+
+          if [ "${{ matrix.target }}" != "aarch64-pc-windows-msvc" ]; then
+            "$package_dir/${{ matrix.binary }}" --version | grep -E '\(rust\)$'
+          fi
 
           if [ "${{ matrix.archive }}" = "zip" ]; then
             (cd dist && 7z a "${name}.zip" "$name")
@@ -111,14 +125,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          tar --exclude='structure-of-knowledge/bin' \
-            --exclude='structure-of-knowledge/bin/*' \
-            --exclude='structure-of-knowledge/target' \
-            --exclude='structure-of-knowledge/target/*' \
-            -czf "dist/structure-of-knowledge-${GITHUB_REF_NAME}.tar.gz" \
+          tar -czf "dist/structure-of-knowledge-${GITHUB_REF_NAME}.tar.gz" \
             LICENSE README.md structure-of-knowledge
-          zip -r "dist/structure-of-knowledge-${GITHUB_REF_NAME}.zip" LICENSE README.md structure-of-knowledge \
-            -x 'structure-of-knowledge/bin/*' 'structure-of-knowledge/target/*'
+          zip -r "dist/structure-of-knowledge-${GITHUB_REF_NAME}.zip" LICENSE README.md structure-of-knowledge
+
+          listing="$(tar -tzf "dist/structure-of-knowledge-${GITHUB_REF_NAME}.tar.gz")"
+          if grep -E '(^|/)cli/|(^|/)target/|structure-of-knowledge/(bin/|Cargo\.(toml|lock)$|src/)' <<<"$listing"; then
+            echo "source-only skill archive contains CLI sources, Cargo files, or build artifacts" >&2
+            exit 1
+          fi
 
       - name: Upload GitHub release artifacts
         shell: bash

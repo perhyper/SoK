@@ -2,11 +2,11 @@
 
 *warning: this project is yet to be completed, so the codes and documents currently may be quite rough. 
 
-Structure of Knowledge, or SoK, is a Codex skill and orchestration harness for turning an unfamiliar field into a reusable knowledge scaffold: field structure, source layers, evidence standards, visual maps, and next-step task plans.
+Structure of Knowledge, or SoK, is a Codex skill and orchestration harness for building a reusable knowledge scaffold from an unfamiliar field. It guides an agent in mapping the field's organizing questions, concepts, representations, methods, evidence standards, source layers, dependencies, and frontier. The CLI provides deterministic scaffolding, validation, and rendering.
 
-SoK was originally developed for research-oriented field mapping. Its more general role is to produce a structured intermediate artifact that other agents, research systems, writing tools, curriculum tools, or visualization layers can adapt for many audiences and formats.
+SoK grew from a practical need: researchers, agents, and independent learners need a disciplined way to enter unfamiliar fields. It also reflects a public-access motivation: rigorous structures of knowledge should be usable without depending on a formal educational institution. The output is a structured intermediate artifact, not only a curriculum or report. People and downstream tools can adapt it for learning, research, writing, curriculum design, and visualization.
 
-The core scaffold idea is inspired by pedagogical ideas of Jerome Bruner and the structure-of-knowledge curriculum tradition: decompose a domain into the concepts, representations, methods, and warrants that make it intelligible, then recompose that structure into a scaffold for learning, research, and downstream generation.
+The method is inspired by Jerome Bruner and the structure-of-knowledge curriculum tradition. SoK decomposes a domain into the ideas and inquiry practices that organize it, then recomposes them into a navigable scaffold. It borrows this process as a design method. It does not claim to implement educational theory or evaluate learning outcomes.
 
 ## Purpose
 
@@ -18,6 +18,10 @@ SoK helps an agent capture questions such as:
 - Which sources function as orientation, foundation, method, synthesis, frontier, or critique?
 - What sequence of readings, artifacts, exercises, reproductions, critiques, or briefs supports the target use case?
 - What are the current open problems, debates, infrastructure bottlenecks, standards, and research opportunities?
+
+## Current Scope
+
+SoK currently maps one target field per run. The CLI's initial domain profile is a heuristic starter that the executing agent must revise after source review. A completed scaffold can inform later interdisciplinary work, but it does not compare two fields or model and validate a source-to-target domain bridge.
 
 ## Installation
 
@@ -87,37 +91,44 @@ On macOS or Linux:
 ```bash
 SKILL_DIR="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge"
 test -f "$SKILL_DIR/SKILL.md"
+"$SKILL_DIR/bin/sok" --version
 "$SKILL_DIR/bin/sok" --help
 ```
 
-The help output should begin with `SoK agent CLI`. The installed skill becomes available to Codex on a subsequent turn; start a new session if the client has not refreshed its skill list.
+The version output should end with `(rust)`, and the help output should begin with `SoK agent CLI`. The installed skill becomes available to Codex on a subsequent turn; start a new session if the client has not refreshed its skill list.
 
 To update a source installation, update the repository checkout and run `make install` again.
 
 ## Local Development
 
+The repository keeps the two deliverables separate:
+
+- `structure-of-knowledge/` contains only the portable Codex skill, agent metadata, and reference documents.
+- `cli/` is the Rust crate.
+- `cli/target/` is generated build output and is not tracked.
+- `bin/sok` exists only inside an installed skill or a platform-specific release package.
+
 Run the CLI from source:
 
 ```bash
-cd structure-of-knowledge
-cargo run --bin sok -- --help
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- --help
 ```
 
 Build a reusable local binary from the repository root:
 
 ```bash
 make build
-structure-of-knowledge/bin/sok --help
+cli/target/release/sok --version
+cli/target/release/sok --help
 ```
 
-Or build directly from the skill folder:
+Or build directly from the CLI crate:
 
 ```bash
-cd structure-of-knowledge
-cargo build --release --bin sok
-mkdir -p bin
-cp target/release/sok bin/sok
-./bin/sok --help
+cd cli
+cargo build --locked --release --bin sok
+./target/release/sok --version
+./target/release/sok --help
 ```
 
 Available Make targets:
@@ -147,8 +158,7 @@ The first output can remain deliberately scaffold-like. A later agent or downstr
 The CLI provides deterministic scaffolding, agent handoffs, source manifests, access audits, and safe downloads. It does not replace research; it provides the execution frame an agent can fill with sourced findings.
 
 ```bash
-cd structure-of-knowledge
-cargo run --bin sok -- --help
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- --help
 ```
 
 Current commands:
@@ -158,7 +168,7 @@ init              Create an agent workspace.
 brief             Generate an agent handoff brief.
 scaffold          Generate an agent-facing SoK report scaffold.
 handoff-report    Generate a next-agent brief for completing a human-reader report from a scaffold.
-source-template   Create a source manifest CSV template.
+source-template   Create a header-only source manifest CSV template.
 audit-sources     Audit source access metadata.
 download-sources  Download legally accessible open/free sources from a manifest.
 ingest last       Normalize this run's source manifest into cataloged evidence JSONL.
@@ -176,19 +186,20 @@ The report pipeline is bounded to the files from the current run. It does not cr
 Use the scaffold lane when an agent needs internal working context:
 
 ```bash
-structure-of-knowledge/bin/sok source-template --output /tmp/sok-sources.csv
-structure-of-knowledge/bin/sok ingest last \
+cli/target/release/sok source-template --output /tmp/sok-sources.csv
+# Add real source rows to /tmp/sok-sources.csv before ingesting it.
+cli/target/release/sok ingest last \
   --sources /tmp/sok-sources.csv \
   --output /tmp/sok-evidence.jsonl
-structure-of-knowledge/bin/sok scaffold \
+cli/target/release/sok scaffold \
   --field "topology" \
   --output /tmp/sok-scaffold.md
-structure-of-knowledge/bin/sok lint \
+cli/target/release/sok lint \
   --stage scaffold \
   --scaffold /tmp/sok-scaffold.md \
   --sources /tmp/sok-sources.csv \
   --evidence /tmp/sok-evidence.jsonl
-structure-of-knowledge/bin/sok export-json \
+cli/target/release/sok export-json \
   --stage scaffold \
   --scaffold /tmp/sok-scaffold.md \
   --sources /tmp/sok-sources.csv \
@@ -201,21 +212,21 @@ The scaffold JSON may contain `internal_context` and export diagnostics. Do not 
 Use the final-report lane when a human-facing report has reviewed evidence:
 
 ```bash
-structure-of-knowledge/bin/sok lint \
+cli/target/release/sok lint \
   --stage final \
   --report reports/examples/json-first-human-report.md \
   --sources reports/examples/json-first-sources.csv \
   --evidence reports/examples/json-first-reviewed-evidence.jsonl
-structure-of-knowledge/bin/sok export-json \
+cli/target/release/sok export-json \
   --stage final \
   --report reports/examples/json-first-human-report.md \
   --sources reports/examples/json-first-sources.csv \
   --evidence reports/examples/json-first-reviewed-evidence.jsonl \
   --output /tmp/sok-report.json
-structure-of-knowledge/bin/sok validate-report \
+cli/target/release/sok validate-report \
   --input /tmp/sok-report.json \
   --strict
-structure-of-knowledge/bin/sok render-html \
+cli/target/release/sok render-html \
   --input /tmp/sok-report.json \
   --output /tmp/sok-report.html
 ```
@@ -227,8 +238,7 @@ Only `human_report` JSON that passes validation should be rendered. The renderer
 Use `scaffold` when you want the agent-facing starter only.
 
 ```bash
-cd structure-of-knowledge
-cargo run --bin sok -- scaffold \
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- scaffold \
   --field "computational neuroscience" \
   --learner "technical reader new to neuroscience" \
   --goal "build a reusable field map for downstream report generation" \
@@ -253,8 +263,7 @@ For downstream tooling, export the scaffold with `sok export-json --stage scaffo
 Use `handoff-report` when you want to pass a scaffold to a next agent that will complete a polished report for a specified human audience.
 
 ```bash
-cd structure-of-knowledge
-cargo run --bin sok -- handoff-report \
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- handoff-report \
   --field "computational neuroscience" \
   --learner "technical reader new to neuroscience" \
   --goal "complete a polished audience-specific report" \
@@ -265,8 +274,7 @@ cargo run --bin sok -- handoff-report \
 If you already generated a scaffold, pass it directly:
 
 ```bash
-cd structure-of-knowledge
-cargo run --bin sok -- handoff-report \
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- handoff-report \
   --scaffold /tmp/sok-computational-neuroscience.md \
   --output /tmp/sok-computational-neuroscience-handoff.md
 ```
@@ -279,6 +287,8 @@ After the next agent completes the human-facing Markdown and evidence review, ru
 
 SoK is most useful when treated as an upstream knowledge-structure layer. The same scaffold can be recomposed for different users and products:
 
+- Independent scholarly learning: build a self-directed path from field structure and actionable source routes without reducing the field to a beginner summary.
+- Interdisciplinary research preparation: map a target field's concepts, methods, evidence standards, and limitations before attempting cross-domain transfer.
 - Research briefing: expand the scaffold into a source-grounded report with dated frontier claims and evidence notes.
 - Executive or policy briefing: compress the scaffold into decisions, risks, institutions, and current constraints.
 - Course or workshop plan: turn the concept map, literature ladder, and practice tasks into sessions and assessments.
@@ -292,8 +302,7 @@ SoK is most useful when treated as an upstream knowledge-structure layer. The sa
 Use `init` for delegated research, textbook planning, curriculum design, model-tuning corpus planning, or source-pack workflows.
 
 ```bash
-cd structure-of-knowledge
-cargo run --bin sok -- init \
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- init \
   --field "particle physics" \
   --learner "physics-adjacent authoring team" \
   --goal "plan a textbook outline and source pack" \
@@ -327,12 +336,11 @@ Downloads are intentionally conservative. By default, `download-sources` only do
 Paid, paywalled, subscription-only, restricted, unknown, and blank access statuses are metadata-only by default.
 
 ```bash
-cd structure-of-knowledge
-cargo run --bin sok -- audit-sources \
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- audit-sources \
   --manifest /tmp/sok-particle-physics-textbook/sources.csv \
   --strict
 
-cargo run --bin sok -- download-sources \
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- download-sources \
   --manifest /tmp/sok-particle-physics-textbook/sources.csv \
   --out-dir /tmp/sok-particle-physics-textbook/downloads \
   --dry-run
@@ -343,10 +351,10 @@ cargo run --bin sok -- download-sources \
 Create a source manifest template:
 
 ```bash
-cd structure-of-knowledge
-cargo run --bin sok -- source-template --output /tmp/sok-sources.csv
-cargo run --bin sok -- audit-sources --manifest /tmp/sok-sources.csv --strict
-cargo run --bin sok -- download-sources --manifest /tmp/sok-sources.csv --out-dir /tmp/sok-downloads --dry-run
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- source-template --output /tmp/sok-sources.csv
+# Add real source rows before auditing or downloading.
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- audit-sources --manifest /tmp/sok-sources.csv --strict
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- download-sources --manifest /tmp/sok-sources.csv --out-dir /tmp/sok-downloads --dry-run
 ```
 
 ## Expected Outputs
@@ -371,6 +379,7 @@ A substantial SoK package usually includes:
 - Current claims require dates and sources. Durable foundations and frontier claims should not be mixed without marking the difference.
 - Source recommendations must be actionable. Books should include publisher or ISBN where available and a library or purchase route. Papers should include DOI, arXiv ID, or stable URL. Paid or paywalled sources need visible price estimates or `budget unknown; library preferred`.
 - Source-role coverage is not a fixed quota. Require orientation, foundation, method/warrant, and sequence evidence for most substantial tasks, then add or waive frontier, dataset, standard, infrastructure, primary-corpus, or canonical-case roles with rationale.
+- Source-role requirements are intended to be decided from the field, goal, and reviewed evidence. They are categorical requirements, not numeric weights. The current release does not implement a dynamic weighting engine.
 - Different fields require different structures. Some need prerequisite graphs, some need debate networks, and some need instrument-data-governance pipelines.
 - A good SoK-derived artifact connects concepts, evidence, sources, and next actions into an explicit structure.
 - Graph views are selected from structured `relations` and `visual_views`; Mermaid diagrams are optional inspection aids, not a required runtime or source of authority.
@@ -381,30 +390,13 @@ The Codex skill defines agent behavior. The repository also includes implementat
 
 - `specs/sok-harness.yaml`: research harness stages, required artifacts, quality gates, and CLI command registry.
 - `specs/sok-report.schema.json`: structured report contract for future validators, visualization tools, or datasets.
-- `structure-of-knowledge/src`: Rust CLI for agent workspaces, source manifests, access audits, safe downloads, scaffolds, and handoff briefs.
+- `cli/src`: Rust CLI for agent workspaces, source manifests, access audits, safe downloads, scaffolds, and handoff briefs.
 
 This keeps SoK extensible beyond a single prompt: CLI workflows, web reports, evaluation benchmarks, source-ingestion tools, and visualization apps can share the same contracts.
 
 ## Release
 
-Run local release checks:
-
-```bash
-make fmt
-make test
-make vet
-make build
-```
-
-GitHub Actions runs the same Rust checks on pushes and pull requests. Pushing a `v*` tag triggers the release workflow, which attaches six platform-specific CLI archives plus source-only `structure-of-knowledge/` skill archives in `.tar.gz` and `.zip` formats. Pair one CLI archive with either skill archive as described in [Installation](#installation).
-
-The release workflow includes `LICENSE` in binary archives and includes `LICENSE`, `README.md`, and `structure-of-knowledge/` in the skill archive.
-
-To package the skill archive locally:
-
-```bash
-make package
-```
+GitHub Actions runs Rust checks on pushes and pull requests. Pushing a `v*` tag publishes platform-specific CLI archives and source-only skill archives.
 
 ## License
 

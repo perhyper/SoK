@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: structure-of-knowledge
+        working-directory: cli
 
     steps:
       - name: Check out repository
@@ -22,16 +22,62 @@ jobs:
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: structure-of-knowledge
+          workspaces: cli
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
       - name: Run tests
-        run: cargo test
+        run: cargo test --locked
 
       - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
 
       - name: Build CLI
-        run: cargo build --release --bin sok
+        run: cargo build --locked --release --bin sok
+
+      - name: Verify source and installed boundaries
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e structure-of-knowledge/bin
+          test ! -e structure-of-knowledge/Cargo.toml
+          test ! -e structure-of-knowledge/Cargo.lock
+          test ! -e structure-of-knowledge/src
+          test ! -e structure-of-knowledge/target
+          cli/target/release/sok --version | grep -E '\(rust\)$'
+
+          crate_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' cli/Cargo.toml | head -n 1)"
+          spec_version="$(sed -n 's/^version: //p' specs/sok-harness.yaml | head -n 1)"
+          test -n "$crate_version"
+          test "$crate_version" = "$spec_version"
+
+          test_codex_home="$(mktemp -d)"
+          trap 'rm -rf "$test_codex_home"' EXIT
+          CODEX_HOME="$test_codex_home" make install
+
+          installed="$test_codex_home/skills/structure-of-knowledge"
+          test -f "$installed/SKILL.md"
+          test -x "$installed/bin/sok"
+          "$installed/bin/sok" --version | grep -E '\(rust\)$'
+          "$installed/bin/sok" --help
+          test ! -e "$installed/Cargo.toml"
+          test ! -e "$installed/Cargo.lock"
+          test ! -e "$installed/src"
+          test ! -e "$installed/target"
+
+      - name: Verify source-only skill package
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          make package
+          archive="dist/structure-of-knowledge-skill.tar.gz"
+          listing="$(tar -tzf "$archive")"
+          grep -F 'structure-of-knowledge/SKILL.md' <<<"$listing"
+          grep -F 'structure-of-knowledge/references/' <<<"$listing"
+          if grep -E '(^|/)cli/|(^|/)target/|structure-of-knowledge/(bin/|Cargo\.(toml|lock)$|src/)' <<<"$listing"; then
+            echo "source-only skill archive contains CLI sources, Cargo files, or build artifacts" >&2
+            exit 1
+          fi

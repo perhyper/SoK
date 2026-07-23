@@ -72,11 +72,14 @@ outputs:
   graph_views: optional_structured_views_selected_from_relations
 agent_cli:
   language: rust
-  manifest: structure-of-knowledge/Cargo.toml
-  package: structure-of-knowledge/src
-  run_from_source: cd structure-of-knowledge && cargo run --bin sok --
+  manifest: cli/Cargo.toml
+  package: cli/src
+  run_from_source: cargo run --locked --manifest-path cli/Cargo.toml --bin sok --
   build: make build
-  binary: structure-of-knowledge/bin/sok
+  development_binary: cli/target/release/sok
+  installed_binary: ${CODEX_HOME}/skills/structure-of-knowledge/bin/sok
+  installed_binary_windows: ${CODEX_HOME}\skills\structure-of-knowledge\bin\sok.exe
+  implementation_check: sok --version must end with "(rust)"
   install_skill: make install
   default_download_statuses:
     - open_access
@@ -140,7 +143,8 @@ agent_cli:
     - make test
     - make vet
     - make build
-    - structure-of-knowledge/bin/sok --help
+    - cli/target/release/sok --version
+    - cli/target/release/sok --help
   modes:
     research: SoK report, literature ladder, frontier map, and curriculum path.
     textbook: Textbook thesis, chapter architecture, exercise ladder, and permissions plan.

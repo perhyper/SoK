@@ -27,16 +27,14 @@ The agent layer should not replace judgment. It should make the workflow executa
 The canonical CLI is implemented in Rust and lives at:
 
 ```text
-structure-of-knowledge/src/
+cli/src/
 ```
 
 Build it with:
 
 ```bash
-cd structure-of-knowledge
-cargo build --release --bin sok
-mkdir -p bin
-cp target/release/sok bin/sok
+make build
+cli/target/release/sok --version
 ```
 
 Commands:
@@ -45,7 +43,7 @@ Commands:
 - `brief`: Produce a standalone agent handoff brief.
 - `scaffold`: Produce a SoK report scaffold.
 - `handoff-report`: Wrap a scaffold in instructions for completing a human-facing report.
-- `source-template`: Create a CSV source manifest template.
+- `source-template`: Create a header-only CSV source manifest; add real rows before ingestion or audit.
 - `audit-sources`: Validate required source metadata.
 - `download-sources`: Download only sources with allowed open/free/user-provided access status by default.
 - `ingest last`: Normalize the current run's source manifest into cataloged evidence JSONL.

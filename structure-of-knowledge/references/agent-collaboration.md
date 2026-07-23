@@ -6,27 +6,36 @@ Use this reference when SoK is not only producing a human-readable report, but c
 
 Use the Rust CLI for deterministic setup and safety checks.
 
-From the skill folder:
+Resolve the executable once per run. Prefer the repository build when the current workspace contains `cli/Cargo.toml`; otherwise use the installed skill.
+
+From an installed skill:
 
 ```bash
-cargo run --bin sok -- <command> [options]
+SOK_CLI="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok"
+"$SOK_CLI" --version
+"$SOK_CLI" <command> [options]
 ```
 
-For repeated use, build a local binary. From the repository root, use the Makefile:
+From a repository checkout, run the Rust crate directly:
+
+```bash
+cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- <command> [options]
+```
+
+For repeated development use, build the CLI from the repository root:
 
 ```bash
 make build
-structure-of-knowledge/bin/sok <command> [options]
+SOK_CLI="$PWD/cli/target/release/sok"
+"$SOK_CLI" --version
+"$SOK_CLI" <command> [options]
 ```
 
-From the skill folder, use Cargo directly:
+The version output must end with `(rust)`. Do not use an executable that lacks this marker. On Windows, resolve the installed executable as `%CODEX_HOME%\skills\structure-of-knowledge\bin\sok.exe` (or under `%USERPROFILE%\.codex` when `CODEX_HOME` is unset). The repository does not keep a compiled executable inside the skill source tree. `make install` copies the freshly built Rust binary into the installed skill's `bin/sok`.
 
-```bash
-cargo build --release --bin sok
-mkdir -p bin
-cp target/release/sok bin/sok
-./bin/sok <command> [options]
-```
+Before using an unfamiliar command, run `"$SOK_CLI" <command> --help` (or `"$SOK_CLI" ingest last --help`) and use the displayed flags. Do not guess arguments by provoking an error.
+
+Use the CLI when producing persistent workflow artifacts or enforcing deterministic checks. A narrow prose answer does not require it.
 
 Primary commands:
 
@@ -34,7 +43,7 @@ Primary commands:
 - `brief`: Produce a standalone agent handoff brief.
 - `scaffold`: Produce a domain-aware SoK report starter with a provisional profile and source role probe.
 - `handoff-report`: Wrap a scaffold in next-agent instructions for completing a polished human-reader report.
-- `source-template`: Create a CSV source manifest template.
+- `source-template`: Create a header-only CSV source manifest; add real rows before `ingest last`.
 - `audit-sources`: Check that sources include type, identifier or URL, access status, access route, budget/library guidance, and curricular role.
 - `download-sources`: Download only sources with default-allowed access statuses by default.
 - `ingest last`: Normalize this run's source manifest into cataloged evidence JSONL. This is bounded ingestion, not a persistent knowledge base.
@@ -49,11 +58,11 @@ Primary commands:
 1. Run `init` for any substantial delegated task.
 2. Use the scaffold's source role probe to decide which evidence roles are required, conditional, optional, or waived for this field and goal.
 3. Fill `sources.csv` during research, not after writing.
-4. Optionally run `sok ingest last --sources sources.csv --output evidence.jsonl` to create a bounded cataloged evidence ledger for the current run.
-5. For internal scaffolds, run `sok lint --stage scaffold` and `sok export-json --stage scaffold`; keep `internal_context` private and do not render scaffold JSON as HTML.
-6. For final human-facing reports, add reviewed or verified evidence rows, run `sok lint --stage final`, `sok export-json --stage final`, `sok validate-report --strict`, and only then `sok render-html`.
-7. Run `sok audit-sources --strict` before final delivery when source manifests are being delivered independently.
-8. Run `sok download-sources --dry-run` before downloading.
+4. Optionally run `"$SOK_CLI" ingest last --sources sources.csv --output evidence.jsonl` to create a bounded cataloged evidence ledger for the current run.
+5. For internal scaffolds, run `"$SOK_CLI" lint --stage scaffold` and `"$SOK_CLI" export-json --stage scaffold`; keep `internal_context` private and do not render scaffold JSON as HTML.
+6. For final human-facing reports, add reviewed or verified evidence rows, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, and only then `"$SOK_CLI" render-html`.
+7. Run `"$SOK_CLI" audit-sources --strict` before final delivery when source manifests are being delivered independently.
+8. Run `"$SOK_CLI" download-sources --dry-run` before downloading.
 9. Download only sources with clearly default-allowed access status.
 10. Treat paid books, paywalled papers, subscription resources, restricted sources, unknown access, missing access metadata, and unclear licenses as metadata-only unless the user supplies access or permission.
 11. Treat existing syllabi and curricula as evidence of pedagogical consensus, not as the boundary of the field.
@@ -78,6 +87,7 @@ Each source row should include:
 - `type`: book, paper, preprint, notes, course, standard, dataset, software, archive, report, or syllabus
 - `identifier`: DOI, arXiv ID, ISBN, official URL, or stable catalog entry
 - `url`
+- `date`: publication, release, or last-updated date when known
 - `access_status`: open_access, free_web, public_domain, cc_by, cc_by_sa, official_open, user_provided, paid_book, paywalled, subscription, unknown, or restricted
 - `access_route`: how to find or obtain it
 - `budget_estimate`: `$0`, visible price, or `budget unknown; library preferred`

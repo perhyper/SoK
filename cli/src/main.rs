@@ -1,3 +1,5 @@
+//! Executable entry point for the Rust SoK CLI.
+
 fn main() {
     let args = std::env::args().skip(1).collect();
     let exit_code = match sok::run_cli(args) {
