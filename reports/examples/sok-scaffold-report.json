@@ -1,0 +1,160 @@
+{
+  "metadata": {
+    "schema_version": "sok-report/v1",
+    "generated_at": "2026-07-16T00:00:00Z",
+    "report_type": "scaffold",
+    "temporal_review": {
+      "as_of": "2026-07-16",
+      "review_after": "2026-08-16",
+      "temporal_status": "unknown",
+      "rationale": "The scaffold records candidate structure before source review."
+    },
+    "generator": {
+      "name": "sok-fixture",
+      "version": "1"
+    }
+  },
+  "report": {
+    "field": "Topology",
+    "scope": {
+      "summary": "Scaffold-stage topology path with source and frontier details still unresolved.",
+      "included": ["point-set topology", "algebraic topology"],
+      "excluded": ["complete frontier survey"],
+      "assumptions": [
+        "Public scope may mention the bounded subfield path, but not the raw learner profile or original prompt."
+      ]
+    },
+    "domain_profile": {
+      "classification": "formal",
+      "secondary_characteristics": ["well_structured"],
+      "rationale": "Initial classification based on proof-driven foundations and cumulative prerequisites."
+    },
+    "core_ideas": [
+      {
+        "id": "concept-invariance",
+        "label": "Invariance",
+        "description": "Candidate organizing idea for the final report."
+      }
+    ],
+    "methods": [
+      {
+        "id": "method-homology",
+        "label": "Homology",
+        "description": "Candidate method to verify against reviewed sources."
+      }
+    ],
+    "representations": [
+      {
+        "id": "rep-chain-complex",
+        "label": "Chain complex",
+        "description": "Candidate representation for algebraic topology."
+      }
+    ],
+    "evidence_standards": {
+      "summary": "Scaffold claims must not be treated as final until source rows become reviewed evidence links.",
+      "claim_policy": "Cataloged source candidates are bibliography leads only.",
+      "source_role_requirements": [
+        {
+          "role": "foundation",
+          "requirement": "required",
+          "minimum_sources": 2,
+          "rationale": "Formal field scaffolds need at least two stable foundation sources before final export."
+        },
+        {
+          "role": "frontier",
+          "requirement": "conditional",
+          "minimum_sources": 1,
+          "rationale": "Required only if the final report keeps a frontier section."
+        },
+        {
+          "role": "infrastructure",
+          "requirement": "waived",
+          "minimum_sources": 0,
+          "rationale": "No infrastructure-bound claim is planned.",
+          "waiver": {
+            "rationale": "The scaffold is focused on formal foundations rather than instruments or facilities.",
+            "as_of": "2026-07-16"
+          }
+        }
+      ]
+    },
+    "sources": [
+      {
+        "id": "src-topology-orientation-candidate",
+        "citation": "Topology orientation source to verify",
+        "title": "Topology orientation source to verify",
+        "source_type": "candidate_source",
+        "identifier": "source to verify",
+        "roles": ["orientation"],
+        "access": {
+          "status": "unknown",
+          "route": "official route to verify",
+          "budget_estimate": "budget unknown",
+          "metadata_only": true,
+          "notes": "Candidate row imported from a scaffold, not reviewed evidence."
+        },
+        "why_it_matters": "Placeholder candidate for field orientation.",
+        "verification_status": "cataloged",
+        "notes": "Do not use this candidate as claim support until reviewed."
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim-topology-scaffold-invariance",
+        "statement": "Topology can likely be organized around invariance, construction, and functoriality.",
+        "claim_type": "structural",
+        "evidence_requirement": "reviewed_source",
+        "evidence_links": [],
+        "confidence": "unknown",
+        "temporal": {
+          "as_of": "2026-07-16",
+          "review_after": "2026-08-16",
+          "temporal_status": "unknown"
+        },
+        "notes": "Candidate scaffold claim awaiting evidence review."
+      }
+    ],
+    "relations": [],
+    "curriculum_path": [
+      {
+        "id": "step-foundation-review",
+        "sequence": 1,
+        "title": "Verify foundation sources",
+        "learning_goal": "Replace placeholder source candidates with reviewed topology references.",
+        "prerequisite_ids": [],
+        "practice_artifact": "Reviewed source manifest with access metadata.",
+        "progress_criteria": ["At least two foundation sources are reviewed"],
+        "source_ids": ["src-topology-orientation-candidate"]
+      }
+    ],
+    "frontier_debates": []
+  },
+  "internal_context": {
+    "raw_learner_profile": "SENTINEL_INTERNAL_LEARNER: mathematically mature scholar new to topology",
+    "original_goal": "SENTINEL_INTERNAL_GOAL: build field-entry to research-fluent understanding in 12 weeks",
+    "prompt_derived_assumptions": [
+      "SENTINEL_INTERNAL_ASSUMPTION: start from point-set topology before branching"
+    ],
+    "placeholder_state": {
+      "unreviewed_source_rows": ["source to verify"],
+      "unresolved_dates": ["date after lookup"],
+      "claims_waiting_for_evidence": ["claim-topology-scaffold-invariance"]
+    },
+    "handoff_notes": [
+      "SENTINEL_INTERNAL_HANDOFF: keep this context out of the human report payload"
+    ]
+  },
+  "diagnostics": {
+    "summary": "Scaffold fixture intentionally contains unresolved evidence.",
+    "checks": [
+      {
+        "check_id": "scaffold.cataloged-source",
+        "severity": "warning",
+        "status": "failed",
+        "message": "Cataloged source candidate cannot support a final claim.",
+        "target_path": "/report/sources/0",
+        "entity_id": "src-topology-orientation-candidate"
+      }
+    ]
+  }
+}

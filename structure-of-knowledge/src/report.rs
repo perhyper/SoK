@@ -1,0 +1,6080 @@
+use crate::{load_sources, source_access, Source};
+use anyhow::{bail, Context, Result};
+use chrono::{Duration, NaiveDate, SecondsFormat, Utc};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::path::Path;
+
+pub const CHECK_SOURCE_MISSING_ACCESS_STATUS: &str = "source.missing-access-status";
+pub const CHECK_SOURCE_MISSING_ACCESS_ROUTE: &str = "source.missing-access-route";
+pub const CHECK_SOURCE_MISSING_CURRICULAR_USE: &str = "source.missing-curricular-use";
+pub const CHECK_EVIDENCE_CATALOGED_ONLY: &str = "evidence.cataloged-only";
+pub const CHECK_EXPORT_UNSUPPORTED_SECTION: &str = "export.unsupported-section";
+pub const CHECK_EXPORT_AMBIGUOUS_SECTION: &str = "export.ambiguous-section";
+pub const CHECK_EXPORT_MISSING_FIELD: &str = "export.missing-field";
+pub const CHECK_EXPORT_MISSING_PUBLIC_FIELD: &str = "export.missing-public-field";
+pub const CHECK_EXPORT_INTERNAL_SECTION_IN_FINAL: &str = "export.internal-section-in-final";
+pub const CHECK_EXPORT_UNKNOWN_EVIDENCE_SOURCE: &str = "export.unknown-evidence-source";
+pub const CHECK_EXPORT_CLAIM_NEEDS_EVIDENCE: &str = "export.claim-needs-evidence";
+pub const CHECK_VALIDATE_SCHEMA_JSON: &str = "validate.schema.json";
+pub const CHECK_VALIDATE_SCHEMA_REQUIRED: &str = "validate.schema.required";
+pub const CHECK_VALIDATE_SCHEMA_DESERIALIZE: &str = "validate.schema.deserialize";
+pub const CHECK_VALIDATE_PUBLIC_BOUNDARY: &str = "validate.public-boundary";
+pub const CHECK_VALIDATE_EVIDENCE_REQUIRED: &str = "validate.evidence.required";
+pub const CHECK_VALIDATE_EVIDENCE_SOURCE: &str = "validate.evidence.source";
+pub const CHECK_VALIDATE_EVIDENCE_SUPPORT: &str = "validate.evidence.support";
+pub const CHECK_VALIDATE_SOURCE_ROLE_REQUIRED: &str = "validate.source-role.required";
+pub const CHECK_VALIDATE_SOURCE_ROLE_CONDITIONAL: &str = "validate.source-role.conditional";
+pub const CHECK_VALIDATE_SOURCE_ROLE_WAIVER: &str = "validate.source-role.waiver";
+pub const CHECK_VALIDATE_CURRENTNESS_METADATA: &str = "validate.currentness.metadata";
+pub const CHECK_VALIDATE_CURRENTNESS_REVIEW_DUE: &str = "validate.currentness.review-due";
+pub const CHECK_VALIDATE_CURRENTNESS_SOURCE_DATE: &str = "validate.currentness.source-date";
+pub const CHECK_VALIDATE_CURRENTNESS_PROSE: &str = "validate.currentness.prose";
+pub const CHECK_VALIDATE_RELATION_ENDPOINT: &str = "validate.relation.endpoint";
+pub const CHECK_VALIDATE_RELATION_KIND: &str = "validate.relation.kind";
+pub const CHECK_VALIDATE_CURRICULUM_REFERENCE: &str = "validate.curriculum.reference";
+pub const CHECK_VALIDATE_SOURCE_ACCESS: &str = "validate.source-access";
+pub const CHECK_VALIDATE_VISUAL_REFERENCE: &str = "validate.visual.reference";
+pub const CHECK_LINT_STRUCTURAL: &str = "lint.structural";
+pub const CHECK_LINT_SCAFFOLD_UNRESOLVED: &str = "lint.scaffold-unresolved";
+pub const CHECK_LINT_FINAL_PUBLIC_LEAKAGE: &str = "lint.final-public-leakage";
+
+const ID_HASH_LEN: usize = 10;
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReportDocument {
+    pub metadata: ReportMetadata,
+    pub report: PublicReport,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub internal_context: Option<InternalContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub diagnostics: Option<Diagnostics>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReportMetadata {
+    #[serde(default)]
+    pub schema_version: String,
+    #[serde(default)]
+    pub generated_at: String,
+    #[serde(default)]
+    pub report_type: ReportType,
+    pub temporal_review: TemporalMarker,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generator: Option<GeneratorInfo>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GeneratorInfo {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub version: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportType {
+    #[default]
+    Scaffold,
+    HumanReport,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PublicReport {
+    #[serde(default)]
+    pub field: String,
+    pub scope: Scope,
+    pub domain_profile: DomainProfile,
+    pub core_ideas: Vec<KnowledgeItem>,
+    pub methods: Vec<KnowledgeItem>,
+    pub representations: Vec<KnowledgeItem>,
+    pub evidence_standards: EvidenceStandards,
+    pub sources: Vec<ReportSource>,
+    pub claims: Vec<Claim>,
+    pub relations: Vec<Relation>,
+    pub curriculum_path: Vec<CurriculumStep>,
+    pub frontier_debates: Vec<FrontierDebateItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visual_views: Vec<VisualView>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Scope {
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub included: Vec<String>,
+    #[serde(default)]
+    pub excluded: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assumptions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub interpretive_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DomainProfile {
+    #[serde(default)]
+    pub classification: DomainClassification,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub secondary_characteristics: Vec<DomainClassification>,
+    #[serde(default)]
+    pub rationale: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub failure_modes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DomainClassification {
+    WellStructured,
+    Formal,
+    IllStructured,
+    ProfessionalPractice,
+    InstrumentBound,
+    InfrastructureBound,
+    Emerging,
+    Interdisciplinary,
+    #[default]
+    Mixed,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct KnowledgeItem {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temporal: Option<TemporalMarker>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EvidenceStandards {
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub claim_policy: String,
+    #[serde(default)]
+    pub source_role_requirements: Vec<SourceRoleRequirement>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SourceRoleRequirement {
+    #[serde(default)]
+    pub role: SourceRole,
+    #[serde(default)]
+    pub requirement: SourceRoleRequirementKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum_sources: Option<u32>,
+    #[serde(default)]
+    pub rationale: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiver: Option<SourceRoleWaiver>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceRoleRequirementKind {
+    #[default]
+    Required,
+    Conditional,
+    Waived,
+    NotApplicable,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SourceRoleWaiver {
+    #[serde(default)]
+    pub rationale: String,
+    #[serde(default)]
+    pub as_of: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub review_after: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReportSource {
+    pub id: String,
+    pub citation: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub title: String,
+    pub source_type: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub identifier: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub url: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub date: String,
+    pub roles: Vec<SourceRole>,
+    pub access: SourceAccessMetadata,
+    pub why_it_matters: String,
+    pub verification_status: VerificationStatus,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub last_reviewed: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceRole {
+    Orientation,
+    Foundation,
+    Method,
+    Representation,
+    Evidence,
+    Synthesis,
+    Frontier,
+    Debate,
+    Standard,
+    Dataset,
+    Infrastructure,
+    Critique,
+    Curriculum,
+    #[default]
+    Other,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SourceAccessMetadata {
+    pub status: AccessStatus,
+    pub route: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub budget_estimate: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub license: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata_only: Option<bool>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AccessStatus {
+    OpenAccess,
+    FreeWeb,
+    PublicDomain,
+    OfficialOpen,
+    UserProvided,
+    Library,
+    PaidBook,
+    Paywalled,
+    Subscription,
+    Restricted,
+    #[default]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VerificationStatus {
+    #[default]
+    Cataloged,
+    Reviewed,
+    Verified,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Claim {
+    pub id: String,
+    pub statement: String,
+    pub claim_type: ClaimType,
+    pub evidence_requirement: EvidenceRequirement,
+    pub evidence_links: Vec<EvidenceLink>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<ClaimConfidence>,
+    pub temporal: TemporalMarker,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaimType {
+    Structural,
+    Currentness,
+    Frontier,
+    Debate,
+    Curricular,
+    #[default]
+    Interpretive,
+    Methodological,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceRequirement {
+    None,
+    CatalogedSource,
+    #[default]
+    ReviewedSource,
+    VerifiedSource,
+    MultipleReviewedSources,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaimConfidence {
+    High,
+    Medium,
+    Low,
+    #[default]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EvidenceLink {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub evidence_id: String,
+    pub source_id: String,
+    pub verification_status: VerificationStatus,
+    pub support_kind: SupportKind,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub locator: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub support_note: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reviewed_at: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SupportKind {
+    #[default]
+    Supports,
+    Qualifies,
+    Contradicts,
+    Background,
+    Example,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Relation {
+    pub id: String,
+    pub kind: RelationKind,
+    pub from: RelationEndpoint,
+    pub to: RelationEndpoint,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationKind {
+    DependsOn,
+    #[default]
+    Supports,
+    Qualifies,
+    Contradicts,
+    Precedes,
+    Introduces,
+    UsesMethod,
+    RepresentedBy,
+    Grounds,
+    Motivates,
+    PartOf,
+    MapsTo,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RelationEndpoint {
+    pub entity_type: EntityType,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum EntityType {
+    #[default]
+    Concept,
+    Claim,
+    Source,
+    CurriculumStep,
+    FrontierDebate,
+    Method,
+    Representation,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CurriculumStep {
+    pub id: String,
+    pub sequence: u32,
+    pub title: String,
+    pub learning_goal: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prerequisite_ids: Vec<String>,
+    pub practice_artifact: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub progress_criteria: Vec<String>,
+    pub source_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FrontierDebateItem {
+    pub id: String,
+    pub kind: FrontierDebateKind,
+    pub title: String,
+    pub summary: String,
+    pub why_it_matters: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_background_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub claim_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_ids: Vec<String>,
+    pub temporal: TemporalMarker,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FrontierDebateKind {
+    #[default]
+    Frontier,
+    Debate,
+    OpenProblem,
+    Uncertainty,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TemporalMarker {
+    #[serde(default)]
+    pub as_of: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub review_after: String,
+    #[serde(default)]
+    pub temporal_status: TemporalStatus,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub rationale: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TemporalStatus {
+    Durable,
+    Current,
+    ReviewDue,
+    Stale,
+    #[default]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Diagnostics {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub summary: String,
+    pub checks: Vec<DiagnosticCheck>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DiagnosticCheck {
+    pub check_id: String,
+    pub severity: DiagnosticSeverity,
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<DiagnosticStatus>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub target_path: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub entity_id: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticSeverity {
+    Info,
+    #[default]
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DiagnosticStatus {
+    Passed,
+    Failed,
+    NotApplicable,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VisualView {
+    pub id: String,
+    pub kind: VisualViewKind,
+    pub title: String,
+    pub justification: String,
+    pub nodes: Vec<VisualViewNode>,
+    pub edges: Vec<VisualViewEdge>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum VisualViewKind {
+    KnowledgeSpine,
+    ConceptSource,
+    DependencyPath,
+    FrontierDebate,
+    #[default]
+    Custom,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VisualViewNode {
+    pub id: String,
+    pub label: String,
+    pub entity_type: EntityType,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub ref_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VisualViewEdge {
+    pub from: String,
+    pub to: String,
+    pub kind: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relation_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InternalContext {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub raw_learner_profile: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub original_goal: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompt_derived_assumptions: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub placeholder_state: BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub handoff_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EvidenceEntry {
+    pub evidence_id: String,
+    pub source_id: String,
+    pub input_provenance: BoundedInputProvenance,
+    pub verification_status: VerificationStatus,
+    pub support_kind: SupportKind,
+    pub locator: String,
+    pub support_note: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub observed_at: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reviewed_at: String,
+    pub notes: String,
+    pub claim_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_roles: Vec<SourceRole>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_access: Option<SourceAccessMetadata>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_citation: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_identifier: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_url: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub curricular_use: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BoundedInputProvenance {
+    pub input_path: String,
+    pub input_kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row_number: Option<usize>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub row_hash: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NormalizedSourceManifest {
+    pub sources: Vec<ReportSource>,
+    pub evidence: Vec<EvidenceEntry>,
+    pub diagnostics: Vec<DiagnosticCheck>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportValidation {
+    pub diagnostics: Diagnostics,
+}
+
+impl ReportValidation {
+    pub fn new(mut checks: Vec<DiagnosticCheck>) -> Self {
+        sort_diagnostics(&mut checks);
+        let error_count = checks
+            .iter()
+            .filter(|check| check.severity == DiagnosticSeverity::Error)
+            .count();
+        let warning_count = checks
+            .iter()
+            .filter(|check| check.severity == DiagnosticSeverity::Warning)
+            .count();
+        let summary = format!(
+            "report validation produced {error_count} error(s) and {warning_count} warning(s)"
+        );
+        Self {
+            diagnostics: Diagnostics { summary, checks },
+        }
+    }
+
+    pub fn error_count(&self) -> usize {
+        self.diagnostics
+            .checks
+            .iter()
+            .filter(|check| check.severity == DiagnosticSeverity::Error)
+            .count()
+    }
+
+    pub fn warning_count(&self) -> usize {
+        self.diagnostics
+            .checks
+            .iter()
+            .filter(|check| check.severity == DiagnosticSeverity::Warning)
+            .count()
+    }
+
+    pub fn info_count(&self) -> usize {
+        self.diagnostics
+            .checks
+            .iter()
+            .filter(|check| check.severity == DiagnosticSeverity::Info)
+            .count()
+    }
+
+    pub fn has_errors(&self) -> bool {
+        self.error_count() > 0
+    }
+
+    pub fn has_warnings(&self) -> bool {
+        self.warning_count() > 0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportStage {
+    Scaffold,
+    Final,
+}
+
+pub fn validate_report_file<P: AsRef<Path>>(path: P) -> Result<ReportValidation> {
+    let path = path.as_ref();
+    let data = fs::read(path).with_context(|| format!("read JSON {}", path.display()))?;
+    let value = match serde_json::from_slice::<Value>(&data) {
+        Ok(value) => value,
+        Err(err) => {
+            return Ok(ReportValidation::new(vec![DiagnosticCheck::error(
+                CHECK_VALIDATE_SCHEMA_JSON,
+                format!("invalid JSON in {}: {err}", path.display()),
+            )
+            .with_target("/", "")]));
+        }
+    };
+    Ok(validate_report_value(&value))
+}
+
+pub fn validate_report_value(value: &Value) -> ReportValidation {
+    let mut checks = Vec::new();
+    validate_schema_level_fields(value, &mut checks);
+    validate_known_enum_strings(value, &mut checks);
+
+    let document = match serde_json::from_value::<ReportDocument>(value.clone()) {
+        Ok(document) => Some(document),
+        Err(err) => {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_DESERIALIZE,
+                    format!("report JSON does not match the typed report model: {err}"),
+                )
+                .with_target("/", ""),
+            );
+            None
+        }
+    };
+
+    if let Some(document) = document {
+        let index = ReportIdIndex::from_report(&document.report, &mut checks);
+        validate_public_report_boundary(value, document.metadata.report_type, &mut checks);
+        validate_reference_consistency(&document.report, &index, &mut checks);
+        validate_claim_evidence_requirements(&document.report, &index, &mut checks);
+        validate_source_role_coverage(&document.report, &mut checks);
+        validate_currentness(&document, &index, &mut checks);
+        validate_relation_consistency(&document.report, &index, &mut checks);
+        validate_visual_references(&document.report, &index, &mut checks);
+        validate_source_access_metadata(&document.report, &mut checks);
+    }
+
+    ReportValidation::new(checks)
+}
+
+pub fn lint_markdown_report<R, S, E>(
+    report_path: R,
+    sources_path: S,
+    evidence_path: Option<E>,
+    stage: ExportStage,
+) -> Result<ReportValidation>
+where
+    R: AsRef<Path>,
+    S: AsRef<Path>,
+    E: AsRef<Path>,
+{
+    let report_path = report_path.as_ref();
+    let sources_path = sources_path.as_ref();
+    let markdown = fs::read_to_string(report_path)
+        .with_context(|| format!("read report Markdown {}", report_path.display()))?;
+    let mut parsed = parse_markdown_report(&markdown);
+    let normalized_sources = normalize_source_manifest(sources_path)?;
+    let sources = normalized_sources.sources;
+    let mut evidence = normalized_sources.evidence;
+    let mut checks = Vec::new();
+
+    checks.extend(select_lint_parse_diagnostics(&mut parsed.diagnostics));
+    checks.extend(normalized_sources.diagnostics);
+
+    if let Some(path) = evidence_path {
+        let mut ledger_entries: Vec<EvidenceEntry> = read_jsonl_file(path)?;
+        evidence.append(&mut ledger_entries);
+    }
+
+    if !parsed_has_any_canonical_content(&parsed) {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_LINT_STRUCTURAL,
+                "Markdown report has no canonical SoK title or sections",
+            )
+            .with_target("/report", ""),
+        );
+    }
+
+    lint_stage_boundary(&markdown, &parsed, stage, &mut checks);
+    lint_source_role_coverage(&parsed, &sources, &mut checks);
+    lint_evidence_sources(&evidence, &sources, &mut checks);
+    lint_claim_evidence_support(&parsed, &sources, &evidence, stage, &mut checks);
+    lint_markdown_currentness(&markdown, &mut checks);
+
+    Ok(ReportValidation::new(checks))
+}
+
+fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>) {
+    let Some(root) = value.as_object() else {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_SCHEMA_REQUIRED,
+                "root report payload must be a JSON object",
+            )
+            .with_target("/", ""),
+        );
+        return;
+    };
+
+    for key in root.keys() {
+        if !matches!(
+            key.as_str(),
+            "metadata" | "report" | "internal_context" | "diagnostics"
+        ) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!("unexpected top-level key {key:?}; expected metadata, report, internal_context, or diagnostics"),
+                )
+                .with_target(format!("/{key}"), ""),
+            );
+        }
+    }
+
+    let Some(metadata) = require_object_for_validation(root, "metadata", "/", checks) else {
+        return;
+    };
+    let Some(report) = require_object_for_validation(root, "report", "/", checks) else {
+        return;
+    };
+
+    validate_allowed_keys(
+        metadata,
+        "/metadata",
+        &[
+            "schema_version",
+            "generated_at",
+            "report_type",
+            "temporal_review",
+            "generator",
+        ],
+        checks,
+    );
+    validate_allowed_keys(
+        report,
+        "/report",
+        &[
+            "field",
+            "scope",
+            "domain_profile",
+            "core_ideas",
+            "methods",
+            "representations",
+            "evidence_standards",
+            "sources",
+            "claims",
+            "relations",
+            "curriculum_path",
+            "frontier_debates",
+            "visual_views",
+        ],
+        checks,
+    );
+
+    for key in [
+        "schema_version",
+        "generated_at",
+        "report_type",
+        "temporal_review",
+    ] {
+        require_key(metadata, key, "/metadata", checks);
+    }
+    require_non_empty_string(metadata, "schema_version", "/metadata", checks);
+    require_non_empty_string(metadata, "generated_at", "/metadata", checks);
+    require_non_empty_string(metadata, "report_type", "/metadata", checks);
+    if let Some(temporal) =
+        require_object_for_validation(metadata, "temporal_review", "/metadata", checks)
+    {
+        require_temporal_marker_fields(temporal, "/metadata/temporal_review", checks);
+    }
+
+    for key in [
+        "field",
+        "scope",
+        "domain_profile",
+        "core_ideas",
+        "methods",
+        "representations",
+        "evidence_standards",
+        "sources",
+        "claims",
+        "relations",
+        "curriculum_path",
+        "frontier_debates",
+    ] {
+        require_key(report, key, "/report", checks);
+    }
+    require_non_empty_string(report, "field", "/report", checks);
+
+    if let Some(scope) = require_object_for_validation(report, "scope", "/report", checks) {
+        require_non_empty_string(scope, "summary", "/report/scope", checks);
+        require_array(scope, "included", "/report/scope", checks);
+        require_array(scope, "excluded", "/report/scope", checks);
+    }
+    if let Some(domain) = require_object_for_validation(report, "domain_profile", "/report", checks)
+    {
+        require_non_empty_string(domain, "classification", "/report/domain_profile", checks);
+        require_non_empty_string(domain, "rationale", "/report/domain_profile", checks);
+    }
+    if let Some(standards) =
+        require_object_for_validation(report, "evidence_standards", "/report", checks)
+    {
+        require_non_empty_string(standards, "summary", "/report/evidence_standards", checks);
+        require_non_empty_string(
+            standards,
+            "claim_policy",
+            "/report/evidence_standards",
+            checks,
+        );
+        require_array(
+            standards,
+            "source_role_requirements",
+            "/report/evidence_standards",
+            checks,
+        );
+    }
+
+    for key in [
+        "core_ideas",
+        "methods",
+        "representations",
+        "sources",
+        "claims",
+        "relations",
+        "curriculum_path",
+        "frontier_debates",
+    ] {
+        require_array(report, key, "/report", checks);
+    }
+
+    validate_required_array_item_fields(
+        report,
+        "sources",
+        &[
+            "id",
+            "citation",
+            "source_type",
+            "roles",
+            "access",
+            "why_it_matters",
+            "verification_status",
+        ],
+        checks,
+    );
+    validate_required_array_item_fields(
+        report,
+        "claims",
+        &[
+            "id",
+            "statement",
+            "claim_type",
+            "evidence_requirement",
+            "evidence_links",
+            "temporal",
+        ],
+        checks,
+    );
+    validate_required_array_item_fields(report, "relations", &["id", "kind", "from", "to"], checks);
+    validate_required_array_item_fields(
+        report,
+        "curriculum_path",
+        &[
+            "id",
+            "sequence",
+            "title",
+            "learning_goal",
+            "practice_artifact",
+            "source_ids",
+        ],
+        checks,
+    );
+    validate_required_array_item_fields(
+        report,
+        "frontier_debates",
+        &[
+            "id",
+            "kind",
+            "title",
+            "summary",
+            "why_it_matters",
+            "temporal",
+        ],
+        checks,
+    );
+}
+
+fn validate_allowed_keys(
+    object: &serde_json::Map<String, Value>,
+    path: &str,
+    allowed: &[&str],
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    for key in object.keys() {
+        if !allowed.contains(&key.as_str()) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!("{path} contains unsupported key {key:?}"),
+                )
+                .with_target(format!("{path}/{key}"), ""),
+            );
+        }
+    }
+}
+
+fn require_object_for_validation<'a>(
+    object: &'a serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) -> Option<&'a serde_json::Map<String, Value>> {
+    match object.get(key) {
+        Some(Value::Object(child)) => Some(child),
+        Some(_) => {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!("{path}/{key} must be an object"),
+                )
+                .with_target(format!("{path}/{key}"), ""),
+            );
+            None
+        }
+        None => {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!("missing required object {path}/{key}"),
+                )
+                .with_target(format!("{path}/{key}"), ""),
+            );
+            None
+        }
+    }
+}
+
+fn require_key(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    if !object.contains_key(key) {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_SCHEMA_REQUIRED,
+                format!("missing required field {path}/{key}"),
+            )
+            .with_target(format!("{path}/{key}"), ""),
+        );
+    }
+}
+
+fn require_non_empty_string(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    match object.get(key) {
+        Some(Value::String(value)) if !value.trim().is_empty() => {}
+        Some(Value::String(_)) => checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_SCHEMA_REQUIRED,
+                format!("{path}/{key} must be a non-empty string"),
+            )
+            .with_target(format!("{path}/{key}"), ""),
+        ),
+        Some(_) => checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_SCHEMA_REQUIRED,
+                format!("{path}/{key} must be a string"),
+            )
+            .with_target(format!("{path}/{key}"), ""),
+        ),
+        None => require_key(object, key, path, checks),
+    }
+}
+
+fn require_array(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    path: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    match object.get(key) {
+        Some(Value::Array(_)) => {}
+        Some(_) => checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_SCHEMA_REQUIRED,
+                format!("{path}/{key} must be an array"),
+            )
+            .with_target(format!("{path}/{key}"), ""),
+        ),
+        None => require_key(object, key, path, checks),
+    }
+}
+
+fn require_temporal_marker_fields(
+    temporal: &serde_json::Map<String, Value>,
+    path: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    require_non_empty_string(temporal, "as_of", path, checks);
+    require_non_empty_string(temporal, "temporal_status", path, checks);
+}
+
+fn validate_required_array_item_fields(
+    report: &serde_json::Map<String, Value>,
+    section: &str,
+    fields: &[&str],
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    let Some(Value::Array(items)) = report.get(section) else {
+        return;
+    };
+    for (index, item) in items.iter().enumerate() {
+        let path = format!("/report/{section}/{index}");
+        let Some(object) = item.as_object() else {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!("{path} must be an object"),
+                )
+                .with_target(path, ""),
+            );
+            continue;
+        };
+        for field in fields {
+            require_key(object, field, &path, checks);
+        }
+    }
+}
+
+fn validate_known_enum_strings(value: &Value, checks: &mut Vec<DiagnosticCheck>) {
+    if let Some(metadata) = value.get("metadata").and_then(Value::as_object) {
+        validate_string_enum(
+            metadata,
+            "report_type",
+            &["scaffold", "human_report"],
+            CHECK_VALIDATE_SCHEMA_REQUIRED,
+            "/metadata",
+            checks,
+        );
+    }
+
+    let Some(report) = value.get("report").and_then(Value::as_object) else {
+        return;
+    };
+
+    if let Some(sources) = report.get("sources").and_then(Value::as_array) {
+        for (index, source) in sources.iter().enumerate() {
+            let Some(source) = source.as_object() else {
+                continue;
+            };
+            if let Some(access) = source.get("access").and_then(Value::as_object) {
+                validate_string_enum(
+                    access,
+                    "status",
+                    &[
+                        "open_access",
+                        "free_web",
+                        "public_domain",
+                        "official_open",
+                        "user_provided",
+                        "library",
+                        "paid_book",
+                        "paywalled",
+                        "subscription",
+                        "restricted",
+                        "unknown",
+                    ],
+                    CHECK_VALIDATE_SOURCE_ACCESS,
+                    &format!("/report/sources/{index}/access"),
+                    checks,
+                );
+            }
+        }
+    }
+
+    if let Some(claims) = report.get("claims").and_then(Value::as_array) {
+        for (claim_index, claim) in claims.iter().enumerate() {
+            let Some(claim) = claim.as_object() else {
+                continue;
+            };
+            validate_string_enum(
+                claim,
+                "claim_type",
+                &[
+                    "structural",
+                    "currentness",
+                    "frontier",
+                    "debate",
+                    "curricular",
+                    "interpretive",
+                    "methodological",
+                ],
+                CHECK_VALIDATE_EVIDENCE_REQUIRED,
+                &format!("/report/claims/{claim_index}"),
+                checks,
+            );
+            validate_string_enum(
+                claim,
+                "evidence_requirement",
+                &[
+                    "none",
+                    "cataloged_source",
+                    "reviewed_source",
+                    "verified_source",
+                    "multiple_reviewed_sources",
+                ],
+                CHECK_VALIDATE_EVIDENCE_REQUIRED,
+                &format!("/report/claims/{claim_index}"),
+                checks,
+            );
+            if let Some(links) = claim.get("evidence_links").and_then(Value::as_array) {
+                for (link_index, link) in links.iter().enumerate() {
+                    let Some(link) = link.as_object() else {
+                        continue;
+                    };
+                    validate_string_enum(
+                        link,
+                        "verification_status",
+                        &["cataloged", "reviewed", "verified"],
+                        CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                        &format!("/report/claims/{claim_index}/evidence_links/{link_index}"),
+                        checks,
+                    );
+                }
+            }
+        }
+    }
+
+    if let Some(relations) = report.get("relations").and_then(Value::as_array) {
+        for (index, relation) in relations.iter().enumerate() {
+            let Some(relation) = relation.as_object() else {
+                continue;
+            };
+            validate_string_enum(
+                relation,
+                "kind",
+                &[
+                    "depends_on",
+                    "supports",
+                    "qualifies",
+                    "contradicts",
+                    "precedes",
+                    "introduces",
+                    "uses_method",
+                    "represented_by",
+                    "grounds",
+                    "motivates",
+                    "part_of",
+                    "maps_to",
+                ],
+                CHECK_VALIDATE_RELATION_KIND,
+                &format!("/report/relations/{index}"),
+                checks,
+            );
+            for endpoint_key in ["from", "to"] {
+                if let Some(endpoint) = relation.get(endpoint_key).and_then(Value::as_object) {
+                    validate_string_enum(
+                        endpoint,
+                        "entity_type",
+                        &[
+                            "concept",
+                            "claim",
+                            "source",
+                            "curriculum_step",
+                            "frontier_debate",
+                            "method",
+                            "representation",
+                        ],
+                        CHECK_VALIDATE_RELATION_ENDPOINT,
+                        &format!("/report/relations/{index}/{endpoint_key}"),
+                        checks,
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn validate_string_enum(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    allowed: &[&str],
+    check_id: &str,
+    path: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    let Some(Value::String(value)) = object.get(key) else {
+        return;
+    };
+    if !allowed.contains(&value.as_str()) {
+        checks.push(
+            DiagnosticCheck::error(
+                check_id,
+                format!("{path}/{key} has unknown value {value:?}"),
+            )
+            .with_target(format!("{path}/{key}"), ""),
+        );
+    }
+}
+
+#[derive(Debug, Default)]
+struct ReportIdIndex {
+    concepts: BTreeSet<String>,
+    methods: BTreeSet<String>,
+    representations: BTreeSet<String>,
+    sources: BTreeSet<String>,
+    claims: BTreeSet<String>,
+    curriculum_steps: BTreeSet<String>,
+    frontier_debates: BTreeSet<String>,
+    relations: BTreeSet<String>,
+    all_entities: BTreeSet<String>,
+}
+
+impl ReportIdIndex {
+    fn from_report(report: &PublicReport, checks: &mut Vec<DiagnosticCheck>) -> Self {
+        let mut index = Self::default();
+        for (item_index, item) in report.core_ideas.iter().enumerate() {
+            index.insert_entity(
+                "concept",
+                &item.id,
+                format!("/report/core_ideas/{item_index}/id"),
+                checks,
+            );
+        }
+        for (item_index, item) in report.methods.iter().enumerate() {
+            index.insert_entity(
+                "method",
+                &item.id,
+                format!("/report/methods/{item_index}/id"),
+                checks,
+            );
+        }
+        for (item_index, item) in report.representations.iter().enumerate() {
+            index.insert_entity(
+                "representation",
+                &item.id,
+                format!("/report/representations/{item_index}/id"),
+                checks,
+            );
+        }
+        for (item_index, source) in report.sources.iter().enumerate() {
+            index.insert_entity(
+                "source",
+                &source.id,
+                format!("/report/sources/{item_index}/id"),
+                checks,
+            );
+        }
+        for (item_index, claim) in report.claims.iter().enumerate() {
+            index.insert_entity(
+                "claim",
+                &claim.id,
+                format!("/report/claims/{item_index}/id"),
+                checks,
+            );
+        }
+        for (item_index, step) in report.curriculum_path.iter().enumerate() {
+            index.insert_entity(
+                "curriculum_step",
+                &step.id,
+                format!("/report/curriculum_path/{item_index}/id"),
+                checks,
+            );
+        }
+        for (item_index, frontier) in report.frontier_debates.iter().enumerate() {
+            index.insert_entity(
+                "frontier_debate",
+                &frontier.id,
+                format!("/report/frontier_debates/{item_index}/id"),
+                checks,
+            );
+        }
+        for (item_index, relation) in report.relations.iter().enumerate() {
+            if !index.relations.insert(relation.id.clone()) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_RELATION_ENDPOINT,
+                        format!("duplicate relation id {}", relation.id),
+                    )
+                    .with_target(format!("/report/relations/{item_index}/id"), &relation.id),
+                );
+            }
+        }
+        index
+    }
+
+    fn insert_entity(
+        &mut self,
+        entity_type: &str,
+        id: &str,
+        path: String,
+        checks: &mut Vec<DiagnosticCheck>,
+    ) {
+        if !is_stable_id(id) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!("{path} is not a stable id: {id:?}"),
+                )
+                .with_target(&path, id),
+            );
+        }
+        if !self.all_entities.insert(id.to_string()) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!("duplicate public entity id {id}"),
+                )
+                .with_target(path.clone(), id),
+            );
+        }
+        match entity_type {
+            "concept" => {
+                self.concepts.insert(id.to_string());
+            }
+            "method" => {
+                self.methods.insert(id.to_string());
+            }
+            "representation" => {
+                self.representations.insert(id.to_string());
+            }
+            "source" => {
+                self.sources.insert(id.to_string());
+            }
+            "claim" => {
+                self.claims.insert(id.to_string());
+            }
+            "curriculum_step" => {
+                self.curriculum_steps.insert(id.to_string());
+            }
+            "frontier_debate" => {
+                self.frontier_debates.insert(id.to_string());
+            }
+            _ => {}
+        }
+    }
+
+    fn has_entity(&self, entity_type: EntityType, id: &str) -> bool {
+        match entity_type {
+            EntityType::Concept => self.concepts.contains(id),
+            EntityType::Claim => self.claims.contains(id),
+            EntityType::Source => self.sources.contains(id),
+            EntityType::CurriculumStep => self.curriculum_steps.contains(id),
+            EntityType::FrontierDebate => self.frontier_debates.contains(id),
+            EntityType::Method => self.methods.contains(id),
+            EntityType::Representation => self.representations.contains(id),
+        }
+    }
+
+    fn has_any_entity(&self, id: &str) -> bool {
+        self.all_entities.contains(id)
+    }
+}
+
+fn validate_public_report_boundary(
+    value: &Value,
+    report_type: ReportType,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    if report_type != ReportType::HumanReport {
+        return;
+    }
+    let Some(report) = value.get("report") else {
+        return;
+    };
+    scan_public_boundary(report, "/report", checks);
+}
+
+fn scan_public_boundary(value: &Value, path: &str, checks: &mut Vec<DiagnosticCheck>) {
+    match value {
+        Value::Object(object) => {
+            for (key, child) in object {
+                let child_path = format!("{path}/{key}");
+                if is_public_boundary_key(key) {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_PUBLIC_BOUNDARY,
+                            format!("human_report public payload contains non-public key {key:?}"),
+                        )
+                        .with_target(&child_path, ""),
+                    );
+                }
+                scan_public_boundary(child, &child_path, checks);
+            }
+        }
+        Value::Array(items) => {
+            for (index, child) in items.iter().enumerate() {
+                scan_public_boundary(child, &format!("{path}/{index}"), checks);
+            }
+        }
+        Value::String(text) => {
+            let normalized = normalize_id_text(text);
+            for phrase in [
+                "sentinel internal",
+                "raw prompt intent",
+                "prompt intent",
+                "raw learner profile",
+                "learner profile",
+                "original goal",
+                "scaffold quality notes",
+                "internal context",
+                "source to verify",
+                "date after lookup",
+                "placeholder",
+                "todo",
+            ] {
+                if normalized.contains(phrase) {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_PUBLIC_BOUNDARY,
+                            format!("human_report public payload contains non-public placeholder or internal text {phrase:?}"),
+                        )
+                        .with_target(path.to_string(), ""),
+                    );
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn is_public_boundary_key(key: &str) -> bool {
+    matches!(
+        key,
+        "internal_context"
+            | "diagnostics"
+            | "check_id"
+            | "severity"
+            | "target_path"
+            | "raw_learner_profile"
+            | "original_goal"
+            | "prompt_derived_assumptions"
+            | "placeholder_state"
+            | "handoff_notes"
+            | "raw_prompt_intent"
+            | "prompt_intent"
+            | "research_frame"
+            | "scaffold_quality_notes"
+            | "quality_gate_diagnostics"
+    )
+}
+
+fn validate_reference_consistency(
+    report: &PublicReport,
+    index: &ReportIdIndex,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    for (item_index, item) in report.core_ideas.iter().enumerate() {
+        validate_source_refs(
+            &item.source_ids,
+            index,
+            &format!("/report/core_ideas/{item_index}/source_ids"),
+            &item.id,
+            checks,
+        );
+    }
+    for (item_index, item) in report.methods.iter().enumerate() {
+        validate_source_refs(
+            &item.source_ids,
+            index,
+            &format!("/report/methods/{item_index}/source_ids"),
+            &item.id,
+            checks,
+        );
+    }
+    for (item_index, item) in report.representations.iter().enumerate() {
+        validate_source_refs(
+            &item.source_ids,
+            index,
+            &format!("/report/representations/{item_index}/source_ids"),
+            &item.id,
+            checks,
+        );
+    }
+    for (step_index, step) in report.curriculum_path.iter().enumerate() {
+        validate_source_refs(
+            &step.source_ids,
+            index,
+            &format!("/report/curriculum_path/{step_index}/source_ids"),
+            &step.id,
+            checks,
+        );
+        for prerequisite_id in &step.prerequisite_ids {
+            if !index.has_any_entity(prerequisite_id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_CURRICULUM_REFERENCE,
+                        format!(
+                            "curriculum step {} references missing prerequisite {}",
+                            step.id, prerequisite_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/curriculum_path/{step_index}/prerequisite_ids"),
+                        &step.id,
+                    ),
+                );
+            }
+            if prerequisite_id.starts_with("step-")
+                && !index.curriculum_steps.contains(prerequisite_id)
+            {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_CURRICULUM_REFERENCE,
+                        format!(
+                            "curriculum step {} references missing curriculum step {}",
+                            step.id, prerequisite_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/curriculum_path/{step_index}/prerequisite_ids"),
+                        &step.id,
+                    ),
+                );
+            }
+        }
+    }
+    for (item_index, item) in report.frontier_debates.iter().enumerate() {
+        validate_source_refs(
+            &item.source_ids,
+            index,
+            &format!("/report/frontier_debates/{item_index}/source_ids"),
+            &item.id,
+            checks,
+        );
+        for claim_id in &item.claim_ids {
+            if !index.claims.contains(claim_id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_RELATION_ENDPOINT,
+                        format!(
+                            "frontier/debate item {} references missing claim {}",
+                            item.id, claim_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/frontier_debates/{item_index}/claim_ids"),
+                        &item.id,
+                    ),
+                );
+            }
+        }
+        for background_id in &item.required_background_ids {
+            if !index.has_any_entity(background_id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_RELATION_ENDPOINT,
+                        format!(
+                            "frontier/debate item {} references missing background {}",
+                            item.id, background_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/frontier_debates/{item_index}/required_background_ids"),
+                        &item.id,
+                    ),
+                );
+            }
+        }
+    }
+}
+
+fn validate_source_refs(
+    source_ids: &[String],
+    index: &ReportIdIndex,
+    path: &str,
+    entity_id: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    for source_id in source_ids {
+        if !index.sources.contains(source_id) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_EVIDENCE_SOURCE,
+                    format!("{entity_id} references missing source {source_id}"),
+                )
+                .with_target(path.to_string(), entity_id),
+            );
+        }
+    }
+}
+
+fn validate_claim_evidence_requirements(
+    report: &PublicReport,
+    index: &ReportIdIndex,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    for (claim_index, claim) in report.claims.iter().enumerate() {
+        let path = format!("/report/claims/{claim_index}");
+        let mut usable_reviewed_sources = BTreeSet::new();
+        let mut usable_verified_sources = BTreeSet::new();
+        for (link_index, link) in claim.evidence_links.iter().enumerate() {
+            let link_path = format!("{path}/evidence_links/{link_index}");
+            if !index.sources.contains(&link.source_id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_EVIDENCE_SOURCE,
+                        format!(
+                            "claim {} evidence link references missing source {}",
+                            claim.id, link.source_id
+                        ),
+                    )
+                    .with_target(&link_path, &claim.id),
+                );
+            }
+            if matches!(
+                link.verification_status,
+                VerificationStatus::Reviewed | VerificationStatus::Verified
+            ) && link.locator.trim().is_empty()
+                && link.support_note.trim().is_empty()
+            {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                        format!(
+                            "claim {} evidence link {} needs a locator or support_note",
+                            claim.id, link.source_id
+                        ),
+                    )
+                    .with_target(&link_path, &claim.id),
+                );
+            }
+            if link.support_kind == SupportKind::Background {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                        format!(
+                            "claim {} evidence link {} is background and cannot satisfy claim support",
+                            claim.id, link.source_id
+                        ),
+                    )
+                    .with_target(&link_path, &claim.id),
+                );
+                continue;
+            }
+            if link.locator.trim().is_empty() && link.support_note.trim().is_empty() {
+                continue;
+            }
+            match link.verification_status {
+                VerificationStatus::Reviewed => {
+                    usable_reviewed_sources.insert(link.source_id.clone());
+                }
+                VerificationStatus::Verified => {
+                    usable_reviewed_sources.insert(link.source_id.clone());
+                    usable_verified_sources.insert(link.source_id.clone());
+                }
+                VerificationStatus::Cataloged => {}
+            }
+        }
+
+        if !claim_requires_reviewed_or_verified_evidence(claim) {
+            continue;
+        }
+
+        let satisfied = match claim.evidence_requirement {
+            EvidenceRequirement::VerifiedSource => !usable_verified_sources.is_empty(),
+            EvidenceRequirement::MultipleReviewedSources => usable_reviewed_sources.len() >= 2,
+            EvidenceRequirement::None
+            | EvidenceRequirement::CatalogedSource
+            | EvidenceRequirement::ReviewedSource => !usable_reviewed_sources.is_empty(),
+        };
+        if !satisfied {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_EVIDENCE_REQUIRED,
+                    format!(
+                        "claim {} requires reviewed or verified evidence with a locator or support_note based on claim_type {:?} and evidence_requirement {:?}",
+                        claim.id, claim.claim_type, claim.evidence_requirement
+                    ),
+                )
+                .with_target(&path, &claim.id),
+            );
+        }
+    }
+}
+
+fn claim_requires_reviewed_or_verified_evidence(claim: &Claim) -> bool {
+    claim.evidence_requirement != EvidenceRequirement::None
+        || matches!(
+            claim.claim_type,
+            ClaimType::Currentness | ClaimType::Frontier | ClaimType::Debate
+        )
+}
+
+fn validate_source_role_coverage(report: &PublicReport, checks: &mut Vec<DiagnosticCheck>) {
+    for (requirement_index, requirement) in report
+        .evidence_standards
+        .source_role_requirements
+        .iter()
+        .enumerate()
+    {
+        let path =
+            format!("/report/evidence_standards/source_role_requirements/{requirement_index}");
+        let minimum = requirement
+            .minimum_sources
+            .unwrap_or(match requirement.requirement {
+                SourceRoleRequirementKind::Required | SourceRoleRequirementKind::Conditional => 1,
+                SourceRoleRequirementKind::Waived | SourceRoleRequirementKind::NotApplicable => 0,
+            }) as usize;
+        let count = report
+            .sources
+            .iter()
+            .filter(|source| source.roles.contains(&requirement.role))
+            .count();
+        if requirement.rationale.trim().is_empty() {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!(
+                        "source role {} needs a recorded rationale",
+                        source_role_label(requirement.role)
+                    ),
+                )
+                .with_target(&path, ""),
+            );
+        }
+
+        match requirement.requirement {
+            SourceRoleRequirementKind::Required if count < minimum => {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_SOURCE_ROLE_REQUIRED,
+                        format!(
+                            "required source role {} has {count} source(s), minimum is {minimum}",
+                            source_role_label(requirement.role)
+                        ),
+                    )
+                    .with_target(&path, ""),
+                );
+            }
+            SourceRoleRequirementKind::Conditional if count < minimum => {
+                if !has_usable_waiver(&requirement.waiver) {
+                    checks.push(
+                        DiagnosticCheck::warning(
+                            CHECK_VALIDATE_SOURCE_ROLE_CONDITIONAL,
+                            format!(
+                                "conditional source role {} has {count} source(s), minimum is {minimum}; record a waiver rationale if the condition is not active",
+                                source_role_label(requirement.role)
+                            ),
+                        )
+                        .with_target(&path, ""),
+                    );
+                }
+            }
+            SourceRoleRequirementKind::Waived => {
+                if !has_usable_waiver(&requirement.waiver) {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_SOURCE_ROLE_WAIVER,
+                            format!(
+                                "waived source role {} needs waiver rationale and as_of",
+                                source_role_label(requirement.role)
+                            ),
+                        )
+                        .with_target(&path, ""),
+                    );
+                }
+            }
+            SourceRoleRequirementKind::NotApplicable => {
+                if let Some(waiver) = &requirement.waiver {
+                    if waiver.rationale.trim().is_empty() {
+                        checks.push(
+                            DiagnosticCheck::warning(
+                                CHECK_VALIDATE_SOURCE_ROLE_WAIVER,
+                                format!(
+                                    "not_applicable source role {} has an empty waiver rationale",
+                                    source_role_label(requirement.role)
+                                ),
+                            )
+                            .with_target(&path, ""),
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn has_usable_waiver(waiver: &Option<SourceRoleWaiver>) -> bool {
+    waiver
+        .as_ref()
+        .map(|waiver| !waiver.rationale.trim().is_empty() && !waiver.as_of.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn validate_currentness(
+    document: &ReportDocument,
+    index: &ReportIdIndex,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    validate_temporal_marker(
+        &document.metadata.temporal_review,
+        "/metadata/temporal_review",
+        "",
+        document.metadata.report_type == ReportType::HumanReport,
+        checks,
+    );
+
+    let sources_by_id = document
+        .report
+        .sources
+        .iter()
+        .map(|source| (source.id.as_str(), source))
+        .collect::<BTreeMap<_, _>>();
+
+    for (claim_index, claim) in document.report.claims.iter().enumerate() {
+        let path = format!("/report/claims/{claim_index}/temporal");
+        let needs_current_metadata = claim_needs_currentness_metadata(claim);
+        validate_temporal_marker(
+            &claim.temporal,
+            &path,
+            &claim.id,
+            needs_current_metadata,
+            checks,
+        );
+        if has_currentness_words(&format!("{} {}", claim.statement, claim.notes))
+            && structured_temporal_metadata_absent(&claim.temporal)
+        {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_CURRENTNESS_PROSE,
+                    format!(
+                        "claim {} uses currentness prose but lacks structured temporal metadata",
+                        claim.id
+                    ),
+                )
+                .with_target(format!("/report/claims/{claim_index}/statement"), &claim.id),
+            );
+        }
+        if needs_current_metadata {
+            validate_claim_source_dates(claim, &sources_by_id, index, claim_index, checks);
+        }
+    }
+
+    for (item_index, item) in document.report.frontier_debates.iter().enumerate() {
+        validate_temporal_marker(
+            &item.temporal,
+            &format!("/report/frontier_debates/{item_index}/temporal"),
+            &item.id,
+            true,
+            checks,
+        );
+        if has_currentness_words(&format!("{} {}", item.title, item.summary))
+            && structured_temporal_metadata_absent(&item.temporal)
+        {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_CURRENTNESS_PROSE,
+                    format!(
+                        "frontier/debate item {} uses currentness prose but lacks structured temporal metadata",
+                        item.id
+                    ),
+                )
+                .with_target(
+                    format!("/report/frontier_debates/{item_index}/summary"),
+                    &item.id,
+                ),
+            );
+        }
+    }
+}
+
+fn validate_temporal_marker(
+    marker: &TemporalMarker,
+    path: &str,
+    entity_id: &str,
+    require_review_after: bool,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    if marker.as_of.trim().is_empty() {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_CURRENTNESS_METADATA,
+                format!("{path}/as_of is required for deterministic currentness"),
+            )
+            .with_target(format!("{path}/as_of"), entity_id),
+        );
+    } else if !looks_like_iso_date(&marker.as_of) {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_CURRENTNESS_METADATA,
+                format!("{path}/as_of must be YYYY-MM-DD"),
+            )
+            .with_target(format!("{path}/as_of"), entity_id),
+        );
+    }
+
+    if require_review_after && marker.review_after.trim().is_empty() {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_CURRENTNESS_METADATA,
+                format!("{path}/review_after is required for currentness/frontier/debate claims"),
+            )
+            .with_target(format!("{path}/review_after"), entity_id),
+        );
+    }
+    if !marker.review_after.trim().is_empty() && !looks_like_iso_date(&marker.review_after) {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_CURRENTNESS_METADATA,
+                format!("{path}/review_after must be YYYY-MM-DD"),
+            )
+            .with_target(format!("{path}/review_after"), entity_id),
+        );
+    }
+
+    if !marker.as_of.trim().is_empty()
+        && !marker.review_after.trim().is_empty()
+        && looks_like_iso_date(&marker.as_of)
+        && looks_like_iso_date(&marker.review_after)
+        && marker.review_after.as_str() <= marker.as_of.as_str()
+    {
+        let severity = if marker.temporal_status == TemporalStatus::Current {
+            DiagnosticSeverity::Error
+        } else {
+            DiagnosticSeverity::Warning
+        };
+        checks.push(
+            DiagnosticCheck::new(
+                CHECK_VALIDATE_CURRENTNESS_REVIEW_DUE,
+                severity,
+                format!(
+                    "{path}/review_after {} is not after as_of {}",
+                    marker.review_after, marker.as_of
+                ),
+            )
+            .with_target(format!("{path}/review_after"), entity_id),
+        );
+    }
+
+    match marker.temporal_status {
+        TemporalStatus::Stale => checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_CURRENTNESS_REVIEW_DUE,
+                format!("{path}/temporal_status is stale"),
+            )
+            .with_target(format!("{path}/temporal_status"), entity_id),
+        ),
+        TemporalStatus::ReviewDue => checks.push(
+            DiagnosticCheck::warning(
+                CHECK_VALIDATE_CURRENTNESS_REVIEW_DUE,
+                format!("{path}/temporal_status is review_due"),
+            )
+            .with_target(format!("{path}/temporal_status"), entity_id),
+        ),
+        TemporalStatus::Unknown if require_review_after => checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_CURRENTNESS_METADATA,
+                format!("{path}/temporal_status cannot be unknown for currentness/frontier/debate claims"),
+            )
+            .with_target(format!("{path}/temporal_status"), entity_id),
+        ),
+        _ => {}
+    }
+}
+
+fn claim_needs_currentness_metadata(claim: &Claim) -> bool {
+    matches!(
+        claim.claim_type,
+        ClaimType::Currentness | ClaimType::Frontier | ClaimType::Debate
+    ) || matches!(
+        claim.temporal.temporal_status,
+        TemporalStatus::Current | TemporalStatus::ReviewDue | TemporalStatus::Stale
+    )
+}
+
+fn validate_claim_source_dates(
+    claim: &Claim,
+    sources_by_id: &BTreeMap<&str, &ReportSource>,
+    index: &ReportIdIndex,
+    claim_index: usize,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    for link in &claim.evidence_links {
+        if !index.sources.contains(&link.source_id) {
+            continue;
+        }
+        let Some(source) = sources_by_id.get(link.source_id.as_str()) else {
+            continue;
+        };
+        if source.date.trim().is_empty() {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_CURRENTNESS_SOURCE_DATE,
+                    format!(
+                        "currentness claim {} uses source {} with no source date",
+                        claim.id, source.id
+                    ),
+                )
+                .with_target(
+                    format!("/report/claims/{claim_index}/evidence_links"),
+                    &claim.id,
+                ),
+            );
+        } else if source_date_after_as_of(&source.date, &claim.temporal.as_of) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_CURRENTNESS_SOURCE_DATE,
+                    format!(
+                        "claim {} has as_of {} before source {} date {}",
+                        claim.id, claim.temporal.as_of, source.id, source.date
+                    ),
+                )
+                .with_target(
+                    format!("/report/claims/{claim_index}/evidence_links"),
+                    &claim.id,
+                ),
+            );
+        }
+    }
+}
+
+fn validate_relation_consistency(
+    report: &PublicReport,
+    index: &ReportIdIndex,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    for (relation_index, relation) in report.relations.iter().enumerate() {
+        validate_relation_endpoint_consistency(
+            relation,
+            "from",
+            &relation.from,
+            relation_index,
+            index,
+            checks,
+        );
+        validate_relation_endpoint_consistency(
+            relation,
+            "to",
+            &relation.to,
+            relation_index,
+            index,
+            checks,
+        );
+        if matches!(
+            relation.kind,
+            RelationKind::DependsOn | RelationKind::Precedes
+        ) && (relation.from.entity_type == EntityType::CurriculumStep
+            || relation.to.entity_type == EntityType::CurriculumStep)
+            && (!index.has_entity(relation.from.entity_type, &relation.from.id)
+                || !index.has_entity(relation.to.entity_type, &relation.to.id))
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_CURRICULUM_REFERENCE,
+                    format!(
+                        "dependency/curriculum relation {} references a missing endpoint",
+                        relation.id
+                    ),
+                )
+                .with_target(format!("/report/relations/{relation_index}"), &relation.id),
+            );
+        }
+    }
+}
+
+fn validate_relation_endpoint_consistency(
+    relation: &Relation,
+    endpoint_name: &str,
+    endpoint: &RelationEndpoint,
+    relation_index: usize,
+    index: &ReportIdIndex,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    if !index.has_entity(endpoint.entity_type, &endpoint.id) {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_RELATION_ENDPOINT,
+                format!(
+                    "relation {} {} endpoint references missing {}:{}",
+                    relation.id,
+                    endpoint_name,
+                    entity_type_label(endpoint.entity_type),
+                    endpoint.id
+                ),
+            )
+            .with_target(
+                format!("/report/relations/{relation_index}/{endpoint_name}"),
+                &relation.id,
+            ),
+        );
+    }
+}
+
+fn validate_visual_references(
+    report: &PublicReport,
+    index: &ReportIdIndex,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    for (view_index, view) in report.visual_views.iter().enumerate() {
+        let mut node_ids = BTreeSet::new();
+        for (node_index, node) in view.nodes.iter().enumerate() {
+            node_ids.insert(node.id.clone());
+            if !node.ref_id.trim().is_empty() && !index.has_entity(node.entity_type, &node.ref_id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_VISUAL_REFERENCE,
+                        format!(
+                            "visual view {} node {} references missing {}:{}",
+                            view.id,
+                            node.id,
+                            entity_type_label(node.entity_type),
+                            node.ref_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/visual_views/{view_index}/nodes/{node_index}/ref_id"),
+                        &view.id,
+                    ),
+                );
+            }
+        }
+        for (edge_index, edge) in view.edges.iter().enumerate() {
+            for (endpoint_name, endpoint) in [("from", &edge.from), ("to", &edge.to)] {
+                if !node_ids.contains(endpoint) {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_VISUAL_REFERENCE,
+                            format!(
+                                "visual view {} edge references missing node {}",
+                                view.id, endpoint
+                            ),
+                        )
+                        .with_target(
+                            format!(
+                                "/report/visual_views/{view_index}/edges/{edge_index}/{endpoint_name}"
+                            ),
+                            &view.id,
+                        ),
+                    );
+                }
+            }
+            if !edge.relation_id.trim().is_empty() && !index.relations.contains(&edge.relation_id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_VISUAL_REFERENCE,
+                        format!(
+                            "visual view {} edge references missing relation {}",
+                            view.id, edge.relation_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/visual_views/{view_index}/edges/{edge_index}/relation_id"),
+                        &view.id,
+                    ),
+                );
+            }
+        }
+    }
+}
+
+fn validate_source_access_metadata(report: &PublicReport, checks: &mut Vec<DiagnosticCheck>) {
+    for (source_index, source) in report.sources.iter().enumerate() {
+        let path = format!("/report/sources/{source_index}/access");
+        if source.access.status == AccessStatus::Unknown {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SOURCE_ACCESS,
+                    format!("source {} has unknown access status", source.id),
+                )
+                .with_target(format!("{path}/status"), &source.id),
+            );
+        }
+        if source.access.route.trim().is_empty()
+            || source.access.route.trim().eq_ignore_ascii_case("unknown")
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SOURCE_ACCESS,
+                    format!("source {} has no actionable access route", source.id),
+                )
+                .with_target(format!("{path}/route"), &source.id),
+            );
+        }
+        if source_access_requires_notes(source.access.status)
+            && source.access.budget_estimate.trim().is_empty()
+            && source.access.license.trim().is_empty()
+            && source.access.notes.trim().is_empty()
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SOURCE_ACCESS,
+                    format!(
+                        "source {} needs budget, license, or access notes for {} access",
+                        source.id,
+                        access_status_label(source.access.status)
+                    ),
+                )
+                .with_target(path.clone(), &source.id),
+            );
+        }
+        if source_access_requires_metadata_only(source.access.status)
+            && source.access.metadata_only != Some(true)
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SOURCE_ACCESS,
+                    format!(
+                        "source {} with {} access must be marked metadata_only",
+                        source.id,
+                        access_status_label(source.access.status)
+                    ),
+                )
+                .with_target(format!("{path}/metadata_only"), &source.id),
+            );
+        }
+    }
+}
+
+fn source_access_requires_notes(status: AccessStatus) -> bool {
+    matches!(
+        status,
+        AccessStatus::PaidBook
+            | AccessStatus::Paywalled
+            | AccessStatus::Subscription
+            | AccessStatus::Restricted
+            | AccessStatus::Unknown
+    )
+}
+
+fn source_access_requires_metadata_only(status: AccessStatus) -> bool {
+    matches!(
+        status,
+        AccessStatus::PaidBook
+            | AccessStatus::Paywalled
+            | AccessStatus::Subscription
+            | AccessStatus::Restricted
+            | AccessStatus::Unknown
+    )
+}
+
+fn structured_temporal_metadata_absent(marker: &TemporalMarker) -> bool {
+    marker.as_of.trim().is_empty() || marker.temporal_status == TemporalStatus::Unknown
+}
+
+fn has_currentness_words(text: &str) -> bool {
+    let normalized = normalize_id_text(text);
+    normalized.split_whitespace().any(|word| {
+        matches!(
+            word,
+            "current" | "currently" | "recent" | "recently" | "latest"
+        )
+    })
+}
+
+fn source_date_after_as_of(source_date: &str, as_of: &str) -> bool {
+    if !looks_like_iso_date(as_of) {
+        return false;
+    }
+    if looks_like_iso_date(source_date) {
+        return source_date > as_of;
+    }
+    let Some(source_year) = leading_year(source_date) else {
+        return false;
+    };
+    let Some(as_of_year) = leading_year(as_of) else {
+        return false;
+    };
+    source_year > as_of_year
+}
+
+fn leading_year(value: &str) -> Option<i32> {
+    let year = value.get(0..4)?;
+    if year.chars().all(|ch| ch.is_ascii_digit()) {
+        year.parse().ok()
+    } else {
+        None
+    }
+}
+
+fn looks_like_iso_date(value: &str) -> bool {
+    NaiveDate::parse_from_str(value, "%Y-%m-%d").is_ok()
+}
+
+fn is_stable_id(id: &str) -> bool {
+    id.contains('-')
+        && !id.ends_with('-')
+        && !id.contains("--")
+        && id
+            .chars()
+            .next()
+            .map(|first| first.is_ascii_lowercase())
+            .unwrap_or(false)
+        && id
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+}
+
+fn source_role_label(role: SourceRole) -> &'static str {
+    match role {
+        SourceRole::Orientation => "orientation",
+        SourceRole::Foundation => "foundation",
+        SourceRole::Method => "method",
+        SourceRole::Representation => "representation",
+        SourceRole::Evidence => "evidence",
+        SourceRole::Synthesis => "synthesis",
+        SourceRole::Frontier => "frontier",
+        SourceRole::Debate => "debate",
+        SourceRole::Standard => "standard",
+        SourceRole::Dataset => "dataset",
+        SourceRole::Infrastructure => "infrastructure",
+        SourceRole::Critique => "critique",
+        SourceRole::Curriculum => "curriculum",
+        SourceRole::Other => "other",
+    }
+}
+
+fn access_status_label(status: AccessStatus) -> &'static str {
+    match status {
+        AccessStatus::OpenAccess => "open_access",
+        AccessStatus::FreeWeb => "free_web",
+        AccessStatus::PublicDomain => "public_domain",
+        AccessStatus::OfficialOpen => "official_open",
+        AccessStatus::UserProvided => "user_provided",
+        AccessStatus::Library => "library",
+        AccessStatus::PaidBook => "paid_book",
+        AccessStatus::Paywalled => "paywalled",
+        AccessStatus::Subscription => "subscription",
+        AccessStatus::Restricted => "restricted",
+        AccessStatus::Unknown => "unknown",
+    }
+}
+
+fn entity_type_label(entity_type: EntityType) -> &'static str {
+    match entity_type {
+        EntityType::Concept => "concept",
+        EntityType::Claim => "claim",
+        EntityType::Source => "source",
+        EntityType::CurriculumStep => "curriculum_step",
+        EntityType::FrontierDebate => "frontier_debate",
+        EntityType::Method => "method",
+        EntityType::Representation => "representation",
+    }
+}
+
+#[derive(Debug, Clone)]
+struct MarkdownSection {
+    title: String,
+    canonical: Option<CanonicalSection>,
+    body: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum CanonicalSection {
+    ResearchFrame,
+    DomainDecomposition,
+    Orientation,
+    DeepStructure,
+    SourceRoleProbe,
+    LiteratureLadder,
+    CurriculumRoadmap,
+    PracticeAssessment,
+    FrontierDebates,
+    VisualMap,
+    VisualSummary,
+    SourcesFurtherReading,
+    SourcePointers,
+    SoKUsefulnessNotes,
+    ScaffoldQualityNotes,
+    Claims,
+}
+
+#[derive(Debug, Default)]
+struct ParsedMarkdownReport {
+    title_field: String,
+    sections: BTreeSet<CanonicalSection>,
+    research_frame: BTreeMap<String, String>,
+    domain_decomposition: String,
+    orientation: String,
+    deep_structure_rows: Vec<BTreeMap<String, String>>,
+    source_role_rows: Vec<BTreeMap<String, String>>,
+    curriculum_rows: Vec<BTreeMap<String, String>>,
+    frontier_rows: Vec<BTreeMap<String, String>>,
+    claim_rows: Vec<BTreeMap<String, String>>,
+    practice_text: String,
+    usefulness_notes: Vec<String>,
+    quality_notes: Vec<String>,
+    placeholder_lines: Vec<String>,
+    diagnostics: Vec<DiagnosticCheck>,
+}
+
+#[derive(Debug, Clone)]
+struct ClaimSeed {
+    statement: String,
+    claim_type: ClaimType,
+    evidence_requirement: EvidenceRequirement,
+    source_refs: Vec<String>,
+    confidence: Option<ClaimConfidence>,
+    notes: String,
+    temporal_status: Option<TemporalStatus>,
+}
+
+pub fn export_markdown_report<P>(
+    report_path: P,
+    sources_path: P,
+    evidence_path: Option<P>,
+    stage: ExportStage,
+) -> Result<ReportDocument>
+where
+    P: AsRef<Path>,
+{
+    let report_path = report_path.as_ref();
+    let sources_path = sources_path.as_ref();
+    let markdown = fs::read_to_string(report_path)
+        .with_context(|| format!("read report Markdown {}", report_path.display()))?;
+    let mut parsed = parse_markdown_report(&markdown);
+
+    let normalized_sources = normalize_source_manifest(sources_path)?;
+    let mut sources = normalized_sources.sources;
+    let mut evidence = normalized_sources.evidence;
+    let mut diagnostics = Vec::new();
+    diagnostics.append(&mut parsed.diagnostics);
+    diagnostics.extend(normalized_sources.diagnostics);
+
+    if let Some(path) = evidence_path.as_ref() {
+        let mut reviewed_evidence: Vec<EvidenceEntry> = read_jsonl_file(path.as_ref())?;
+        evidence.append(&mut reviewed_evidence);
+    }
+
+    let source_ids = sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect::<BTreeSet<_>>();
+    diagnostics.extend(evidence_source_diagnostics(&evidence, &source_ids));
+    apply_evidence_review_status(&mut sources, &evidence);
+
+    let generated_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+    let as_of = generated_at
+        .split('T')
+        .next()
+        .unwrap_or("1970-01-01")
+        .to_string();
+    let review_after = review_after_date(&as_of);
+    let field = infer_report_field(&parsed);
+    if field == "Unknown field" {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_MISSING_FIELD,
+            "could not infer report field from canonical title or Research Frame table",
+        ));
+    }
+
+    let source_lookup = SourceLookup::new(&sources);
+    let scope = build_scope(&parsed, &mut diagnostics);
+    let domain_profile = build_domain_profile(&parsed, stage, &mut diagnostics);
+    let (core_ideas, methods, representations) =
+        build_knowledge_items(&parsed, &source_lookup, &mut diagnostics);
+    let evidence_standards = build_evidence_standards(&parsed);
+    let curriculum_path = build_curriculum_path(&parsed, &source_lookup, &mut diagnostics);
+    let (frontier_debates, frontier_claims) =
+        build_frontier_debates(&parsed, &source_lookup, &as_of, &review_after);
+    let mut claim_seeds = build_claim_seeds(&parsed);
+    claim_seeds.extend(frontier_claims);
+    let claims = build_claims(
+        claim_seeds,
+        &source_lookup,
+        &evidence,
+        stage,
+        &as_of,
+        &review_after,
+        &mut diagnostics,
+    );
+
+    warn_if_empty_public_sections(
+        &core_ideas,
+        &methods,
+        &representations,
+        &curriculum_path,
+        &mut diagnostics,
+    );
+
+    if stage == ExportStage::Final {
+        for section in [
+            CanonicalSection::ResearchFrame,
+            CanonicalSection::ScaffoldQualityNotes,
+            CanonicalSection::SoKUsefulnessNotes,
+        ] {
+            if parsed_has_section(&parsed, section) {
+                diagnostics.push(DiagnosticCheck::warning(
+                    CHECK_EXPORT_INTERNAL_SECTION_IN_FINAL,
+                    format!(
+                        "final-stage export ignored internal scaffold section {}",
+                        canonical_section_label(section)
+                    ),
+                ));
+            }
+        }
+    }
+
+    let report_type = match stage {
+        ExportStage::Scaffold => ReportType::Scaffold,
+        ExportStage::Final => ReportType::HumanReport,
+    };
+    let mut document = ReportDocument {
+        metadata: ReportMetadata {
+            schema_version: "sok-report/v1".to_string(),
+            generated_at,
+            report_type,
+            temporal_review: TemporalMarker {
+                as_of: as_of.clone(),
+                review_after: match stage {
+                    ExportStage::Scaffold => String::new(),
+                    ExportStage::Final => review_after.clone(),
+                },
+                temporal_status: match stage {
+                    ExportStage::Scaffold => TemporalStatus::Unknown,
+                    ExportStage::Final => TemporalStatus::Current,
+                },
+                rationale: match stage {
+                    ExportStage::Scaffold => {
+                        "Exported from a bounded scaffold before final evidence validation."
+                            .to_string()
+                    }
+                    ExportStage::Final => {
+                        "Exported from a bounded human report and source/evidence files."
+                            .to_string()
+                    }
+                },
+            },
+            generator: Some(GeneratorInfo {
+                name: "sok export-json".to_string(),
+                version: "1".to_string(),
+            }),
+        },
+        report: PublicReport {
+            field,
+            scope,
+            domain_profile,
+            core_ideas,
+            methods,
+            representations,
+            evidence_standards,
+            sources,
+            claims,
+            relations: Vec::new(),
+            curriculum_path,
+            frontier_debates,
+            visual_views: Vec::new(),
+        },
+        internal_context: match stage {
+            ExportStage::Scaffold => Some(build_internal_context(&parsed)),
+            ExportStage::Final => None,
+        },
+        diagnostics: None,
+    };
+
+    if !diagnostics.is_empty() {
+        document.diagnostics = Some(Diagnostics {
+            summary: format!(
+                "export-json emitted {} diagnostic(s) while converting bounded Markdown.",
+                diagnostics.len()
+            ),
+            checks: diagnostics,
+        });
+    }
+
+    Ok(document)
+}
+
+fn parse_markdown_report(markdown: &str) -> ParsedMarkdownReport {
+    let mut parsed = ParsedMarkdownReport {
+        title_field: infer_title_field(markdown),
+        placeholder_lines: collect_placeholder_lines(markdown),
+        ..ParsedMarkdownReport::default()
+    };
+    let sections = parse_markdown_sections(markdown, &mut parsed.diagnostics);
+    let mut seen = BTreeSet::new();
+
+    for section in sections {
+        let Some(canonical) = section.canonical else {
+            parsed.diagnostics.push(DiagnosticCheck::warning(
+                CHECK_EXPORT_UNSUPPORTED_SECTION,
+                format!("unsupported Markdown section {:?}", section.title),
+            ));
+            continue;
+        };
+        parsed.sections.insert(canonical);
+        if !seen.insert(canonical) {
+            parsed.diagnostics.push(DiagnosticCheck::warning(
+                CHECK_EXPORT_AMBIGUOUS_SECTION,
+                format!(
+                    "duplicate canonical Markdown section {}; only deterministic table extraction is supported",
+                    canonical_section_label(canonical)
+                ),
+            ));
+        }
+
+        match canonical {
+            CanonicalSection::ResearchFrame => {
+                parsed
+                    .research_frame
+                    .extend(parse_key_value_table(&section.body));
+            }
+            CanonicalSection::DomainDecomposition => {
+                parsed.domain_decomposition = public_section_text(&section.body);
+            }
+            CanonicalSection::Orientation => {
+                parsed.orientation = public_section_text(&section.body);
+            }
+            CanonicalSection::DeepStructure => {
+                parsed
+                    .deep_structure_rows
+                    .extend(parse_first_markdown_table(&section.body));
+            }
+            CanonicalSection::SourceRoleProbe => {
+                parsed
+                    .source_role_rows
+                    .extend(parse_first_markdown_table(&section.body));
+            }
+            CanonicalSection::CurriculumRoadmap => {
+                parsed
+                    .curriculum_rows
+                    .extend(parse_first_markdown_table(&section.body));
+            }
+            CanonicalSection::FrontierDebates => {
+                parsed
+                    .frontier_rows
+                    .extend(parse_first_markdown_table(&section.body));
+            }
+            CanonicalSection::Claims => {
+                parsed
+                    .claim_rows
+                    .extend(parse_first_markdown_table(&section.body));
+            }
+            CanonicalSection::PracticeAssessment => {
+                parsed.practice_text = public_section_text(&section.body);
+            }
+            CanonicalSection::SoKUsefulnessNotes => {
+                parsed.usefulness_notes = bullet_or_paragraph_lines(&section.body);
+            }
+            CanonicalSection::ScaffoldQualityNotes => {
+                parsed.quality_notes = bullet_or_paragraph_lines(&section.body);
+            }
+            CanonicalSection::VisualMap | CanonicalSection::VisualSummary => {
+                parsed.diagnostics.push(DiagnosticCheck::warning(
+                    CHECK_EXPORT_UNSUPPORTED_SECTION,
+                    format!(
+                        "Markdown visual section {} was not converted; JSON visual_views require explicit structured data",
+                        canonical_section_label(canonical)
+                    ),
+                ));
+            }
+            CanonicalSection::LiteratureLadder
+            | CanonicalSection::SourcesFurtherReading
+            | CanonicalSection::SourcePointers => {
+                parsed.diagnostics.push(DiagnosticCheck::warning(
+                    CHECK_EXPORT_UNSUPPORTED_SECTION,
+                    format!(
+                        "Markdown source section {} was ignored; --sources is the source-of-truth manifest",
+                        canonical_section_label(canonical)
+                    ),
+                ));
+            }
+        }
+    }
+
+    parsed
+}
+
+fn select_lint_parse_diagnostics(checks: &mut Vec<DiagnosticCheck>) -> Vec<DiagnosticCheck> {
+    checks
+        .drain(..)
+        .filter(|check| {
+            check.check_id == CHECK_EXPORT_AMBIGUOUS_SECTION
+                || check.message.contains("unclosed fenced code block")
+        })
+        .collect()
+}
+
+fn parsed_has_any_canonical_content(parsed: &ParsedMarkdownReport) -> bool {
+    !parsed.title_field.trim().is_empty() || !parsed.sections.is_empty()
+}
+
+fn lint_stage_boundary(
+    markdown: &str,
+    parsed: &ParsedMarkdownReport,
+    stage: ExportStage,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    for section in [
+        CanonicalSection::ResearchFrame,
+        CanonicalSection::ScaffoldQualityNotes,
+        CanonicalSection::SoKUsefulnessNotes,
+    ] {
+        if parsed_has_section(parsed, section) {
+            let label = canonical_section_label(section);
+            match stage {
+                ExportStage::Scaffold => checks.push(
+                    DiagnosticCheck::new(
+                        CHECK_LINT_SCAFFOLD_UNRESOLVED,
+                        DiagnosticSeverity::Info,
+                        format!(
+                            "scaffold-stage Markdown contains expected internal section {label}"
+                        ),
+                    )
+                    .with_target("/report/sections", ""),
+                ),
+                ExportStage::Final => checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_LINT_FINAL_PUBLIC_LEAKAGE,
+                        format!("final-stage Markdown contains internal scaffold section {label}"),
+                    )
+                    .with_target("/report/sections", ""),
+                ),
+            }
+        }
+    }
+
+    let mut seen = BTreeSet::new();
+    for (line_index, line) in markdown.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || !contains_non_public_scaffold_text(trimmed) {
+            continue;
+        }
+        let normalized = normalize_id_text(trimmed);
+        if !seen.insert(normalized) {
+            continue;
+        }
+        let target = format!("/report/markdown/line-{}", line_index + 1);
+        match stage {
+            ExportStage::Scaffold => checks.push(
+                DiagnosticCheck::new(
+                    CHECK_LINT_SCAFFOLD_UNRESOLVED,
+                    DiagnosticSeverity::Info,
+                    format!("scaffold-stage unresolved or internal note is expected before finalization: {trimmed}"),
+                )
+                .with_target(target, ""),
+            ),
+            ExportStage::Final => checks.push(
+                DiagnosticCheck::error(
+                    CHECK_LINT_FINAL_PUBLIC_LEAKAGE,
+                    format!("final-stage Markdown would leak scaffold/internal text: {trimmed}"),
+                )
+                .with_target(target, ""),
+            ),
+        }
+    }
+}
+
+fn contains_non_public_scaffold_text(text: &str) -> bool {
+    let normalized = normalize_id_text(text);
+    is_placeholder_text(text)
+        || [
+            "raw intent",
+            "raw prompt",
+            "prompt intent",
+            "original goal",
+            "learner profile",
+            "profile hypothesis",
+            "scaffold stance",
+            "scoped assumption",
+            "evidence posture",
+            "scaffold quality notes",
+            "sok usefulness notes",
+        ]
+        .iter()
+        .any(|phrase| normalized.contains(phrase))
+}
+
+fn lint_source_role_coverage(
+    parsed: &ParsedMarkdownReport,
+    sources: &[ReportSource],
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    let standards = build_evidence_standards(parsed);
+    for (requirement_index, requirement) in standards.source_role_requirements.iter().enumerate() {
+        let minimum = requirement
+            .minimum_sources
+            .unwrap_or(match requirement.requirement {
+                SourceRoleRequirementKind::Required | SourceRoleRequirementKind::Conditional => 1,
+                SourceRoleRequirementKind::Waived | SourceRoleRequirementKind::NotApplicable => 0,
+            }) as usize;
+        let count = sources
+            .iter()
+            .filter(|source| source.roles.contains(&requirement.role))
+            .count();
+        let target = format!("/report/source_role_probe/{requirement_index}");
+        match requirement.requirement {
+            SourceRoleRequirementKind::Required if count < minimum => checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_SOURCE_ROLE_REQUIRED,
+                    format!(
+                        "required source role {} has {count} source(s), minimum is {minimum}",
+                        source_role_label(requirement.role)
+                    ),
+                )
+                .with_target(target, ""),
+            ),
+            SourceRoleRequirementKind::Conditional if count < minimum => {
+                if !has_usable_waiver(&requirement.waiver) {
+                    checks.push(
+                        DiagnosticCheck::warning(
+                            CHECK_VALIDATE_SOURCE_ROLE_CONDITIONAL,
+                            format!(
+                                "conditional source role {} has {count} source(s), minimum is {minimum}; record a waiver rationale if the condition is not active",
+                                source_role_label(requirement.role)
+                            ),
+                        )
+                        .with_target(target, ""),
+                    );
+                }
+            }
+            SourceRoleRequirementKind::Waived if !has_usable_waiver(&requirement.waiver) => {
+                checks.push(
+                    DiagnosticCheck::warning(
+                        CHECK_VALIDATE_SOURCE_ROLE_WAIVER,
+                        format!(
+                            "waived source role {} needs waiver rationale and as_of",
+                            source_role_label(requirement.role)
+                        ),
+                    )
+                    .with_target(target, ""),
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+fn lint_evidence_sources(
+    evidence: &[EvidenceEntry],
+    sources: &[ReportSource],
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    let source_ids = sources
+        .iter()
+        .map(|source| source.id.clone())
+        .collect::<BTreeSet<_>>();
+    for mut check in evidence_source_diagnostics(evidence, &source_ids) {
+        check.severity = DiagnosticSeverity::Error;
+        checks.push(check);
+    }
+}
+
+fn lint_claim_evidence_support(
+    parsed: &ParsedMarkdownReport,
+    sources: &[ReportSource],
+    evidence: &[EvidenceEntry],
+    stage: ExportStage,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    let source_lookup = SourceLookup::new(sources);
+    let mut seeds = build_claim_seeds(parsed);
+    let lint_as_of = "1970-01-01";
+    let lint_review_after = review_after_date(lint_as_of);
+    let (_, frontier_claims) =
+        build_frontier_debates(parsed, &source_lookup, lint_as_of, &lint_review_after);
+    seeds.extend(frontier_claims);
+
+    for seed in seeds {
+        let claim_id = content_id("claim", &[&seed.statement]);
+        let intended_source_ids = source_lookup.resolve_ref_list(&seed.source_refs);
+        if intended_source_ids.is_empty() && !seed.source_refs.is_empty() {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_EVIDENCE_SOURCE,
+                    format!(
+                        "claim {} references source text that does not match the source manifest",
+                        claim_id
+                    ),
+                )
+                .with_target("/report/claims", &claim_id),
+            );
+            continue;
+        }
+
+        let mut saw_cataloged_only = false;
+        let mut saw_matching_evidence = false;
+        let mut saw_satisfying_evidence = false;
+        for entry in evidence {
+            if !intended_source_ids.is_empty() && !intended_source_ids.contains(&entry.source_id) {
+                continue;
+            }
+            if intended_source_ids.is_empty()
+                && !entry
+                    .claim_ids
+                    .iter()
+                    .any(|entry_claim_id| entry_claim_id == &claim_id)
+            {
+                continue;
+            }
+            if !entry.claim_ids.is_empty()
+                && !entry
+                    .claim_ids
+                    .iter()
+                    .any(|entry_claim_id| entry_claim_id == &claim_id)
+            {
+                continue;
+            }
+            saw_matching_evidence = true;
+            if entry.can_satisfy_claim_link() {
+                saw_satisfying_evidence = true;
+            } else if entry.verification_status == VerificationStatus::Cataloged {
+                saw_cataloged_only = true;
+            }
+        }
+
+        if saw_satisfying_evidence || !claim_seed_requires_evidence(&seed, stage) {
+            continue;
+        }
+        if saw_cataloged_only {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_EVIDENCE_CATALOGED_ONLY,
+                    format!(
+                        "claim {} only has cataloged evidence; cataloged rows cannot support claims before review",
+                        claim_id
+                    ),
+                )
+                .with_target("/report/claims", &claim_id),
+            );
+        } else if saw_matching_evidence || !intended_source_ids.is_empty() {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_CLAIM_NEEDS_EVIDENCE,
+                    format!(
+                        "claim {} has no reviewed or verified evidence with usable support metadata",
+                        claim_id
+                    ),
+                )
+                .with_target("/report/claims", &claim_id),
+            );
+        }
+    }
+}
+
+fn claim_seed_requires_evidence(seed: &ClaimSeed, stage: ExportStage) -> bool {
+    stage == ExportStage::Final
+        || seed.evidence_requirement != EvidenceRequirement::None
+        || matches!(
+            seed.claim_type,
+            ClaimType::Currentness | ClaimType::Frontier | ClaimType::Debate
+        )
+}
+
+fn lint_markdown_currentness(markdown: &str, checks: &mut Vec<DiagnosticCheck>) {
+    let mut in_code_fence = false;
+    for (line_index, line) in markdown.lines().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            in_code_fence = !in_code_fence;
+            continue;
+        }
+        if in_code_fence
+            || trimmed.is_empty()
+            || trimmed.starts_with('#')
+            || is_likely_currentness_table_header(trimmed)
+        {
+            continue;
+        }
+        let normalized = normalize_id_text(trimmed);
+        let has_temporal_word = has_currentness_words(trimmed)
+            || normalized
+                .split_whitespace()
+                .any(|word| matches!(word, "stale" | "outdated"));
+        if has_temporal_word && !line_contains_iso_date(trimmed) {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_CURRENTNESS_PROSE,
+                    "Markdown uses currentness or stale-date prose without an explicit YYYY-MM-DD marker",
+                )
+                .with_target(format!("/report/markdown/line-{}", line_index + 1), ""),
+            );
+        }
+    }
+}
+
+fn is_likely_currentness_table_header(line: &str) -> bool {
+    let normalized = normalize_id_text(line);
+    line.starts_with('|')
+        && !line.contains('.')
+        && !line.contains(':')
+        && (normalized.contains("current state") || normalized.contains("temporal status"))
+}
+
+fn line_contains_iso_date(line: &str) -> bool {
+    line.as_bytes().windows(10).any(|window| {
+        window[0..4].iter().all(u8::is_ascii_digit)
+            && window[4] == b'-'
+            && window[5..7].iter().all(u8::is_ascii_digit)
+            && window[7] == b'-'
+            && window[8..10].iter().all(u8::is_ascii_digit)
+            && std::str::from_utf8(window)
+                .map(looks_like_iso_date)
+                .unwrap_or(false)
+    })
+}
+
+fn parse_markdown_sections(
+    markdown: &str,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Vec<MarkdownSection> {
+    let mut sections = Vec::new();
+    let mut current_title = String::new();
+    let mut current_body = Vec::new();
+    let mut in_code_fence = false;
+
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            in_code_fence = !in_code_fence;
+        }
+        if !in_code_fence && trimmed.starts_with("## ") && !trimmed.starts_with("### ") {
+            if !current_title.is_empty() {
+                sections.push(MarkdownSection {
+                    canonical: canonical_section(&current_title),
+                    title: current_title,
+                    body: current_body.join("\n"),
+                });
+                current_body.clear();
+            }
+            current_title = trimmed.trim_start_matches('#').trim().to_string();
+        } else if !current_title.is_empty() {
+            current_body.push(line.to_string());
+        }
+    }
+
+    if in_code_fence {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_UNSUPPORTED_SECTION,
+            "Markdown has an unclosed fenced code block; fenced content was not interpreted",
+        ));
+    }
+    if !current_title.is_empty() {
+        sections.push(MarkdownSection {
+            canonical: canonical_section(&current_title),
+            title: current_title,
+            body: current_body.join("\n"),
+        });
+    }
+    sections
+}
+
+fn canonical_section(title: &str) -> Option<CanonicalSection> {
+    let title = normalize_heading_title(title);
+    match title.as_str() {
+        "research frame" | "internal context" => Some(CanonicalSection::ResearchFrame),
+        "domain decomposition" => Some(CanonicalSection::DomainDecomposition),
+        "orientation" => Some(CanonicalSection::Orientation),
+        "the field s deep structure" | "field s deep structure" | "deep structure" => {
+            Some(CanonicalSection::DeepStructure)
+        }
+        "source role probe" => Some(CanonicalSection::SourceRoleProbe),
+        "literature ladder" | "literature ladder with access metadata" => {
+            Some(CanonicalSection::LiteratureLadder)
+        }
+        "curriculum roadmap" | "research roadmap" => Some(CanonicalSection::CurriculumRoadmap),
+        "practice and assessment" => Some(CanonicalSection::PracticeAssessment),
+        "frontier debates and open problems"
+        | "frontier debate map"
+        | "frontier and debate map"
+        | "frontier and debates"
+        | "frontier debates"
+        | "frontier and debate"
+        | "frontier open problems and debates" => Some(CanonicalSection::FrontierDebates),
+        "visual summary" => Some(CanonicalSection::VisualSummary),
+        "concept and prerequisite map"
+        | "debate and case network"
+        | "instrument data and standards map"
+        | "concept map" => Some(CanonicalSection::VisualMap),
+        "sources and further reading" => Some(CanonicalSection::SourcesFurtherReading),
+        "source pointers" => Some(CanonicalSection::SourcePointers),
+        "sok usefulness notes" => Some(CanonicalSection::SoKUsefulnessNotes),
+        "scaffold quality notes" => Some(CanonicalSection::ScaffoldQualityNotes),
+        "claims" | "evidence backed claims" | "public claims" => Some(CanonicalSection::Claims),
+        _ => None,
+    }
+}
+
+fn canonical_section_label(section: CanonicalSection) -> &'static str {
+    match section {
+        CanonicalSection::ResearchFrame => "Research Frame",
+        CanonicalSection::DomainDecomposition => "Domain Decomposition",
+        CanonicalSection::Orientation => "Orientation",
+        CanonicalSection::DeepStructure => "Deep Structure",
+        CanonicalSection::SourceRoleProbe => "Source Role Probe",
+        CanonicalSection::LiteratureLadder => "Literature Ladder",
+        CanonicalSection::CurriculumRoadmap => "Curriculum Roadmap",
+        CanonicalSection::PracticeAssessment => "Practice and Assessment",
+        CanonicalSection::FrontierDebates => "Frontier, Debates, and Open Problems",
+        CanonicalSection::VisualMap => "Visual Map",
+        CanonicalSection::VisualSummary => "Visual Summary",
+        CanonicalSection::SourcesFurtherReading => "Sources and Further Reading",
+        CanonicalSection::SourcePointers => "Source Pointers",
+        CanonicalSection::SoKUsefulnessNotes => "SoK Usefulness Notes",
+        CanonicalSection::ScaffoldQualityNotes => "Scaffold Quality Notes",
+        CanonicalSection::Claims => "Claims",
+    }
+}
+
+fn normalize_heading_title(title: &str) -> String {
+    let normalized = normalize_id_text(title);
+    normalized
+        .trim_start_matches(|ch: char| ch.is_ascii_digit() || ch.is_whitespace())
+        .trim()
+        .to_string()
+}
+
+fn parse_key_value_table(markdown: &str) -> BTreeMap<String, String> {
+    parse_first_markdown_table(markdown)
+        .into_iter()
+        .filter_map(|row| {
+            let key = lookup_cell(&row, &["item", "key", "field", "label"]);
+            let value = lookup_cell(&row, &["value", "so k extraction", "in this field"]);
+            if key.is_empty() || value.is_empty() {
+                None
+            } else {
+                Some((key, value))
+            }
+        })
+        .collect()
+}
+
+fn parse_first_markdown_table(markdown: &str) -> Vec<BTreeMap<String, String>> {
+    let mut header: Vec<String> = Vec::new();
+    let mut rows = Vec::new();
+    let mut in_table = false;
+
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with('|') {
+            if in_table && !trimmed.is_empty() {
+                break;
+            }
+            continue;
+        }
+        let cells = parse_table_cells(trimmed);
+        if cells.is_empty() || is_table_separator(&cells) {
+            continue;
+        }
+        if header.is_empty() {
+            header = cells
+                .into_iter()
+                .map(|cell| normalize_id_text(&cell))
+                .collect();
+            in_table = true;
+            continue;
+        }
+        let mut row = BTreeMap::new();
+        for (index, value) in cells.into_iter().enumerate() {
+            let key = header
+                .get(index)
+                .cloned()
+                .unwrap_or_else(|| format!("column_{index}"));
+            row.insert(key, clean_inline_markdown(&value));
+        }
+        if !row.values().all(|value| value.trim().is_empty()) {
+            rows.push(row);
+        }
+    }
+
+    rows
+}
+
+fn parse_table_cells(line: &str) -> Vec<String> {
+    line.trim()
+        .trim_matches('|')
+        .split('|')
+        .map(|cell| cell.trim().to_string())
+        .collect()
+}
+
+fn is_table_separator(cells: &[String]) -> bool {
+    cells.iter().all(|cell| {
+        let value = cell.trim();
+        !value.is_empty() && value.chars().all(|ch| matches!(ch, '-' | ':' | ' ' | '\t'))
+    })
+}
+
+fn public_section_text(markdown: &str) -> String {
+    collapse_whitespace(
+        &markdown
+            .lines()
+            .filter(|line| {
+                let trimmed = line.trim();
+                !trimmed.is_empty()
+                    && !trimmed.starts_with('|')
+                    && !trimmed.starts_with("```")
+                    && !is_placeholder_text(trimmed)
+            })
+            .map(clean_inline_markdown)
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
+}
+
+fn bullet_or_paragraph_lines(markdown: &str) -> Vec<String> {
+    markdown
+        .lines()
+        .map(|line| {
+            line.trim()
+                .trim_start_matches("- ")
+                .trim_start_matches("* ")
+                .trim()
+                .to_string()
+        })
+        .filter(|line| !line.is_empty() && !line.starts_with('|') && !line.starts_with("```"))
+        .map(|line| clean_inline_markdown(&line))
+        .collect()
+}
+
+fn clean_inline_markdown(raw: &str) -> String {
+    collapse_whitespace(
+        &raw.replace('`', "")
+            .replace("**", "")
+            .replace("__", "")
+            .replace("<br>", "; ")
+            .replace("<br/>", "; ")
+            .replace("<br />", "; "),
+    )
+}
+
+fn collapse_whitespace(raw: &str) -> String {
+    raw.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn collect_placeholder_lines(markdown: &str) -> Vec<String> {
+    markdown
+        .lines()
+        .map(str::trim)
+        .filter(|line| is_placeholder_text(line))
+        .map(clean_inline_markdown)
+        .collect()
+}
+
+fn is_placeholder_text(text: &str) -> bool {
+    let normalized = normalize_id_text(text);
+    normalized.contains("source to verify")
+        || normalized.contains("date after lookup")
+        || normalized.contains("budget unknown")
+        || normalized.contains("until verified")
+        || normalized.contains("replace starter source")
+        || normalized.contains("scaffold quality")
+        || normalized.contains("sentinel internal")
+}
+
+fn lookup_cell(row: &BTreeMap<String, String>, keys: &[&str]) -> String {
+    keys.iter()
+        .find_map(|key| row.get(*key))
+        .cloned()
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
+fn lookup_cell_any(row: &BTreeMap<String, String>, keys: &[&str]) -> String {
+    for key in keys {
+        let normalized = normalize_id_text(key);
+        if let Some(value) = row.get(&normalized) {
+            return value.trim().to_string();
+        }
+    }
+    String::new()
+}
+
+fn infer_title_field(markdown: &str) -> String {
+    for line in markdown.lines() {
+        let line = line.trim();
+        if let Some(value) = line.strip_prefix("# Structure of Knowledge:") {
+            return clean_inline_markdown(value);
+        }
+        if let Some(value) = line.strip_prefix("# SoK v0 Sample:") {
+            return clean_inline_markdown(value);
+        }
+        if line.starts_with("# SoK") && line.contains(':') {
+            if let Some((_, value)) = line.split_once(':') {
+                return clean_inline_markdown(value);
+            }
+        }
+    }
+    String::new()
+}
+
+fn infer_report_field(parsed: &ParsedMarkdownReport) -> String {
+    first_non_empty([
+        parsed
+            .research_frame
+            .get("Field")
+            .map_or("", String::as_str),
+        parsed.title_field.as_str(),
+        "Unknown field",
+    ])
+}
+
+fn build_scope(parsed: &ParsedMarkdownReport, diagnostics: &mut Vec<DiagnosticCheck>) -> Scope {
+    let mut included = split_listish(&first_non_empty([
+        parsed
+            .research_frame
+            .get("Scope included")
+            .map_or("", String::as_str),
+        parsed
+            .research_frame
+            .get("Included")
+            .map_or("", String::as_str),
+    ]));
+    let excluded = split_listish(&first_non_empty([
+        parsed
+            .research_frame
+            .get("Scope excluded")
+            .map_or("", String::as_str),
+        parsed
+            .research_frame
+            .get("Excluded")
+            .map_or("", String::as_str),
+    ]));
+    if included.is_empty() {
+        included.push(infer_report_field(parsed));
+    }
+
+    let summary = first_non_empty([
+        parsed.domain_decomposition.as_str(),
+        parsed.orientation.as_str(),
+        "Bounded SoK export; public scope could not be fully inferred from canonical Markdown.",
+    ]);
+    if parsed.domain_decomposition.is_empty() && parsed.orientation.is_empty() {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+            "could not infer a public scope summary from Domain Decomposition or Orientation",
+        ));
+    }
+
+    let mut interpretive_notes = Vec::new();
+    if !parsed.orientation.is_empty() && parsed.orientation != summary {
+        interpretive_notes.push(parsed.orientation.clone());
+    }
+
+    Scope {
+        summary,
+        included,
+        excluded,
+        assumptions: Vec::new(),
+        interpretive_notes,
+    }
+}
+
+fn build_domain_profile(
+    parsed: &ParsedMarkdownReport,
+    stage: ExportStage,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> DomainProfile {
+    let raw = match stage {
+        ExportStage::Scaffold => first_non_empty([
+            parsed
+                .research_frame
+                .get("Domain classification")
+                .map_or("", String::as_str),
+            parsed
+                .research_frame
+                .get("Domain type")
+                .map_or("", String::as_str),
+            parsed.domain_decomposition.as_str(),
+        ]),
+        ExportStage::Final => parsed.domain_decomposition.clone(),
+    };
+    if raw.is_empty() {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+            "could not infer domain classification; using mixed",
+        ));
+    }
+    let classifications = domain_classifications_from_text(&raw);
+    let classification = classifications
+        .first()
+        .copied()
+        .unwrap_or(DomainClassification::Mixed);
+    let secondary_characteristics = classifications
+        .into_iter()
+        .filter(|candidate| *candidate != classification)
+        .collect();
+    let rationale = first_non_empty([
+        parsed.domain_decomposition.as_str(),
+        raw.as_str(),
+        "Domain profile was not explicit in canonical Markdown.",
+    ]);
+    let failure_modes = parsed
+        .deep_structure_rows
+        .iter()
+        .find(|row| normalize_id_text(&lookup_cell_any(row, &["Element"])).contains("failure mode"))
+        .map(|row| {
+            split_listish(&first_non_empty([
+                lookup_cell_any(row, &["SoK extraction"]).as_str(),
+                lookup_cell_any(row, &["In this field"]).as_str(),
+                lookup_cell_any(row, &["Why it matters"]).as_str(),
+            ]))
+        })
+        .unwrap_or_default();
+
+    DomainProfile {
+        classification,
+        secondary_characteristics,
+        rationale,
+        failure_modes,
+    }
+}
+
+fn domain_classifications_from_text(raw: &str) -> Vec<DomainClassification> {
+    let text = normalize_id_text(raw);
+    let mut out = Vec::new();
+    for (needle, classification) in [
+        ("formal", DomainClassification::Formal),
+        ("well structured", DomainClassification::WellStructured),
+        ("ill structured", DomainClassification::IllStructured),
+        (
+            "professional practice",
+            DomainClassification::ProfessionalPractice,
+        ),
+        ("instrument bound", DomainClassification::InstrumentBound),
+        (
+            "infrastructure bound",
+            DomainClassification::InfrastructureBound,
+        ),
+        ("emerging", DomainClassification::Emerging),
+        ("interdisciplinary", DomainClassification::Interdisciplinary),
+        ("mixed", DomainClassification::Mixed),
+    ] {
+        if text.contains(needle) && !out.contains(&classification) {
+            out.push(classification);
+        }
+    }
+    out
+}
+
+fn build_knowledge_items(
+    parsed: &ParsedMarkdownReport,
+    source_lookup: &SourceLookup,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> (Vec<KnowledgeItem>, Vec<KnowledgeItem>, Vec<KnowledgeItem>) {
+    let mut core_ideas = Vec::new();
+    let mut methods = Vec::new();
+    let mut representations = Vec::new();
+    for row in &parsed.deep_structure_rows {
+        let element = lookup_cell_any(row, &["Element"]);
+        let normalized = normalize_id_text(&element);
+        let description = deep_structure_description(row);
+        if element.is_empty() || description.is_empty() || is_placeholder_text(&description) {
+            continue;
+        }
+        let source_ids = source_lookup.resolve_refs(&lookup_cell_any(
+            row,
+            &["Source IDs", "Sources", "Key sources", "Readings"],
+        ));
+        let item = KnowledgeItem {
+            id: content_id(knowledge_prefix(&normalized), &[&element]),
+            label: element,
+            description,
+            source_ids,
+            ..KnowledgeItem::default()
+        };
+        if normalized.contains("representation") {
+            representations.push(item);
+        } else if normalized.contains("syntactic")
+            || normalized.contains("method")
+            || normalized.contains("proof")
+            || normalized.contains("warrant")
+        {
+            methods.push(item);
+        } else if normalized.contains("failure mode") {
+            continue;
+        } else {
+            core_ideas.push(item);
+        }
+    }
+
+    if core_ideas.is_empty() && !parsed.orientation.is_empty() {
+        core_ideas.push(KnowledgeItem {
+            id: content_id("concept", &[&parsed.orientation]),
+            label: "Orientation thesis".to_string(),
+            description: parsed.orientation.clone(),
+            ..KnowledgeItem::default()
+        });
+    }
+    if methods.is_empty() && !parsed.practice_text.is_empty() {
+        methods.push(KnowledgeItem {
+            id: content_id("method", &[&parsed.practice_text]),
+            label: "Practice and assessment method".to_string(),
+            description: parsed.practice_text.clone(),
+            ..KnowledgeItem::default()
+        });
+    }
+    if representations.is_empty() {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+            "no canonical representation rows were inferred from Deep Structure",
+        ));
+    }
+
+    (core_ideas, methods, representations)
+}
+
+fn knowledge_prefix(normalized_element: &str) -> &'static str {
+    if normalized_element.contains("representation") {
+        "rep"
+    } else if normalized_element.contains("method")
+        || normalized_element.contains("syntactic")
+        || normalized_element.contains("proof")
+        || normalized_element.contains("warrant")
+    {
+        "method"
+    } else {
+        "concept"
+    }
+}
+
+fn deep_structure_description(row: &BTreeMap<String, String>) -> String {
+    let mut parts = Vec::new();
+    for key in [
+        "so k extraction",
+        "in this field",
+        "first pass scholarly representation",
+        "research grade representation",
+        "why it matters",
+    ] {
+        if let Some(value) = row.get(key) {
+            if !value.trim().is_empty() {
+                parts.push(value.trim().to_string());
+            }
+        }
+    }
+    collapse_whitespace(&parts.join("; "))
+}
+
+fn build_evidence_standards(parsed: &ParsedMarkdownReport) -> EvidenceStandards {
+    let mut requirements = Vec::new();
+    for row in &parsed.source_role_rows {
+        let role_text = lookup_cell_any(row, &["Source role", "Role"]);
+        if role_text.trim().is_empty() {
+            continue;
+        }
+        let requirement_text = lookup_cell_any(row, &["Status", "Requirement"]);
+        let requirement = parse_source_requirement(&requirement_text);
+        let rationale = first_non_empty([
+            lookup_cell_any(row, &["What it tests"]).as_str(),
+            lookup_cell_any(row, &["Candidate source pattern"]).as_str(),
+            lookup_cell_any(row, &["Waiver or revision rule"]).as_str(),
+            "Requirement imported from Source Role Probe.",
+        ]);
+        let waiver = if requirement == SourceRoleRequirementKind::Waived {
+            Some(SourceRoleWaiver {
+                rationale: first_non_empty([
+                    lookup_cell_any(row, &["Waiver or revision rule"]).as_str(),
+                    rationale.as_str(),
+                ]),
+                as_of: Utc::now()
+                    .to_rfc3339_opts(SecondsFormat::Secs, true)
+                    .split('T')
+                    .next()
+                    .unwrap_or("1970-01-01")
+                    .to_string(),
+                review_after: String::new(),
+            })
+        } else {
+            None
+        };
+        requirements.push(SourceRoleRequirement {
+            role: parse_source_role(&role_text),
+            requirement,
+            minimum_sources: match requirement {
+                SourceRoleRequirementKind::Required | SourceRoleRequirementKind::Conditional => {
+                    Some(1)
+                }
+                SourceRoleRequirementKind::Waived | SourceRoleRequirementKind::NotApplicable => {
+                    Some(0)
+                }
+            },
+            rationale,
+            waiver,
+        });
+    }
+
+    EvidenceStandards {
+        summary: "Sources are cataloged from the manifest; claim support requires reviewed or verified evidence links.".to_string(),
+        claim_policy: "Cataloged source records remain visible as source records but do not satisfy claim evidence requirements.".to_string(),
+        source_role_requirements: requirements,
+    }
+}
+
+fn parse_source_requirement(raw: &str) -> SourceRoleRequirementKind {
+    let text = normalize_id_text(raw);
+    if text.contains("waiv") {
+        SourceRoleRequirementKind::Waived
+    } else if text.contains("conditional") || text.contains("if ") {
+        SourceRoleRequirementKind::Conditional
+    } else if text.contains("not applicable") || text.contains("n a") {
+        SourceRoleRequirementKind::NotApplicable
+    } else if text.contains("required") || text.contains("cannot be waived") {
+        SourceRoleRequirementKind::Required
+    } else {
+        SourceRoleRequirementKind::Conditional
+    }
+}
+
+fn build_curriculum_path(
+    parsed: &ParsedMarkdownReport,
+    source_lookup: &SourceLookup,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Vec<CurriculumStep> {
+    let mut steps = Vec::new();
+    for (index, row) in parsed.curriculum_rows.iter().enumerate() {
+        let title = first_non_empty([
+            lookup_cell_any(row, &["Module"]).as_str(),
+            lookup_cell_any(row, &["Phase"]).as_str(),
+            lookup_cell_any(row, &["Title"]).as_str(),
+        ]);
+        if title.is_empty() || is_placeholder_text(&title) {
+            continue;
+        }
+        let learning_goal = first_non_empty([
+            lookup_cell_any(row, &["Essential question"]).as_str(),
+            lookup_cell_any(row, &["Learning goal"]).as_str(),
+            title.as_str(),
+        ]);
+        let practice_artifact = first_non_empty([
+            lookup_cell_any(row, &["Practice artifact"]).as_str(),
+            lookup_cell_any(row, &["Artifact"]).as_str(),
+            "Practice artifact not inferred from canonical Markdown.",
+        ]);
+        let progress_criteria = split_listish(&lookup_cell_any(
+            row,
+            &["Progress criteria", "Criteria", "Assessment"],
+        ));
+        let source_ids = source_lookup.resolve_refs(&lookup_cell_any(
+            row,
+            &["Readings", "Sources", "Source IDs"],
+        ));
+        steps.push(CurriculumStep {
+            id: content_id("step", &[&title]),
+            sequence: (index + 1) as u32,
+            title,
+            learning_goal,
+            prerequisite_ids: Vec::new(),
+            practice_artifact,
+            progress_criteria,
+            source_ids,
+        });
+    }
+
+    if steps.is_empty() {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+            "no canonical Curriculum Roadmap table rows were inferred",
+        ));
+    }
+    steps
+}
+
+fn build_frontier_debates(
+    parsed: &ParsedMarkdownReport,
+    source_lookup: &SourceLookup,
+    as_of: &str,
+    review_after: &str,
+) -> (Vec<FrontierDebateItem>, Vec<ClaimSeed>) {
+    let mut items = Vec::new();
+    let mut claims = Vec::new();
+    for row in &parsed.frontier_rows {
+        let title = first_non_empty([
+            lookup_cell_any(row, &["Problem or debate"]).as_str(),
+            lookup_cell_any(row, &["Area"]).as_str(),
+            lookup_cell_any(row, &["Title"]).as_str(),
+        ]);
+        if title.is_empty() || is_placeholder_text(&title) {
+            continue;
+        }
+        let summary = first_non_empty([
+            lookup_cell_any(row, &["Current state"]).as_str(),
+            lookup_cell_any(row, &["Current or frontier issue"]).as_str(),
+            lookup_cell_any(row, &["Summary"]).as_str(),
+            "Frontier or debate summary not inferred from canonical Markdown.",
+        ]);
+        if is_placeholder_text(&summary) {
+            continue;
+        }
+        let why_it_matters = first_non_empty([
+            lookup_cell_any(row, &["Why it matters"]).as_str(),
+            lookup_cell_any(row, &["Why it is hard"]).as_str(),
+            "This item marks a frontier, debate, or open problem boundary.",
+        ]);
+        let source_refs = lookup_cell_any(row, &["Key sources", "Sources", "Source IDs"]);
+        let source_ids = source_lookup.resolve_refs(&source_refs);
+        let claim_statement = format!("{title}: {summary}");
+        let claim_id = content_id("claim", &[&claim_statement]);
+        claims.push(ClaimSeed {
+            statement: claim_statement,
+            claim_type: if normalize_id_text(&title).contains("debate") {
+                ClaimType::Debate
+            } else {
+                ClaimType::Frontier
+            },
+            evidence_requirement: EvidenceRequirement::ReviewedSource,
+            source_refs: split_ref_list(&source_refs),
+            confidence: Some(ClaimConfidence::Unknown),
+            notes: String::new(),
+            temporal_status: Some(TemporalStatus::Current),
+        });
+        items.push(FrontierDebateItem {
+            id: content_id("frontier", &[&title]),
+            kind: if normalize_id_text(&title).contains("debate") {
+                FrontierDebateKind::Debate
+            } else if normalize_id_text(&title).contains("problem") {
+                FrontierDebateKind::OpenProblem
+            } else {
+                FrontierDebateKind::Frontier
+            },
+            title,
+            summary,
+            why_it_matters,
+            required_background_ids: Vec::new(),
+            claim_ids: vec![claim_id],
+            source_ids,
+            temporal: TemporalMarker {
+                as_of: as_of.to_string(),
+                review_after: review_after.to_string(),
+                temporal_status: TemporalStatus::Current,
+                rationale: String::new(),
+            },
+        });
+    }
+    (items, claims)
+}
+
+fn build_claim_seeds(parsed: &ParsedMarkdownReport) -> Vec<ClaimSeed> {
+    let mut seeds = Vec::new();
+    for row in &parsed.claim_rows {
+        let statement = first_non_empty([
+            lookup_cell_any(row, &["Statement"]).as_str(),
+            lookup_cell_any(row, &["Claim"]).as_str(),
+        ]);
+        if statement.is_empty() || is_placeholder_text(&statement) {
+            continue;
+        }
+        seeds.push(ClaimSeed {
+            statement,
+            claim_type: parse_claim_type(&lookup_cell_any(row, &["Claim type", "Type"])),
+            evidence_requirement: parse_evidence_requirement(&lookup_cell_any(
+                row,
+                &["Evidence requirement", "Requirement"],
+            )),
+            source_refs: split_ref_list(&lookup_cell_any(
+                row,
+                &["Source IDs", "Source ids", "Sources", "Key sources"],
+            )),
+            confidence: parse_claim_confidence(&lookup_cell_any(row, &["Confidence"])),
+            notes: lookup_cell_any(row, &["Notes", "Note"]),
+            temporal_status: parse_temporal_status(&lookup_cell_any(
+                row,
+                &["Temporal status", "Temporal"],
+            )),
+        });
+    }
+    seeds
+}
+
+fn build_claims(
+    seeds: Vec<ClaimSeed>,
+    source_lookup: &SourceLookup,
+    evidence: &[EvidenceEntry],
+    stage: ExportStage,
+    as_of: &str,
+    review_after: &str,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Vec<Claim> {
+    let mut claims = Vec::new();
+    for seed in seeds {
+        let id = content_id("claim", &[&seed.statement]);
+        let intended_source_ids = source_lookup.resolve_ref_list(&seed.source_refs);
+        let mut evidence_links = Vec::new();
+        let mut saw_cataloged_only = false;
+
+        for entry in evidence {
+            if !intended_source_ids.is_empty() && !intended_source_ids.contains(&entry.source_id) {
+                continue;
+            }
+            if intended_source_ids.is_empty()
+                && !entry.claim_ids.iter().any(|claim_id| claim_id == &id)
+            {
+                continue;
+            }
+            if !entry.claim_ids.is_empty()
+                && !entry.claim_ids.iter().any(|claim_id| claim_id == &id)
+            {
+                continue;
+            }
+            if let Some(link) = entry.to_evidence_link() {
+                if !evidence_links.iter().any(|existing: &EvidenceLink| {
+                    existing.evidence_id == link.evidence_id && existing.source_id == link.source_id
+                }) {
+                    evidence_links.push(link);
+                }
+            } else if entry.verification_status == VerificationStatus::Cataloged {
+                saw_cataloged_only = true;
+            }
+        }
+
+        if evidence_links.is_empty() && (!intended_source_ids.is_empty() || saw_cataloged_only) {
+            let check_id = if saw_cataloged_only {
+                CHECK_EVIDENCE_CATALOGED_ONLY
+            } else {
+                CHECK_EXPORT_CLAIM_NEEDS_EVIDENCE
+            };
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    check_id,
+                    format!(
+                        "claim {} has no reviewed or verified evidence link with usable support metadata",
+                        id
+                    ),
+                )
+                .with_target("/report/claims", &id),
+            );
+        }
+
+        let temporal_status = seed
+            .temporal_status
+            .unwrap_or(match (stage, seed.claim_type) {
+                (ExportStage::Scaffold, _) => TemporalStatus::Unknown,
+                (_, ClaimType::Frontier | ClaimType::Currentness | ClaimType::Debate) => {
+                    TemporalStatus::Current
+                }
+                _ => TemporalStatus::Durable,
+            });
+        claims.push(Claim {
+            id,
+            statement: seed.statement,
+            claim_type: seed.claim_type,
+            evidence_requirement: seed.evidence_requirement,
+            evidence_links,
+            confidence: seed.confidence,
+            temporal: TemporalMarker {
+                as_of: as_of.to_string(),
+                review_after: if matches!(
+                    temporal_status,
+                    TemporalStatus::Current | TemporalStatus::ReviewDue | TemporalStatus::Stale
+                ) {
+                    review_after.to_string()
+                } else {
+                    String::new()
+                },
+                temporal_status,
+                rationale: String::new(),
+            },
+            notes: seed.notes,
+        });
+    }
+    claims
+}
+
+fn evidence_source_diagnostics(
+    evidence: &[EvidenceEntry],
+    source_ids: &BTreeSet<String>,
+) -> Vec<DiagnosticCheck> {
+    evidence
+        .iter()
+        .filter(|entry| !source_ids.contains(&entry.source_id))
+        .map(|entry| {
+            DiagnosticCheck::warning(
+                CHECK_EXPORT_UNKNOWN_EVIDENCE_SOURCE,
+                format!(
+                    "evidence {} references unknown source_id {}",
+                    entry.evidence_id, entry.source_id
+                ),
+            )
+            .with_target("/evidence", &entry.evidence_id)
+        })
+        .collect()
+}
+
+fn apply_evidence_review_status(sources: &mut [ReportSource], evidence: &[EvidenceEntry]) {
+    for source in sources {
+        let mut status = source.verification_status;
+        let mut last_reviewed = source.last_reviewed.clone();
+        for entry in evidence.iter().filter(|entry| entry.source_id == source.id) {
+            status = max_verification_status(status, entry.verification_status);
+            let reviewed_at =
+                first_non_empty([entry.reviewed_at.as_str(), entry.observed_at.as_str()]);
+            if !reviewed_at.is_empty() && reviewed_at > last_reviewed {
+                last_reviewed = reviewed_at;
+            }
+        }
+        source.verification_status = status;
+        source.last_reviewed = last_reviewed;
+    }
+}
+
+fn max_verification_status(
+    left: VerificationStatus,
+    right: VerificationStatus,
+) -> VerificationStatus {
+    if verification_rank(right) > verification_rank(left) {
+        right
+    } else {
+        left
+    }
+}
+
+fn verification_rank(status: VerificationStatus) -> u8 {
+    match status {
+        VerificationStatus::Cataloged => 0,
+        VerificationStatus::Reviewed => 1,
+        VerificationStatus::Verified => 2,
+    }
+}
+
+fn build_internal_context(parsed: &ParsedMarkdownReport) -> InternalContext {
+    let mut placeholder_state = BTreeMap::new();
+    if !parsed.placeholder_lines.is_empty() {
+        placeholder_state.insert(
+            "placeholder_lines".to_string(),
+            serde_json::Value::Array(
+                parsed
+                    .placeholder_lines
+                    .iter()
+                    .map(|line| serde_json::Value::String(line.clone()))
+                    .collect(),
+            ),
+        );
+    }
+    if !parsed.claim_rows.is_empty() {
+        placeholder_state.insert(
+            "candidate_claim_rows".to_string(),
+            serde_json::Value::Number(parsed.claim_rows.len().into()),
+        );
+    }
+
+    let prompt_derived_assumptions = [
+        "Scoped assumption",
+        "Profile hypothesis",
+        "Scaffold stance",
+        "Evidence posture",
+        "Domain classification",
+    ]
+    .into_iter()
+    .filter_map(|key| parsed.research_frame.get(key).cloned())
+    .filter(|value| !value.trim().is_empty())
+    .collect();
+
+    let mut handoff_notes = parsed.quality_notes.clone();
+    handoff_notes.extend(parsed.usefulness_notes.clone());
+
+    InternalContext {
+        raw_learner_profile: first_non_empty([
+            parsed
+                .research_frame
+                .get("Learner")
+                .map_or("", String::as_str),
+            parsed
+                .research_frame
+                .get("Target learner")
+                .map_or("", String::as_str),
+        ]),
+        original_goal: parsed
+            .research_frame
+            .get("Goal")
+            .cloned()
+            .unwrap_or_default(),
+        prompt_derived_assumptions,
+        placeholder_state,
+        handoff_notes,
+    }
+}
+
+fn warn_if_empty_public_sections(
+    core_ideas: &[KnowledgeItem],
+    methods: &[KnowledgeItem],
+    representations: &[KnowledgeItem],
+    curriculum_path: &[CurriculumStep],
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) {
+    for (is_empty, label) in [
+        (core_ideas.is_empty(), "core ideas"),
+        (methods.is_empty(), "methods"),
+        (representations.is_empty(), "representations"),
+        (curriculum_path.is_empty(), "curriculum path"),
+    ] {
+        if is_empty {
+            diagnostics.push(DiagnosticCheck::warning(
+                CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                format!("could not infer public {label} from canonical Markdown"),
+            ));
+        }
+    }
+}
+
+fn parsed_has_section(parsed: &ParsedMarkdownReport, section: CanonicalSection) -> bool {
+    parsed.sections.contains(&section)
+}
+
+#[derive(Debug)]
+struct SourceLookup {
+    aliases: BTreeMap<String, String>,
+}
+
+impl SourceLookup {
+    fn new(sources: &[ReportSource]) -> Self {
+        let mut aliases = BTreeMap::new();
+        for source in sources {
+            for alias in [
+                source.id.as_str(),
+                source.title.as_str(),
+                source.citation.as_str(),
+                source.identifier.as_str(),
+                source.url.as_str(),
+            ] {
+                let normalized = normalize_id_text(alias);
+                if !normalized.is_empty() {
+                    aliases.insert(normalized, source.id.clone());
+                }
+            }
+        }
+        Self { aliases }
+    }
+
+    fn resolve_refs(&self, refs: &str) -> Vec<String> {
+        self.resolve_ref_list(&split_ref_list(refs))
+    }
+
+    fn resolve_ref_list(&self, refs: &[String]) -> Vec<String> {
+        let mut ids = BTreeSet::new();
+        for reference in refs {
+            let normalized = normalize_id_text(reference);
+            if normalized.is_empty() {
+                continue;
+            }
+            if let Some(id) = self.aliases.get(&normalized) {
+                ids.insert(id.clone());
+                continue;
+            }
+            for (alias, id) in &self.aliases {
+                if alias.contains(&normalized) || normalized.contains(alias) {
+                    ids.insert(id.clone());
+                }
+            }
+        }
+        ids.into_iter().collect()
+    }
+}
+
+fn split_ref_list(raw: &str) -> Vec<String> {
+    raw.split([',', ';', '\n'])
+        .map(clean_inline_markdown)
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty() && !is_placeholder_text(item))
+        .collect()
+}
+
+fn split_listish(raw: &str) -> Vec<String> {
+    raw.split([';', '\n'])
+        .flat_map(|part| part.split(" / "))
+        .map(clean_inline_markdown)
+        .map(|item| item.trim().trim_start_matches("- ").to_string())
+        .filter(|item| !item.is_empty() && !is_placeholder_text(item))
+        .collect()
+}
+
+fn parse_source_role(raw: &str) -> SourceRole {
+    let text = normalize_id_text(raw);
+    for (needle, role) in [
+        ("orientation", SourceRole::Orientation),
+        ("foundation", SourceRole::Foundation),
+        ("method", SourceRole::Method),
+        ("representation", SourceRole::Representation),
+        ("evidence", SourceRole::Evidence),
+        ("synthesis", SourceRole::Synthesis),
+        ("frontier", SourceRole::Frontier),
+        ("debate", SourceRole::Debate),
+        ("standard", SourceRole::Standard),
+        ("dataset", SourceRole::Dataset),
+        ("data", SourceRole::Dataset),
+        ("infrastructure", SourceRole::Infrastructure),
+        ("critique", SourceRole::Critique),
+        ("curriculum", SourceRole::Curriculum),
+    ] {
+        if text.contains(needle) {
+            return role;
+        }
+    }
+    SourceRole::Other
+}
+
+fn parse_claim_type(raw: &str) -> ClaimType {
+    let text = normalize_id_text(raw);
+    if text.contains("structural") {
+        ClaimType::Structural
+    } else if text.contains("current") {
+        ClaimType::Currentness
+    } else if text.contains("frontier") {
+        ClaimType::Frontier
+    } else if text.contains("debate") {
+        ClaimType::Debate
+    } else if text.contains("curricular") || text.contains("curriculum") {
+        ClaimType::Curricular
+    } else if text.contains("method") {
+        ClaimType::Methodological
+    } else {
+        ClaimType::Interpretive
+    }
+}
+
+fn parse_evidence_requirement(raw: &str) -> EvidenceRequirement {
+    let text = normalize_id_text(raw);
+    if text.contains("multiple") {
+        EvidenceRequirement::MultipleReviewedSources
+    } else if text.contains("verified") {
+        EvidenceRequirement::VerifiedSource
+    } else if text.contains("catalog") {
+        EvidenceRequirement::CatalogedSource
+    } else if text.contains("none") || text.contains("not required") {
+        EvidenceRequirement::None
+    } else {
+        EvidenceRequirement::ReviewedSource
+    }
+}
+
+fn parse_claim_confidence(raw: &str) -> Option<ClaimConfidence> {
+    let text = normalize_id_text(raw);
+    if text.is_empty() {
+        None
+    } else if text.contains("high") {
+        Some(ClaimConfidence::High)
+    } else if text.contains("medium") {
+        Some(ClaimConfidence::Medium)
+    } else if text.contains("low") {
+        Some(ClaimConfidence::Low)
+    } else {
+        Some(ClaimConfidence::Unknown)
+    }
+}
+
+fn parse_temporal_status(raw: &str) -> Option<TemporalStatus> {
+    let text = normalize_id_text(raw);
+    if text.is_empty() {
+        None
+    } else if text.contains("durable") {
+        Some(TemporalStatus::Durable)
+    } else if text.contains("current") {
+        Some(TemporalStatus::Current)
+    } else if text.contains("review due") {
+        Some(TemporalStatus::ReviewDue)
+    } else if text.contains("stale") {
+        Some(TemporalStatus::Stale)
+    } else {
+        Some(TemporalStatus::Unknown)
+    }
+}
+
+impl DiagnosticCheck {
+    pub fn new(
+        check_id: impl Into<String>,
+        severity: DiagnosticSeverity,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            check_id: check_id.into(),
+            severity,
+            message: message.into(),
+            ..Self::default()
+        }
+    }
+
+    pub fn warning(check_id: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::new(check_id, DiagnosticSeverity::Warning, message)
+    }
+
+    pub fn error(check_id: impl Into<String>, message: impl Into<String>) -> Self {
+        Self::new(check_id, DiagnosticSeverity::Error, message)
+    }
+
+    pub fn with_target(
+        mut self,
+        target_path: impl Into<String>,
+        entity_id: impl Into<String>,
+    ) -> Self {
+        self.target_path = target_path.into();
+        self.entity_id = entity_id.into();
+        self
+    }
+}
+
+fn sort_diagnostics(checks: &mut [DiagnosticCheck]) {
+    checks.sort_by(|left, right| {
+        severity_sort_key(left.severity)
+            .cmp(&severity_sort_key(right.severity))
+            .then_with(|| left.check_id.cmp(&right.check_id))
+            .then_with(|| left.target_path.cmp(&right.target_path))
+            .then_with(|| left.entity_id.cmp(&right.entity_id))
+            .then_with(|| left.message.cmp(&right.message))
+    });
+}
+
+fn severity_sort_key(severity: DiagnosticSeverity) -> u8 {
+    match severity {
+        DiagnosticSeverity::Error => 0,
+        DiagnosticSeverity::Warning => 1,
+        DiagnosticSeverity::Info => 2,
+    }
+}
+
+impl EvidenceEntry {
+    pub fn cataloged_from_source(
+        source: &Source,
+        report_source: &ReportSource,
+        input_path: &Path,
+        row_number: usize,
+    ) -> Self {
+        let source_key = source_content_key(source);
+        Self {
+            evidence_id: content_id("ev", &[&report_source.id, &source_key, "cataloged"]),
+            source_id: report_source.id.clone(),
+            input_provenance: BoundedInputProvenance {
+                input_path: input_path.display().to_string(),
+                input_kind: input_kind_for_path(input_path),
+                row_number: Some(row_number),
+                row_hash: short_hash(&normalize_id_text(&source_key), 16),
+            },
+            verification_status: VerificationStatus::Cataloged,
+            support_kind: SupportKind::Background,
+            locator: String::new(),
+            support_note: String::new(),
+            notes: "Cataloged from source manifest only; this row has not been read, crawled, or externally verified and cannot satisfy claim evidence.".to_string(),
+            claim_ids: Vec::new(),
+            source_roles: report_source.roles.clone(),
+            source_access: Some(report_source.access.clone()),
+            source_citation: report_source.citation.clone(),
+            source_identifier: report_source.identifier.clone(),
+            source_url: report_source.url.clone(),
+            curricular_use: source_curricular_use(source),
+            ..Self::default()
+        }
+    }
+
+    pub fn has_usable_support_metadata(&self) -> bool {
+        !self.locator.trim().is_empty() || !self.support_note.trim().is_empty()
+    }
+
+    pub fn can_satisfy_claim_link(&self) -> bool {
+        matches!(
+            self.verification_status,
+            VerificationStatus::Reviewed | VerificationStatus::Verified
+        ) && self.has_usable_support_metadata()
+            && self.support_kind != SupportKind::Background
+    }
+
+    pub fn to_evidence_link(&self) -> Option<EvidenceLink> {
+        if !self.can_satisfy_claim_link() {
+            return None;
+        }
+        Some(EvidenceLink {
+            evidence_id: self.evidence_id.clone(),
+            source_id: self.source_id.clone(),
+            verification_status: self.verification_status,
+            support_kind: self.support_kind,
+            locator: self.locator.clone(),
+            support_note: self.support_note.clone(),
+            reviewed_at: self.reviewed_at.clone(),
+        })
+    }
+}
+
+impl AccessStatus {
+    pub fn from_manifest_status(raw: &str) -> Self {
+        match normalize_access_status_label(raw).as_str() {
+            "open" | "open_access" | "oa" | "cc_by" | "cc_by_sa" => Self::OpenAccess,
+            "free" | "free_web" | "free_to_read" => Self::FreeWeb,
+            "public_domain" => Self::PublicDomain,
+            "official" | "official_open" => Self::OfficialOpen,
+            "user" | "user_provided" => Self::UserProvided,
+            "library" | "library_access" => Self::Library,
+            "paid" | "paid_book" | "book_purchase" => Self::PaidBook,
+            "paywall" | "paywalled" => Self::Paywalled,
+            "subscription" | "institutional_subscription" => Self::Subscription,
+            "restricted" => Self::Restricted,
+            _ => Self::Unknown,
+        }
+    }
+
+    pub fn metadata_only_default(self) -> bool {
+        matches!(
+            self,
+            Self::PaidBook
+                | Self::Paywalled
+                | Self::Subscription
+                | Self::Restricted
+                | Self::Unknown
+        )
+    }
+}
+
+pub fn normalize_source_manifest<P: AsRef<Path>>(path: P) -> Result<NormalizedSourceManifest> {
+    let path = path.as_ref();
+    let raw_sources = load_sources(path)?;
+    let sources = normalize_report_sources(&raw_sources);
+    let evidence = raw_sources
+        .iter()
+        .zip(sources.iter())
+        .enumerate()
+        .map(|(index, (source, report_source))| {
+            EvidenceEntry::cataloged_from_source(source, report_source, path, index + 1)
+        })
+        .collect::<Vec<_>>();
+    let diagnostics = source_manifest_diagnostics(&sources);
+    Ok(NormalizedSourceManifest {
+        sources,
+        evidence,
+        diagnostics,
+    })
+}
+
+pub fn normalize_report_sources(sources: &[Source]) -> Vec<ReportSource> {
+    let keys = sources.iter().map(source_content_key).collect::<Vec<_>>();
+    let id_map = content_id_map("src", keys.iter().map(String::as_str));
+    sources
+        .iter()
+        .zip(keys.iter())
+        .map(|(source, key)| {
+            let normalized = normalize_id_text(key);
+            let id = id_map
+                .get(&normalized)
+                .cloned()
+                .unwrap_or_else(|| content_id("src", &[key]));
+            normalize_report_source_with_id(source, id)
+        })
+        .collect()
+}
+
+pub fn normalize_report_source(source: &Source) -> ReportSource {
+    normalize_report_source_with_id(source, source_report_id(source))
+}
+
+pub fn source_report_id(source: &Source) -> String {
+    content_id("src", &[&source_content_key(source)])
+}
+
+pub fn normalize_report_source_with_id(source: &Source, id: String) -> ReportSource {
+    let access = SourceAccessMetadata::from_source(source);
+    let citation = first_non_empty([
+        source.citation.as_str(),
+        source.title.as_str(),
+        source.identifier.as_str(),
+        source.url.as_str(),
+        "Untitled source",
+    ]);
+    let why_it_matters = first_non_empty([
+        source.why_it_matters.as_str(),
+        source.use_in_curriculum.as_str(),
+        source.notes.as_str(),
+        "Cataloged source; curricular role not yet specified.",
+    ]);
+    ReportSource {
+        id,
+        citation,
+        title: source.title.trim().to_string(),
+        source_type: first_non_empty([source.source_type.as_str(), "unknown"]),
+        identifier: source.identifier.trim().to_string(),
+        url: source.url.trim().to_string(),
+        date: normalize_report_date(&source.date),
+        roles: normalize_source_roles(&source.layer, &source.source_type),
+        access,
+        why_it_matters,
+        verification_status: VerificationStatus::Cataloged,
+        notes: source.notes.trim().to_string(),
+        ..ReportSource::default()
+    }
+}
+
+impl SourceAccessMetadata {
+    pub fn from_source(source: &Source) -> Self {
+        let access = source_access(source);
+        let status = AccessStatus::from_manifest_status(&access.status);
+        let route = first_non_empty([
+            access.route.as_str(),
+            source.access_route.as_str(),
+            source.url.as_str(),
+            "unknown",
+        ]);
+        Self {
+            status,
+            route,
+            budget_estimate: first_non_empty([
+                access.budget_estimate.as_str(),
+                source.budget_estimate.as_str(),
+            ]),
+            license: source.license.trim().to_string(),
+            metadata_only: Some(status.metadata_only_default()),
+            notes: first_non_empty([access.notes.as_str(), source.notes.as_str()]),
+        }
+    }
+}
+
+pub fn normalize_source_roles(layer: &str, source_type: &str) -> Vec<SourceRole> {
+    let haystack = format!(
+        " {} {} ",
+        normalize_access_status_label(layer),
+        normalize_access_status_label(source_type)
+    );
+    let mut roles = BTreeSet::new();
+    for (needle, role) in [
+        ("orientation", SourceRole::Orientation),
+        ("foundation", SourceRole::Foundation),
+        ("method", SourceRole::Method),
+        ("representation", SourceRole::Representation),
+        ("evidence", SourceRole::Evidence),
+        ("synthesis", SourceRole::Synthesis),
+        ("survey", SourceRole::Synthesis),
+        ("frontier", SourceRole::Frontier),
+        ("debate", SourceRole::Debate),
+        ("standard", SourceRole::Standard),
+        ("dataset", SourceRole::Dataset),
+        ("data", SourceRole::Dataset),
+        ("infrastructure", SourceRole::Infrastructure),
+        ("critique", SourceRole::Critique),
+        ("curriculum", SourceRole::Curriculum),
+        ("syllabus", SourceRole::Curriculum),
+    ] {
+        if haystack.contains(needle) {
+            roles.insert(role);
+        }
+    }
+    if roles.is_empty() {
+        roles.insert(SourceRole::Other);
+    }
+    roles.into_iter().collect()
+}
+
+pub fn source_curricular_use(source: &Source) -> String {
+    first_non_empty([
+        source.use_in_curriculum.as_str(),
+        source.why_it_matters.as_str(),
+        source.layer.as_str(),
+    ])
+}
+
+pub fn normalize_report_date(raw: &str) -> String {
+    let value = raw.trim();
+    let lowered = value.to_ascii_lowercase();
+    if value.is_empty()
+        || matches!(
+            lowered.as_str(),
+            "unknown" | "n/a" | "na" | "date after lookup" | "to verify"
+        )
+    {
+        String::new()
+    } else {
+        value.to_string()
+    }
+}
+
+fn review_after_date(as_of: &str) -> String {
+    NaiveDate::parse_from_str(as_of, "%Y-%m-%d")
+        .ok()
+        .and_then(|date| date.checked_add_signed(Duration::days(183)))
+        .map(|date| date.format("%Y-%m-%d").to_string())
+        .unwrap_or_default()
+}
+
+pub fn source_manifest_diagnostics(sources: &[ReportSource]) -> Vec<DiagnosticCheck> {
+    let mut diagnostics = Vec::new();
+    for (index, source) in sources.iter().enumerate() {
+        let target_path = format!("/sources/{index}");
+        if source.access.status == AccessStatus::Unknown {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_SOURCE_MISSING_ACCESS_STATUS,
+                    format!("source {} has unknown access status", source.id),
+                )
+                .with_target(&target_path, &source.id),
+            );
+        }
+        if source.access.route.trim().is_empty() || source.access.route == "unknown" {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_SOURCE_MISSING_ACCESS_ROUTE,
+                    format!("source {} has no actionable access route", source.id),
+                )
+                .with_target(&target_path, &source.id),
+            );
+        }
+        if source
+            .why_it_matters
+            .starts_with("Cataloged source; curricular role")
+        {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_SOURCE_MISSING_CURRICULAR_USE,
+                    format!("source {} has no curricular use note", source.id),
+                )
+                .with_target(&target_path, &source.id),
+            );
+        }
+    }
+    diagnostics
+}
+
+pub fn content_id(prefix: &str, parts: &[&str]) -> String {
+    let text = normalize_id_text(&parts.join("\n"));
+    let text = if text.is_empty() {
+        "item".to_string()
+    } else {
+        text
+    };
+    let prefix = id_prefix(prefix);
+    let slug = slug_from_normalized(&text);
+    let hash = short_hash(&text, ID_HASH_LEN);
+    format!("{prefix}-{slug}-{hash}")
+}
+
+pub fn content_id_map<'a, I>(prefix: &str, inputs: I) -> BTreeMap<String, String>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let prefix = id_prefix(prefix);
+    let mut by_text = BTreeMap::new();
+    for input in inputs {
+        let mut normalized = normalize_id_text(input);
+        if normalized.is_empty() {
+            normalized = "item".to_string();
+        }
+        by_text
+            .entry(normalized.clone())
+            .or_insert_with(|| (slug_from_normalized(&normalized), full_hash(&normalized)));
+    }
+
+    let mut groups: BTreeMap<String, Vec<(String, String, String)>> = BTreeMap::new();
+    for (normalized, (slug, hash)) in by_text {
+        let candidate = format!("{prefix}-{slug}-{}", &hash[..ID_HASH_LEN]);
+        groups
+            .entry(candidate)
+            .or_default()
+            .push((normalized, slug, hash));
+    }
+
+    let mut ids = BTreeMap::new();
+    for (candidate, mut group) in groups {
+        if group.len() == 1 {
+            let (normalized, _, _) = group.remove(0);
+            ids.insert(normalized, candidate);
+            continue;
+        }
+        group.sort();
+        for (normalized, slug, hash) in &group {
+            let unique_len = shortest_unique_hash_prefix(hash, &group);
+            ids.insert(
+                normalized.clone(),
+                format!("{prefix}-{slug}-{}", &hash[..unique_len]),
+            );
+        }
+    }
+    ids
+}
+
+pub fn normalize_id_text(raw: &str) -> String {
+    let mut output = String::new();
+    let mut previous_space = true;
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() {
+            output.push(ch.to_ascii_lowercase());
+            previous_space = false;
+        } else if !previous_space {
+            output.push(' ');
+            previous_space = true;
+        }
+    }
+    output.trim().to_string()
+}
+
+pub fn render_html_report_file<I, O>(input: I, output: O) -> Result<()>
+where
+    I: AsRef<Path>,
+    O: AsRef<Path>,
+{
+    let input = input.as_ref();
+    let output = output.as_ref();
+    let validation = validate_report_file(input)?;
+    if validation.has_errors() {
+        bail!(
+            "cannot render HTML from {}: report validation has {} error(s); run sok validate-report --input {}",
+            input.display(),
+            validation.error_count(),
+            input.display()
+        );
+    }
+
+    let document: ReportDocument = read_json_file(input)?;
+    let html = render_html_report(&document)?;
+    ensure_parent_dir(output)?;
+    fs::write(output, html).with_context(|| format!("write HTML {}", output.display()))?;
+    Ok(())
+}
+
+pub fn render_html_report(document: &ReportDocument) -> Result<String> {
+    if document.metadata.report_type != ReportType::HumanReport {
+        bail!("sok render-html requires metadata.report_type to be human_report");
+    }
+
+    let report = &document.report;
+    let views = renderable_visual_views(report);
+    let visual_json = safe_script_json(&views)?;
+    let title = format!("Structure of Knowledge: {}", report.field);
+    let mut html = String::new();
+
+    html.push_str("<!doctype html>\n<html lang=\"en\">\n<head>\n");
+    html.push_str("  <meta charset=\"utf-8\">\n");
+    html.push_str("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+    html.push_str("  <title>");
+    push_escaped(&mut html, &title);
+    html.push_str("</title>\n");
+    html.push_str("  <style>\n");
+    html.push_str(REPORT_CSS);
+    html.push_str("\n  </style>\n</head>\n<body>\n");
+    html.push_str("<a class=\"skip-link\" href=\"#main-report\">Skip to report content</a>\n");
+    html.push_str("<div class=\"report-shell\">\n<header class=\"report-header\">\n");
+    html.push_str("<p class=\"eyebrow\">Structure of Knowledge Report</p>\n<h1>");
+    push_escaped(&mut html, &report.field);
+    html.push_str("</h1>\n");
+    if !report.scope.summary.trim().is_empty() {
+        html.push_str("<p class=\"summary\">");
+        push_escaped(&mut html, &report.scope.summary);
+        html.push_str("</p>\n");
+    }
+    push_nav(&mut html, !views.is_empty());
+    html.push_str("</header>\n<main id=\"main-report\">\n");
+
+    push_scope_section(&mut html, &report.scope);
+    push_domain_profile_section(&mut html, &report.domain_profile);
+    push_knowledge_section(&mut html, "core-ideas", "Core Ideas", &report.core_ideas);
+    push_knowledge_section(&mut html, "methods", "Methods", &report.methods);
+    push_knowledge_section(
+        &mut html,
+        "representations",
+        "Representations",
+        &report.representations,
+    );
+    push_evidence_standards_section(&mut html, &report.evidence_standards);
+    push_sources_and_evidence_section(&mut html, report);
+    push_claims_section(&mut html, &report.claims);
+    push_curriculum_section(&mut html, &report.curriculum_path);
+    push_frontier_section(&mut html, &report.frontier_debates);
+    if !views.is_empty() {
+        push_visual_section(&mut html, &views);
+    }
+
+    html.push_str("</main>\n</div>\n");
+    html.push_str("<script type=\"application/json\" id=\"sok-visual-data\">");
+    html.push_str(&visual_json);
+    html.push_str("</script>\n<script>\n");
+    html.push_str(REPORT_JS);
+    html.push_str("\n</script>\n</body>\n</html>\n");
+    Ok(html)
+}
+
+const REPORT_CSS: &str = r#":root {
+  color-scheme: light;
+  --bg: #f6f7f8;
+  --paper: #ffffff;
+  --ink: #1b252f;
+  --muted: #5d6b78;
+  --line: #d8dee4;
+  --accent: #2364aa;
+  --accent-soft: #e8f1fb;
+  --focus: #9b5de5;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 10;
+  background: var(--paper);
+  border: 2px solid var(--focus);
+  color: var(--ink);
+  padding: 0.5rem 0.75rem;
+}
+.skip-link:focus { top: 1rem; }
+.report-shell {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 56px;
+}
+.report-header {
+  padding: 28px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.eyebrow {
+  margin: 0 0 0.45rem;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+h1, h2, h3 {
+  color: var(--ink);
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.7rem);
+}
+h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.55rem;
+}
+h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1.08rem;
+}
+.summary {
+  max-width: 860px;
+  margin: 0.9rem 0 0;
+  color: #344250;
+  font-size: 1.08rem;
+}
+.section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1.35rem;
+}
+.section-nav a {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 0.35rem 0.55rem;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.section-nav a:focus,
+.section-nav a:hover {
+  border-color: var(--accent);
+  outline: 2px solid transparent;
+}
+.report-section {
+  padding: 28px 0;
+  border-bottom: 1px solid var(--line);
+}
+.prose {
+  max-width: 860px;
+  margin: 0.35rem 0 0;
+}
+.muted { color: var(--muted); }
+.split-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.item-card,
+.visual-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+.item-card p,
+.visual-card p {
+  margin: 0.35rem 0 0;
+}
+.meta {
+  margin-top: 0.7rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+th,
+td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: #eef3f7;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+td {
+  font-size: 0.94rem;
+  white-space: pre-wrap;
+}
+tr:last-child td { border-bottom: 0; }
+.visual-canvas {
+  min-height: 380px;
+  margin-top: 0.9rem;
+}
+.visual-svg {
+  display: block;
+  width: 100%;
+  height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.visual-node circle,
+.visual-node rect {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.visual-node text {
+  fill: var(--ink);
+  font-size: 13px;
+  pointer-events: none;
+}
+.visual-edge {
+  stroke: #6f7f8f;
+  stroke-width: 2;
+}
+.visual-node.is-active circle,
+.visual-node.is-active rect {
+  fill: #fff4cc;
+  stroke: #a15c00;
+}
+.visual-edge.is-active {
+  stroke: #a15c00;
+  stroke-width: 3;
+}
+.visual-fallback {
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+  border-left: 4px solid var(--accent);
+  background: #f4f7fa;
+}
+.visual-fallback ul {
+  margin: 0.4rem 0 0.8rem 1.1rem;
+  padding: 0;
+}
+.visual-fallback li { margin: 0.2rem 0; }
+@media (max-width: 720px) {
+  .report-shell {
+    width: min(100% - 20px, 1120px);
+    padding-top: 16px;
+  }
+  .report-header { padding-top: 20px; }
+  .split-list,
+  .item-grid {
+    grid-template-columns: 1fr;
+  }
+  table { min-width: 640px; }
+  .visual-canvas { min-height: 320px; }
+  .visual-svg { height: 300px; }
+}
+@media print {
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-size: 11pt;
+  }
+  .report-shell {
+    width: 100%;
+    padding: 0;
+  }
+  .section-nav,
+  .skip-link,
+  .visual-canvas,
+  script {
+    display: none !important;
+  }
+  .report-header,
+  .report-section {
+    border-color: #bbbbbb;
+  }
+  .item-card,
+  .visual-card,
+  .table-scroll {
+    border-color: #bbbbbb;
+    break-inside: avoid;
+  }
+  .table-scroll {
+    overflow: visible;
+  }
+  table {
+    min-width: 0;
+    font-size: 9pt;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}"#;
+
+const REPORT_JS: &str = r##"(function () {
+  var dataNode = document.getElementById("sok-visual-data");
+  if (!dataNode) return;
+  var views;
+  try {
+    views = JSON.parse(dataNode.textContent || "[]");
+  } catch (error) {
+    return;
+  }
+  if (!Array.isArray(views) || views.length === 0) return;
+
+  var svgNs = "http://www.w3.org/2000/svg";
+  function el(name, attrs) {
+    var node = document.createElementNS(svgNs, name);
+    Object.keys(attrs || {}).forEach(function (key) {
+      node.setAttribute(key, attrs[key]);
+    });
+    return node;
+  }
+  function textNode(value) {
+    return document.createTextNode(value == null ? "" : String(value));
+  }
+  function shortLabel(label) {
+    label = String(label || "");
+    return label.length > 30 ? label.slice(0, 27) + "..." : label;
+  }
+  function layout(view) {
+    var nodes = view.nodes || [];
+    if (view.kind === "concept_source") {
+      var left = nodes.filter(function (node) { return node.entity_type === "source"; });
+      var right = nodes.filter(function (node) { return node.entity_type !== "source"; });
+      var positions = {};
+      left.forEach(function (node, index) {
+        positions[node.id] = { x: 190, y: 85 + index * (210 / Math.max(1, left.length - 1)) };
+      });
+      right.forEach(function (node, index) {
+        positions[node.id] = { x: 720, y: 85 + index * (210 / Math.max(1, right.length - 1)) };
+      });
+      return positions;
+    }
+    if (view.kind === "frontier_debate") {
+      var cx = 480;
+      var cy = 180;
+      var radius = 125;
+      var out = {};
+      nodes.forEach(function (node, index) {
+        if (index === 0) {
+          out[node.id] = { x: cx, y: cy };
+        } else {
+          var angle = -Math.PI / 2 + (2 * Math.PI * (index - 1)) / Math.max(1, nodes.length - 1);
+          out[node.id] = { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+        }
+      });
+      return out;
+    }
+    var step = 720 / Math.max(1, nodes.length - 1);
+    var base = {};
+    nodes.forEach(function (node, index) {
+      base[node.id] = { x: 120 + index * step, y: 180 + (index % 2 === 0 ? -38 : 38) };
+    });
+    return base;
+  }
+  function connectedIds(view, nodeId) {
+    var ids = {};
+    (view.edges || []).forEach(function (edge) {
+      if (edge.from === nodeId) ids[edge.to] = true;
+      if (edge.to === nodeId) ids[edge.from] = true;
+    });
+    ids[nodeId] = true;
+    return ids;
+  }
+  function render(mount, view) {
+    var positions = layout(view);
+    var markerId = "arrowhead-" + view.id;
+    var svg = el("svg", {
+      "class": "visual-svg",
+      "role": "img",
+      "aria-labelledby": "svg-title-" + view.id + " svg-desc-" + view.id,
+      "viewBox": "0 0 960 360",
+      "preserveAspectRatio": "xMidYMid meet"
+    });
+    var title = el("title", { "id": "svg-title-" + view.id });
+    title.appendChild(textNode(view.title || "Visual view"));
+    svg.appendChild(title);
+    var desc = el("desc", { "id": "svg-desc-" + view.id });
+    desc.appendChild(textNode(view.alt || view.justification || ""));
+    svg.appendChild(desc);
+    var defs = el("defs", {});
+    var marker = el("marker", {
+      "id": markerId,
+      "viewBox": "0 0 10 10",
+      "refX": "9",
+      "refY": "5",
+      "markerWidth": "7",
+      "markerHeight": "7",
+      "orient": "auto-start-reverse"
+    });
+    marker.appendChild(el("path", { "d": "M 0 0 L 10 5 L 0 10 z", "fill": "#6f7f8f" }));
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
+    (view.edges || []).forEach(function (edge, index) {
+      var from = positions[edge.from];
+      var to = positions[edge.to];
+      if (!from || !to) return;
+      var line = el("line", {
+        "class": "visual-edge",
+        "data-from": edge.from,
+        "data-to": edge.to,
+        "x1": from.x,
+        "y1": from.y,
+        "x2": to.x,
+        "y2": to.y,
+        "marker-end": "url(#" + markerId + ")",
+        "aria-label": (edge.label || edge.kind || "edge") + " " + edge.from + " to " + edge.to
+      });
+      line.setAttribute("data-edge-index", String(index));
+      svg.appendChild(line);
+    });
+
+    (view.nodes || []).forEach(function (node) {
+      var point = positions[node.id];
+      if (!point) return;
+      var group = el("g", {
+        "class": "visual-node",
+        "tabindex": "0",
+        "role": "img",
+        "aria-label": node.label + ". " + (node.description || node.entity_type || "node"),
+        "data-node-id": node.id
+      });
+      group.appendChild(el("rect", {
+        "x": point.x - 82,
+        "y": point.y - 24,
+        "width": "164",
+        "height": "48",
+        "rx": "7"
+      }));
+      var text = el("text", {
+        "x": point.x,
+        "y": point.y + 4,
+        "text-anchor": "middle"
+      });
+      text.appendChild(textNode(shortLabel(node.label || node.id)));
+      group.appendChild(text);
+      group.addEventListener("mouseenter", function () { activate(svg, view, node.id); });
+      group.addEventListener("focus", function () { activate(svg, view, node.id); });
+      group.addEventListener("mouseleave", function () { clearActive(svg); });
+      group.addEventListener("blur", function () { clearActive(svg); });
+      svg.appendChild(group);
+    });
+    mount.innerHTML = "";
+    mount.appendChild(svg);
+  }
+  function activate(svg, view, nodeId) {
+    var active = connectedIds(view, nodeId);
+    Array.prototype.forEach.call(svg.querySelectorAll(".visual-node"), function (node) {
+      node.classList.toggle("is-active", !!active[node.getAttribute("data-node-id")]);
+    });
+    Array.prototype.forEach.call(svg.querySelectorAll(".visual-edge"), function (edge) {
+      var from = edge.getAttribute("data-from");
+      var to = edge.getAttribute("data-to");
+      edge.classList.toggle("is-active", from === nodeId || to === nodeId);
+    });
+  }
+  function clearActive(svg) {
+    Array.prototype.forEach.call(svg.querySelectorAll(".is-active"), function (node) {
+      node.classList.remove("is-active");
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-visual-mount]"), function (mount) {
+    var id = mount.getAttribute("data-visual-mount");
+    var view = views.find(function (item) { return item.id === id; });
+    if (view) render(mount, view);
+  });
+})();"##;
+
+#[derive(Debug, Serialize)]
+struct RenderVisualView {
+    id: String,
+    kind: String,
+    title: String,
+    justification: String,
+    alt: String,
+    nodes: Vec<RenderVisualNode>,
+    edges: Vec<RenderVisualEdge>,
+}
+
+#[derive(Debug, Serialize)]
+struct RenderVisualNode {
+    id: String,
+    label: String,
+    entity_type: String,
+    description: String,
+}
+
+#[derive(Debug, Serialize)]
+struct RenderVisualEdge {
+    from: String,
+    to: String,
+    kind: String,
+    label: String,
+}
+
+fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
+    report
+        .visual_views
+        .iter()
+        .filter_map(|view| {
+            let kind = visual_view_kind_label(view.kind)?;
+            if view.justification.trim().is_empty() {
+                return None;
+            }
+            let mut node_ids = BTreeSet::new();
+            let nodes = view
+                .nodes
+                .iter()
+                .filter_map(|node| {
+                    if node.id.trim().is_empty() {
+                        return None;
+                    }
+                    node_ids.insert(node.id.clone());
+                    Some(RenderVisualNode {
+                        id: node.id.clone(),
+                        label: first_non_empty([node.label.as_str(), node.id.as_str()]),
+                        entity_type: entity_type_label(node.entity_type).to_string(),
+                        description: node.description.clone(),
+                    })
+                })
+                .collect::<Vec<_>>();
+            let edges = view
+                .edges
+                .iter()
+                .filter_map(|edge| {
+                    if node_ids.contains(&edge.from)
+                        && node_ids.contains(&edge.to)
+                        && edge.from != edge.to
+                    {
+                        Some(RenderVisualEdge {
+                            from: edge.from.clone(),
+                            to: edge.to.clone(),
+                            kind: edge.kind.clone(),
+                            label: edge.label.clone(),
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            if nodes.len() < 2 || edges.is_empty() {
+                return None;
+            }
+            let title = first_non_empty([view.title.as_str(), kind]);
+            Some(RenderVisualView {
+                id: view.id.clone(),
+                kind: kind.to_string(),
+                title: title.clone(),
+                justification: view.justification.clone(),
+                alt: visual_alt_text(&title, kind, &nodes, &edges),
+                nodes,
+                edges,
+            })
+        })
+        .collect()
+}
+
+fn visual_alt_text(
+    title: &str,
+    kind: &str,
+    nodes: &[RenderVisualNode],
+    edges: &[RenderVisualEdge],
+) -> String {
+    let edge_summary = edges
+        .iter()
+        .map(|edge| {
+            format!(
+                "{} to {} ({})",
+                edge.from,
+                edge.to,
+                first_non_empty([edge.label.as_str(), edge.kind.as_str(), "related"])
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!(
+        "{title} is a {kind} view with {} nodes and {} edges: {edge_summary}",
+        nodes.len(),
+        edges.len()
+    )
+}
+
+fn push_nav(html: &mut String, has_visuals: bool) {
+    let mut items = vec![
+        ("scope", "Scope"),
+        ("domain-profile", "Domain Profile"),
+        ("core-ideas", "Core Ideas"),
+        ("methods", "Methods"),
+        ("representations", "Representations"),
+        ("evidence-standards", "Evidence Standards"),
+        ("sources-evidence", "Sources and Evidence"),
+        ("claims", "Claims"),
+        ("curriculum-path", "Curriculum Path"),
+        ("frontier-debates", "Frontier and Debate"),
+    ];
+    if has_visuals {
+        items.push(("visualizations", "Visual Views"));
+    }
+    html.push_str("<nav class=\"section-nav\" aria-label=\"Report sections\">\n");
+    for (id, label) in items {
+        html.push_str("<a href=\"#");
+        push_escaped_attr(html, id);
+        html.push_str("\">");
+        push_escaped(html, label);
+        html.push_str("</a>\n");
+    }
+    html.push_str("</nav>\n");
+}
+
+fn push_scope_section(html: &mut String, scope: &Scope) {
+    push_section_open(html, "scope", "Scope");
+    push_paragraph(html, &scope.summary);
+    html.push_str("<div class=\"split-list\">\n");
+    push_string_list(html, "Included", &scope.included);
+    push_string_list(html, "Excluded", &scope.excluded);
+    push_string_list(html, "Assumptions", &scope.assumptions);
+    push_string_list(html, "Interpretive Notes", &scope.interpretive_notes);
+    html.push_str("</div>\n</section>\n");
+}
+
+fn push_domain_profile_section(html: &mut String, profile: &DomainProfile) {
+    push_section_open(html, "domain-profile", "Domain Profile");
+    let mut classifications = vec![domain_classification_label(profile.classification).to_string()];
+    classifications.extend(
+        profile
+            .secondary_characteristics
+            .iter()
+            .map(|classification| domain_classification_label(*classification).to_string()),
+    );
+    html.push_str("<p class=\"meta\"><strong>Classification:</strong> ");
+    push_escaped(html, &classifications.join(", "));
+    html.push_str("</p>\n");
+    push_paragraph(html, &profile.rationale);
+    push_string_list(html, "Failure Modes", &profile.failure_modes);
+    html.push_str("</section>\n");
+}
+
+fn push_knowledge_section(html: &mut String, id: &str, title: &str, items: &[KnowledgeItem]) {
+    push_section_open(html, id, title);
+    if items.is_empty() {
+        push_empty_note(html);
+    } else {
+        html.push_str("<div class=\"item-grid\">\n");
+        for item in items {
+            html.push_str("<article class=\"item-card\">\n<h3>");
+            push_escaped(html, &item.label);
+            html.push_str("</h3>\n");
+            push_paragraph(html, &item.description);
+            if !item.aliases.is_empty() || !item.source_ids.is_empty() {
+                html.push_str("<p class=\"meta\">");
+                let mut parts = Vec::new();
+                if !item.aliases.is_empty() {
+                    parts.push(format!("Aliases: {}", item.aliases.join(", ")));
+                }
+                if !item.source_ids.is_empty() {
+                    parts.push(format!("Sources: {}", item.source_ids.join(", ")));
+                }
+                push_escaped(html, &parts.join(" | "));
+                html.push_str("</p>\n");
+            }
+            html.push_str("</article>\n");
+        }
+        html.push_str("</div>\n");
+    }
+    html.push_str("</section>\n");
+}
+
+fn push_evidence_standards_section(html: &mut String, standards: &EvidenceStandards) {
+    push_section_open(html, "evidence-standards", "Evidence Standards");
+    push_paragraph(html, &standards.summary);
+    push_paragraph(html, &standards.claim_policy);
+    let rows = standards
+        .source_role_requirements
+        .iter()
+        .map(|requirement| {
+            vec![
+                source_role_label(requirement.role).to_string(),
+                source_role_requirement_label(requirement.requirement).to_string(),
+                requirement
+                    .minimum_sources
+                    .map(|value| value.to_string())
+                    .unwrap_or_default(),
+                requirement.rationale.clone(),
+                requirement
+                    .waiver
+                    .as_ref()
+                    .map(format_source_role_waiver)
+                    .unwrap_or_default(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    push_table(
+        html,
+        &["Role", "Requirement", "Minimum", "Rationale", "Waiver"],
+        &rows,
+    );
+    html.push_str("</section>\n");
+}
+
+fn push_sources_and_evidence_section(html: &mut String, report: &PublicReport) {
+    push_section_open(html, "sources-evidence", "Sources and Evidence");
+    let source_rows = report
+        .sources
+        .iter()
+        .map(|source| {
+            vec![
+                source.id.clone(),
+                first_non_empty([source.citation.as_str(), source.title.as_str()]),
+                source.source_type.clone(),
+                source.identifier.clone(),
+                source.url.clone(),
+                format_source_roles(&source.roles),
+                format_source_access(&source.access),
+                verification_status_label(source.verification_status).to_string(),
+                source.last_reviewed.clone(),
+                source.why_it_matters.clone(),
+                source.notes.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    push_table(
+        html,
+        &[
+            "Source ID",
+            "Citation",
+            "Type",
+            "Identifier",
+            "URL",
+            "Roles",
+            "Access",
+            "Verification",
+            "Last Reviewed",
+            "Why It Matters",
+            "Notes",
+        ],
+        &source_rows,
+    );
+
+    let source_lookup = report
+        .sources
+        .iter()
+        .map(|source| {
+            (
+                source.id.as_str(),
+                first_non_empty([source.citation.as_str(), source.title.as_str()]),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut evidence_rows = Vec::new();
+    for claim in &report.claims {
+        for link in &claim.evidence_links {
+            evidence_rows.push(vec![
+                link.evidence_id.clone(),
+                claim.id.clone(),
+                claim.statement.clone(),
+                link.source_id.clone(),
+                source_lookup
+                    .get(link.source_id.as_str())
+                    .cloned()
+                    .unwrap_or_default(),
+                verification_status_label(link.verification_status).to_string(),
+                support_kind_label(link.support_kind).to_string(),
+                first_non_empty([link.locator.as_str(), link.support_note.as_str()]),
+                link.reviewed_at.clone(),
+            ]);
+        }
+    }
+    html.push_str("<h3>Evidence Links</h3>\n");
+    push_table(
+        html,
+        &[
+            "Evidence ID",
+            "Claim ID",
+            "Claim",
+            "Source ID",
+            "Source",
+            "Status",
+            "Support",
+            "Locator or Note",
+            "Reviewed",
+        ],
+        &evidence_rows,
+    );
+    html.push_str("</section>\n");
+}
+
+fn push_claims_section(html: &mut String, claims: &[Claim]) {
+    push_section_open(html, "claims", "Claims");
+    let rows = claims
+        .iter()
+        .map(|claim| {
+            vec![
+                claim.id.clone(),
+                claim.statement.clone(),
+                claim_type_label(claim.claim_type).to_string(),
+                evidence_requirement_label(claim.evidence_requirement).to_string(),
+                claim
+                    .confidence
+                    .map(claim_confidence_label)
+                    .unwrap_or("")
+                    .to_string(),
+                format_temporal(&claim.temporal),
+                format_claim_evidence_links(&claim.evidence_links),
+                claim.notes.clone(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    push_table(
+        html,
+        &[
+            "ID",
+            "Statement",
+            "Type",
+            "Evidence Requirement",
+            "Confidence",
+            "Temporal",
+            "Evidence",
+            "Notes",
+        ],
+        &rows,
+    );
+    html.push_str("</section>\n");
+}
+
+fn push_curriculum_section(html: &mut String, steps: &[CurriculumStep]) {
+    push_section_open(html, "curriculum-path", "Curriculum Path");
+    let rows = steps
+        .iter()
+        .map(|step| {
+            vec![
+                step.sequence.to_string(),
+                step.title.clone(),
+                step.learning_goal.clone(),
+                step.prerequisite_ids.join(", "),
+                step.practice_artifact.clone(),
+                step.progress_criteria.join("\n"),
+                step.source_ids.join(", "),
+            ]
+        })
+        .collect::<Vec<_>>();
+    push_table(
+        html,
+        &[
+            "Seq",
+            "Title",
+            "Learning Goal",
+            "Prerequisites",
+            "Practice Artifact",
+            "Progress Criteria",
+            "Sources",
+        ],
+        &rows,
+    );
+    html.push_str("</section>\n");
+}
+
+fn push_frontier_section(html: &mut String, items: &[FrontierDebateItem]) {
+    push_section_open(html, "frontier-debates", "Frontier and Debate");
+    let rows = items
+        .iter()
+        .map(|item| {
+            vec![
+                item.id.clone(),
+                frontier_debate_kind_label(item.kind).to_string(),
+                item.title.clone(),
+                item.summary.clone(),
+                item.why_it_matters.clone(),
+                item.required_background_ids.join(", "),
+                item.claim_ids.join(", "),
+                item.source_ids.join(", "),
+                format_temporal(&item.temporal),
+            ]
+        })
+        .collect::<Vec<_>>();
+    push_table(
+        html,
+        &[
+            "ID",
+            "Kind",
+            "Title",
+            "Summary",
+            "Why It Matters",
+            "Required Background",
+            "Claims",
+            "Sources",
+            "Temporal",
+        ],
+        &rows,
+    );
+    html.push_str("</section>\n");
+}
+
+fn push_visual_section(html: &mut String, views: &[RenderVisualView]) {
+    push_section_open(html, "visualizations", "Visual Views");
+    for view in views {
+        html.push_str("<article class=\"visual-card\" aria-labelledby=\"visual-title-");
+        push_escaped_attr(html, &view.id);
+        html.push_str("\">\n<h3 id=\"visual-title-");
+        push_escaped_attr(html, &view.id);
+        html.push_str("\">");
+        push_escaped(html, &view.title);
+        html.push_str("</h3>\n<p class=\"meta\">");
+        push_escaped(html, &view.justification);
+        html.push_str("</p>\n<div class=\"visual-canvas\" data-visual-mount=\"");
+        push_escaped_attr(html, &view.id);
+        html.push_str("\" role=\"region\" aria-label=\"Interactive visual view: ");
+        push_escaped_attr(html, &view.title);
+        html.push_str("\"></div>\n");
+        html.push_str("<noscript><p class=\"muted\">The text alternative below contains the same graph nodes and edges.</p></noscript>\n");
+        html.push_str(
+            "<div class=\"visual-fallback\" role=\"group\" aria-label=\"Text alternative for ",
+        );
+        push_escaped_attr(html, &view.title);
+        html.push_str("\">\n<p>");
+        push_escaped(html, &view.alt);
+        html.push_str("</p>\n<h4>Nodes</h4>\n<ul>\n");
+        for node in &view.nodes {
+            html.push_str("<li><strong>");
+            push_escaped(html, &node.label);
+            html.push_str("</strong> ");
+            push_escaped(html, &format!("({})", node.entity_type));
+            if !node.description.trim().is_empty() {
+                html.push_str(": ");
+                push_escaped(html, &node.description);
+            }
+            html.push_str("</li>\n");
+        }
+        html.push_str("</ul>\n<h4>Edges</h4>\n<ul>\n");
+        for edge in &view.edges {
+            html.push_str("<li>");
+            push_escaped(
+                html,
+                &format!(
+                    "{} -> {} ({})",
+                    edge.from,
+                    edge.to,
+                    first_non_empty([edge.label.as_str(), edge.kind.as_str(), "related"])
+                ),
+            );
+            html.push_str("</li>\n");
+        }
+        html.push_str("</ul>\n</div>\n</article>\n");
+    }
+    html.push_str("</section>\n");
+}
+
+fn push_section_open(html: &mut String, id: &str, title: &str) {
+    html.push_str("<section class=\"report-section\" id=\"");
+    push_escaped_attr(html, id);
+    html.push_str("\">\n<h2>");
+    push_escaped(html, title);
+    html.push_str("</h2>\n");
+}
+
+fn push_paragraph(html: &mut String, text: &str) {
+    if text.trim().is_empty() {
+        return;
+    }
+    html.push_str("<p class=\"prose\">");
+    push_escaped(html, text);
+    html.push_str("</p>\n");
+}
+
+fn push_string_list(html: &mut String, title: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    html.push_str("<div>\n<h3>");
+    push_escaped(html, title);
+    html.push_str("</h3>\n<ul>\n");
+    for item in items {
+        html.push_str("<li>");
+        push_escaped(html, item);
+        html.push_str("</li>\n");
+    }
+    html.push_str("</ul>\n</div>\n");
+}
+
+fn push_empty_note(html: &mut String) {
+    html.push_str("<p class=\"muted\">No entries.</p>\n");
+}
+
+fn push_table(html: &mut String, headers: &[&str], rows: &[Vec<String>]) {
+    if rows.is_empty() {
+        push_empty_note(html);
+        return;
+    }
+    html.push_str("<div class=\"table-scroll\" role=\"region\" aria-label=\"Scrollable table\" tabindex=\"0\">\n<table>\n<thead>\n<tr>");
+    for header in headers {
+        html.push_str("<th scope=\"col\">");
+        push_escaped(html, header);
+        html.push_str("</th>");
+    }
+    html.push_str("</tr>\n</thead>\n<tbody>\n");
+    for row in rows {
+        html.push_str("<tr>");
+        for index in 0..headers.len() {
+            html.push_str("<td>");
+            if let Some(cell) = row.get(index) {
+                push_escaped(html, cell);
+            }
+            html.push_str("</td>");
+        }
+        html.push_str("</tr>\n");
+    }
+    html.push_str("</tbody>\n</table>\n</div>\n");
+}
+
+fn format_source_roles(roles: &[SourceRole]) -> String {
+    roles
+        .iter()
+        .map(|role| source_role_label(*role))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn format_source_access(access: &SourceAccessMetadata) -> String {
+    let mut parts = vec![
+        access_status_label(access.status).to_string(),
+        access.route.clone(),
+    ];
+    if !access.budget_estimate.trim().is_empty() {
+        parts.push(format!("budget: {}", access.budget_estimate));
+    }
+    if !access.license.trim().is_empty() {
+        parts.push(format!("license: {}", access.license));
+    }
+    if access.metadata_only == Some(true) {
+        parts.push("metadata only".to_string());
+    }
+    if !access.notes.trim().is_empty() {
+        parts.push(access.notes.clone());
+    }
+    parts.join("\n")
+}
+
+fn format_source_role_waiver(waiver: &SourceRoleWaiver) -> String {
+    let mut parts = vec![waiver.rationale.clone(), format!("as_of: {}", waiver.as_of)];
+    if !waiver.review_after.trim().is_empty() {
+        parts.push(format!("review_after: {}", waiver.review_after));
+    }
+    parts.join("\n")
+}
+
+fn format_temporal(marker: &TemporalMarker) -> String {
+    let mut parts = Vec::new();
+    if !marker.as_of.trim().is_empty() {
+        parts.push(format!("as_of: {}", marker.as_of));
+    }
+    if !marker.review_after.trim().is_empty() {
+        parts.push(format!("review_after: {}", marker.review_after));
+    }
+    parts.push(format!(
+        "status: {}",
+        temporal_status_label(marker.temporal_status)
+    ));
+    if !marker.rationale.trim().is_empty() {
+        parts.push(marker.rationale.clone());
+    }
+    parts.join("\n")
+}
+
+fn format_claim_evidence_links(links: &[EvidenceLink]) -> String {
+    links
+        .iter()
+        .map(|link| {
+            let support = first_non_empty([link.locator.as_str(), link.support_note.as_str()]);
+            format!(
+                "{} [{}; {}; {}]",
+                link.source_id,
+                verification_status_label(link.verification_status),
+                support_kind_label(link.support_kind),
+                support
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn safe_script_json<T: Serialize>(value: &T) -> Result<String> {
+    let json = serde_json::to_string(value).context("encode visual view JSON")?;
+    Ok(json
+        .replace('&', "\\u0026")
+        .replace('<', "\\u003C")
+        .replace('>', "\\u003E")
+        .replace('\u{2028}', "\\u2028")
+        .replace('\u{2029}', "\\u2029"))
+}
+
+fn push_escaped(html: &mut String, value: &str) {
+    for ch in value.chars() {
+        match ch {
+            '&' => html.push_str("&amp;"),
+            '<' => html.push_str("&lt;"),
+            '>' => html.push_str("&gt;"),
+            '"' => html.push_str("&quot;"),
+            '\'' => html.push_str("&#39;"),
+            _ => html.push(ch),
+        }
+    }
+}
+
+fn push_escaped_attr(html: &mut String, value: &str) {
+    push_escaped(html, value);
+}
+
+fn domain_classification_label(value: DomainClassification) -> &'static str {
+    match value {
+        DomainClassification::WellStructured => "well_structured",
+        DomainClassification::Formal => "formal",
+        DomainClassification::IllStructured => "ill_structured",
+        DomainClassification::ProfessionalPractice => "professional_practice",
+        DomainClassification::InstrumentBound => "instrument_bound",
+        DomainClassification::InfrastructureBound => "infrastructure_bound",
+        DomainClassification::Emerging => "emerging",
+        DomainClassification::Interdisciplinary => "interdisciplinary",
+        DomainClassification::Mixed => "mixed",
+    }
+}
+
+fn source_role_requirement_label(value: SourceRoleRequirementKind) -> &'static str {
+    match value {
+        SourceRoleRequirementKind::Required => "required",
+        SourceRoleRequirementKind::Conditional => "conditional",
+        SourceRoleRequirementKind::Waived => "waived",
+        SourceRoleRequirementKind::NotApplicable => "not_applicable",
+    }
+}
+
+fn verification_status_label(value: VerificationStatus) -> &'static str {
+    match value {
+        VerificationStatus::Cataloged => "cataloged",
+        VerificationStatus::Reviewed => "reviewed",
+        VerificationStatus::Verified => "verified",
+    }
+}
+
+fn claim_type_label(value: ClaimType) -> &'static str {
+    match value {
+        ClaimType::Structural => "structural",
+        ClaimType::Currentness => "currentness",
+        ClaimType::Frontier => "frontier",
+        ClaimType::Debate => "debate",
+        ClaimType::Curricular => "curricular",
+        ClaimType::Interpretive => "interpretive",
+        ClaimType::Methodological => "methodological",
+    }
+}
+
+fn evidence_requirement_label(value: EvidenceRequirement) -> &'static str {
+    match value {
+        EvidenceRequirement::None => "none",
+        EvidenceRequirement::CatalogedSource => "cataloged_source",
+        EvidenceRequirement::ReviewedSource => "reviewed_source",
+        EvidenceRequirement::VerifiedSource => "verified_source",
+        EvidenceRequirement::MultipleReviewedSources => "multiple_reviewed_sources",
+    }
+}
+
+fn claim_confidence_label(value: ClaimConfidence) -> &'static str {
+    match value {
+        ClaimConfidence::High => "high",
+        ClaimConfidence::Medium => "medium",
+        ClaimConfidence::Low => "low",
+        ClaimConfidence::Unknown => "unknown",
+    }
+}
+
+fn support_kind_label(value: SupportKind) -> &'static str {
+    match value {
+        SupportKind::Supports => "supports",
+        SupportKind::Qualifies => "qualifies",
+        SupportKind::Contradicts => "contradicts",
+        SupportKind::Background => "background",
+        SupportKind::Example => "example",
+    }
+}
+
+fn frontier_debate_kind_label(value: FrontierDebateKind) -> &'static str {
+    match value {
+        FrontierDebateKind::Frontier => "frontier",
+        FrontierDebateKind::Debate => "debate",
+        FrontierDebateKind::OpenProblem => "open_problem",
+        FrontierDebateKind::Uncertainty => "uncertainty",
+    }
+}
+
+fn temporal_status_label(value: TemporalStatus) -> &'static str {
+    match value {
+        TemporalStatus::Durable => "durable",
+        TemporalStatus::Current => "current",
+        TemporalStatus::ReviewDue => "review_due",
+        TemporalStatus::Stale => "stale",
+        TemporalStatus::Unknown => "unknown",
+    }
+}
+
+fn visual_view_kind_label(value: VisualViewKind) -> Option<&'static str> {
+    match value {
+        VisualViewKind::KnowledgeSpine => Some("knowledge_spine"),
+        VisualViewKind::ConceptSource => Some("concept_source"),
+        VisualViewKind::DependencyPath => Some("dependency_path"),
+        VisualViewKind::FrontierDebate => Some("frontier_debate"),
+        VisualViewKind::Custom => None,
+    }
+}
+
+pub fn read_json_file<T, P>(path: P) -> Result<T>
+where
+    T: DeserializeOwned,
+    P: AsRef<Path>,
+{
+    let path = path.as_ref();
+    let data = fs::read(path).with_context(|| format!("read JSON {}", path.display()))?;
+    serde_json::from_slice(&data).with_context(|| format!("parse JSON {}", path.display()))
+}
+
+pub fn write_json_file<T, P>(path: P, value: &T) -> Result<()>
+where
+    T: Serialize,
+    P: AsRef<Path>,
+{
+    let path = path.as_ref();
+    ensure_parent_dir(path)?;
+    let mut data = serde_json::to_vec_pretty(value)
+        .with_context(|| format!("encode JSON {}", path.display()))?;
+    data.push(b'\n');
+    fs::write(path, data).with_context(|| format!("write JSON {}", path.display()))?;
+    Ok(())
+}
+
+pub fn read_jsonl_file<T, P>(path: P) -> Result<Vec<T>>
+where
+    T: DeserializeOwned,
+    P: AsRef<Path>,
+{
+    let path = path.as_ref();
+    let file = File::open(path).with_context(|| format!("open JSONL {}", path.display()))?;
+    let mut items = Vec::new();
+    for (index, line) in BufReader::new(file).lines().enumerate() {
+        let line_number = index + 1;
+        let line =
+            line.with_context(|| format!("read JSONL {} line {line_number}", path.display()))?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let item = serde_json::from_str(line.trim())
+            .with_context(|| format!("parse JSONL {} line {line_number}", path.display()))?;
+        items.push(item);
+    }
+    Ok(items)
+}
+
+pub fn write_jsonl_file<T, P>(path: P, values: &[T]) -> Result<()>
+where
+    T: Serialize,
+    P: AsRef<Path>,
+{
+    let path = path.as_ref();
+    ensure_parent_dir(path)?;
+    let file = File::create(path).with_context(|| format!("create JSONL {}", path.display()))?;
+    let mut writer = BufWriter::new(file);
+    for value in values {
+        serde_json::to_writer(&mut writer, value)
+            .with_context(|| format!("encode JSONL {}", path.display()))?;
+        writer
+            .write_all(b"\n")
+            .with_context(|| format!("write JSONL {}", path.display()))?;
+    }
+    writer
+        .flush()
+        .with_context(|| format!("flush JSONL {}", path.display()))?;
+    Ok(())
+}
+
+fn source_content_key(source: &Source) -> String {
+    [
+        source.citation.trim(),
+        source.title.trim(),
+        source.identifier.trim(),
+        source.url.trim(),
+        source.source_type.trim(),
+    ]
+    .into_iter()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+fn first_non_empty<const N: usize>(values: [&str; N]) -> String {
+    values
+        .into_iter()
+        .find(|value| !value.trim().is_empty())
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+fn normalize_access_status_label(raw: &str) -> String {
+    normalize_id_text(raw).replace(' ', "_")
+}
+
+fn input_kind_for_path(path: &Path) -> String {
+    match path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "csv" => "source_manifest_csv",
+        "tsv" => "source_manifest_tsv",
+        "json" => "source_manifest_json",
+        _ => "source_manifest",
+    }
+    .to_string()
+}
+
+fn id_prefix(prefix: &str) -> String {
+    let normalized = normalize_id_text(prefix).replace(' ', "-");
+    if normalized.is_empty() {
+        "item".to_string()
+    } else {
+        normalized
+    }
+}
+
+fn slug_from_normalized(normalized: &str) -> String {
+    let slug = normalized
+        .split_whitespace()
+        .take(8)
+        .collect::<Vec<_>>()
+        .join("-");
+    if slug.is_empty() {
+        "item".to_string()
+    } else {
+        slug
+    }
+}
+
+fn full_hash(normalized: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(normalized.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+fn short_hash(normalized: &str, len: usize) -> String {
+    let hash = full_hash(normalized);
+    hash[..len.min(hash.len())].to_string()
+}
+
+fn shortest_unique_hash_prefix(hash: &str, group: &[(String, String, String)]) -> usize {
+    for len in (ID_HASH_LEN + 1)..=hash.len() {
+        let prefix = &hash[..len];
+        if group
+            .iter()
+            .filter(|(_, _, candidate_hash)| candidate_hash.starts_with(prefix))
+            .count()
+            == 1
+        {
+            return len;
+        }
+    }
+    hash.len()
+}
+
+fn ensure_parent_dir(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+        }
+    }
+    Ok(())
+}

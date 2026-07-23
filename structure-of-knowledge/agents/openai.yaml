@@ -1,0 +1,4 @@
+interface:
+  display_name: "Structure of Knowledge"
+  short_description: "Evidence-grounded maps of unfamiliar fields"
+  default_prompt: "Use $structure-of-knowledge to map a field into a source-backed knowledge scaffold and learning path."

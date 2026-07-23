@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Local-only documents and agent/workflow state
+.private/
+.crack/
+
+# Build and release artifacts
+dist/
+structure-of-knowledge/bin/
+structure-of-knowledge/target/
+
+# Coverage/test outputs
+coverage.out

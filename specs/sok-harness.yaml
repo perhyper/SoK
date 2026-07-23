@@ -1,0 +1,148 @@
+name: structure-of-knowledge
+version: 0.2.0
+purpose: >
+  Evidence-grounded harness for mapping an unfamiliar field into its knowledge
+  structure, source layers, learning sequence, and current frontier.
+target_learner:
+  default: learner_or_downstream_agent
+  assumptions:
+    - audience_and_goal_are_explicit
+    - domain_precision_is_preserved
+    - needs_field_structure_not_a_flat_topic_list
+stages:
+  - id: frame
+    objective: Define field, learner, goal, scope, and a provisional domain profile.
+    required_artifacts:
+      - research_frame
+      - assumptions
+      - domain_decomposition
+      - domain_profile_hypothesis
+  - id: source_stack
+    objective: Gather and rank sources by epistemic and pedagogical role rather than fixed source quotas.
+    required_artifacts:
+      - source_role_probe
+      - evidence_matrix
+      - source_layer_map
+  - id: structure_extraction
+    objective: Extract generative questions, objects, methods, representations, evidence standards, and threshold concepts.
+    required_artifacts:
+      - core_structure_matrix
+      - concept_or_network_map
+  - id: curriculum_design
+    objective: Build a spiral or networked curriculum from field entry to the intended level of fluency.
+    required_artifacts:
+      - curriculum_roadmap
+      - reading_ladder
+      - practice_artifacts
+  - id: frontier_mapping
+    objective: Identify current open problems, debates, schools, and research opportunities.
+    required_artifacts:
+      - frontier_map
+      - debate_map
+  - id: delivery
+    objective: Produce a report, relation-backed visuals when useful, citations, and verification notes.
+    required_artifacts:
+      - narrative_report
+      - visual_package
+      - sources
+quality_gates:
+  - id: not_topic_list
+    rule: Output explains relations, hierarchy or network structure, inquiry methods, and progression.
+  - id: technical_integrity
+    rule: Output preserves the field's concepts, warrants, and uncertainty while adapting explanation to the intended audience.
+  - id: sourced_currentness
+    rule: Current claims include source dates and distinguish durable foundations from frontier claims.
+  - id: actionable_access
+    rule: Recommended sources include type, identifier, access route, free or paid status, and budget estimate or library guidance.
+  - id: pedagogical_ladder
+    rule: Literature is assigned a curricular role, not merely listed.
+  - id: domain_fit
+    rule: Formal fields may use prerequisite/proof graphs; ill-structured fields should use cases, networks, debates, or schools; infrastructure-bound fields must include instruments, datasets, collaborations, standards, and strategic reports.
+  - id: source_role_fit
+    rule: Source baskets are diagnostic roles, not quotas; conditional roles may be waived only with rationale tied to field structure and user goal.
+  - id: curriculum_not_boundary
+    rule: Existing curricula and syllabi count as evidence of stabilized pedagogical consensus, not as the boundary of the field.
+outputs:
+  internal_scaffold_markdown: optional_agent_artifact
+  human_report_markdown: required_for_final_report_lane
+  sources_manifest: required
+  evidence_jsonl: optional_until_final_claim_support
+  json_report: required_structured_source_of_truth
+  html_interactive_report: optional_view_for_validated_human_report
+  graph_views: optional_structured_views_selected_from_relations
+agent_cli:
+  language: rust
+  manifest: structure-of-knowledge/Cargo.toml
+  package: structure-of-knowledge/src
+  run_from_source: cd structure-of-knowledge && cargo run --bin sok --
+  build: make build
+  binary: structure-of-knowledge/bin/sok
+  install_skill: make install
+  default_download_statuses:
+    - open_access
+    - free_web
+    - public_domain
+    - cc_by
+    - cc_by_sa
+    - official_open
+    - user_provided
+  default_download_policy: >
+    paid_book, paywalled, subscription, restricted, unknown, and missing
+    access_status values are metadata-only unless an explicit downloader flag
+    permits them; flags do not grant legal access to restricted content.
+  commands:
+    init: Create an agent workspace with brief, tasks, report scaffold, source manifest, downloads, notes, and logs.
+    brief: Generate a standalone agent handoff brief.
+    scaffold: Generate a domain-aware SoK report starter inferred from field type.
+    handoff-report: Wrap a scaffold in next-agent instructions for completing a polished human-reader report.
+    source-template: Create a CSV source manifest template.
+    audit-sources: Validate access metadata and curricular role fields.
+    download-sources: Download only sources with default-allowed access statuses by default.
+    ingest last: Normalize this run's source manifest into cataloged evidence JSONL without creating a persistent ledger.
+    lint: Stage-aware pre-export check for Markdown, source manifests, and optional evidence ledgers.
+    export-json: Convert bounded scaffold or final Markdown plus source/evidence files into sok-report.json.
+    validate-report: Validate sok-report.json schema, public/internal boundary, evidence, currentness, source-role, and relation gates.
+    render-html: Render a validated human_report JSON file into self-contained local HTML.
+    specificity: Generate a concreteness checklist for underspecified domain tasks.
+  workflow_lanes:
+    scaffold:
+      intent: Internal agent scaffold; not a finished report.
+      commands:
+        - source-template
+        - ingest last
+        - scaffold
+        - lint --stage scaffold
+        - export-json --stage scaffold
+      outputs:
+        - scaffold.md
+        - sources.csv
+        - evidence.jsonl
+        - sok-scaffold.json
+      render_html: false
+      public_boundary: internal_context allowed only outside the public report payload
+    final_report:
+      intent: Human-facing report generated from canonical Markdown and reviewed evidence.
+      commands:
+        - lint --stage final
+        - export-json --stage final
+        - validate-report --strict
+        - render-html
+      inputs:
+        - canonical human report Markdown
+        - sources.csv
+        - reviewed evidence JSONL
+      outputs:
+        - sok-report.json
+        - report.html
+      public_boundary: internal_context and diagnostics are not rendered
+  quality_gate_commands:
+    - make fmt
+    - make test
+    - make vet
+    - make build
+    - structure-of-knowledge/bin/sok --help
+  modes:
+    research: SoK report, literature ladder, frontier map, and curriculum path.
+    textbook: Textbook thesis, chapter architecture, exercise ladder, and permissions plan.
+    model-tuning: Legal corpus plan, access audit, exclusion list, and evaluation blueprint.
+    curriculum: Module roadmap, practice artifacts, and scholarly assessment.
