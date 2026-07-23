@@ -19,10 +19,6 @@ SoK helps an agent capture questions such as:
 - What sequence of readings, artifacts, exercises, reproductions, critiques, or briefs supports the target use case?
 - What are the current open problems, debates, infrastructure bottlenecks, standards, and research opportunities?
 
-## Current Scope
-
-SoK currently maps one target field per run. The CLI's initial domain profile is a heuristic starter that the executing agent must revise after source review. A completed scaffold can inform later interdisciplinary work, but it does not compare two fields or model and validate a source-to-target domain bridge.
-
 ## Installation
 
 The macOS/Linux installer requires Rust with Cargo, `curl`, and `tar`. It downloads `main`, builds the CLI locally, and installs the skill to `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge`.
