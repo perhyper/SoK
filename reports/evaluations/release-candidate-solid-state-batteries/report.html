@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Structure of Knowledge: Solid-State Batteries</title>
+  <style>
+:root {
+  color-scheme: light;
+  --bg: #f6f7f8;
+  --paper: #ffffff;
+  --ink: #1b252f;
+  --muted: #5d6b78;
+  --line: #d8dee4;
+  --accent: #2364aa;
+  --accent-soft: #e8f1fb;
+  --focus: #9b5de5;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 10;
+  background: var(--paper);
+  border: 2px solid var(--focus);
+  color: var(--ink);
+  padding: 0.5rem 0.75rem;
+}
+.skip-link:focus { top: 1rem; }
+.report-shell {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 56px;
+}
+.report-header {
+  padding: 28px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.eyebrow {
+  margin: 0 0 0.45rem;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+h1, h2, h3 {
+  color: var(--ink);
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.7rem);
+}
+h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1.55rem;
+}
+h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1.08rem;
+}
+.summary {
+  max-width: 860px;
+  margin: 0.9rem 0 0;
+  color: #344250;
+  font-size: 1.08rem;
+}
+.section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1.35rem;
+}
+.section-nav a {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 0.35rem 0.55rem;
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+.section-nav a:focus,
+.section-nav a:hover {
+  border-color: var(--accent);
+  outline: 2px solid transparent;
+}
+.report-section {
+  padding: 28px 0;
+  border-bottom: 1px solid var(--line);
+}
+.prose {
+  max-width: 860px;
+  margin: 0.35rem 0 0;
+}
+.muted { color: var(--muted); }
+.split-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.item-card,
+.visual-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+}
+.item-card p,
+.visual-card p {
+  margin: 0.35rem 0 0;
+}
+.meta {
+  margin-top: 0.7rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+.table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+th,
+td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: #eef3f7;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+td {
+  font-size: 0.94rem;
+  white-space: pre-wrap;
+}
+tr:last-child td { border-bottom: 0; }
+.visual-canvas {
+  min-height: 380px;
+  margin-top: 0.9rem;
+}
+.visual-svg {
+  display: block;
+  width: 100%;
+  height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+.visual-node circle,
+.visual-node rect {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.visual-node text {
+  fill: var(--ink);
+  font-size: 13px;
+  pointer-events: none;
+}
+.visual-edge {
+  stroke: #6f7f8f;
+  stroke-width: 2;
+}
+.visual-node.is-active circle,
+.visual-node.is-active rect {
+  fill: #fff4cc;
+  stroke: #a15c00;
+}
+.visual-edge.is-active {
+  stroke: #a15c00;
+  stroke-width: 3;
+}
+.visual-fallback {
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+  border-left: 4px solid var(--accent);
+  background: #f4f7fa;
+}
+.visual-fallback ul {
+  margin: 0.4rem 0 0.8rem 1.1rem;
+  padding: 0;
+}
+.visual-fallback li { margin: 0.2rem 0; }
+@media (max-width: 720px) {
+  .report-shell {
+    width: min(100% - 20px, 1120px);
+    padding-top: 16px;
+  }
+  .report-header { padding-top: 20px; }
+  .split-list,
+  .item-grid {
+    grid-template-columns: 1fr;
+  }
+  table { min-width: 640px; }
+  .visual-canvas { min-height: 320px; }
+  .visual-svg { height: 300px; }
+}
+@media print {
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-size: 11pt;
+  }
+  .report-shell {
+    width: 100%;
+    padding: 0;
+  }
+  .section-nav,
+  .skip-link,
+  .visual-canvas,
+  script {
+    display: none !important;
+  }
+  .report-header,
+  .report-section {
+    border-color: #bbbbbb;
+  }
+  .item-card,
+  .visual-card,
+  .table-scroll {
+    border-color: #bbbbbb;
+    break-inside: avoid;
+  }
+  .table-scroll {
+    overflow: visible;
+  }
+  table {
+    min-width: 0;
+    font-size: 9pt;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+  </style>
+</head>
+<body>
+<a class="skip-link" href="#main-report">Skip to report content</a>
+<div class="report-shell">
+<header class="report-header">
+<p class="eyebrow">Structure of Knowledge Report</p>
+<h1>Solid-State Batteries</h1>
+<p class="summary">Solid-state batteries are an emerging, interdisciplinary, instrument-bound, and infrastructure-bound field. Its organizing problem is not “find the best solid electrolyte.” It is: move lithium ions quickly while blocking electrons, preserving chemically compatible and mechanically continuous interfaces, and doing so in a thin, high-loading cell that can be manufactured and cycled under practical pressure and temperature. The field is best read as five coupled layers: 1. Bulk transport: crystal chemistry, defects, phase stability, grain boundaries, ionic and electronic conductivity. 2. Interfacial thermodynamics and kinetics: electrochemical stability, reaction products, passivation, charge transfer, and space-charge effects. 3. Chemo-mechanics: contact loss, voids, local flux concentration, fracture, filament penetration, particle expansion, and stack pressure. 4. Cell architecture: electrolyte thickness, cathode loading, areal capacity, negative-to-positive capacity balance, pressure, temperature, rate, and lifetime. 5. Manufacturing and validation: powder handling, densification, coatings, sheet and pouch processing, reproducibility, safety qualification, cost, and yield. The layers form a constraint network: improving one variable can worsen another. A softer electrolyte may improve contact but narrow a processing or stability window; more pressure may suppress voids but increase hardware mass or mechanical damage; a highly conductive phase may react at an electrode and create a resistive interphase.</p>
+<nav class="section-nav" aria-label="Report sections">
+<a href="#scope">Scope</a>
+<a href="#domain-profile">Domain Profile</a>
+<a href="#core-ideas">Core Ideas</a>
+<a href="#methods">Methods</a>
+<a href="#representations">Representations</a>
+<a href="#evidence-standards">Evidence Standards</a>
+<a href="#sources-evidence">Sources and Evidence</a>
+<a href="#claims">Claims</a>
+<a href="#curriculum-path">Curriculum Path</a>
+<a href="#frontier-debates">Frontier and Debate</a>
+</nav>
+</header>
+<main id="main-report">
+<section class="report-section" id="scope">
+<h2>Scope</h2>
+<p class="prose">Solid-state batteries are an emerging, interdisciplinary, instrument-bound, and infrastructure-bound field. Its organizing problem is not “find the best solid electrolyte.” It is: move lithium ions quickly while blocking electrons, preserving chemically compatible and mechanically continuous interfaces, and doing so in a thin, high-loading cell that can be manufactured and cycled under practical pressure and temperature. The field is best read as five coupled layers: 1. Bulk transport: crystal chemistry, defects, phase stability, grain boundaries, ionic and electronic conductivity. 2. Interfacial thermodynamics and kinetics: electrochemical stability, reaction products, passivation, charge transfer, and space-charge effects. 3. Chemo-mechanics: contact loss, voids, local flux concentration, fracture, filament penetration, particle expansion, and stack pressure. 4. Cell architecture: electrolyte thickness, cathode loading, areal capacity, negative-to-positive capacity balance, pressure, temperature, rate, and lifetime. 5. Manufacturing and validation: powder handling, densification, coatings, sheet and pouch processing, reproducibility, safety qualification, cost, and yield. The layers form a constraint network: improving one variable can worsen another. A softer electrolyte may improve contact but narrow a processing or stability window; more pressure may suppress voids but increase hardware mass or mechanical damage; a highly conductive phase may react at an electrode and create a resistive interphase.</p>
+<div class="split-list">
+<div>
+<h3>Included</h3>
+<ul>
+<li>Solid-State Batteries</li>
+</ul>
+</div>
+<div>
+<h3>Interpretive Notes</h3>
+<ul>
+<li>The field’s historical arc explains its structure. The 2011 LGPS result made liquid-like room-temperature ionic conductivity plausible in a crystalline solid. Later work showed that conductivity is only one gate: buried interfaces, contact mechanics, composite-electrode transport, pressure, and manufacturing determine whether a material result becomes a useful cell. Three distinctions prevent most beginner errors: - Solid electrolyte is not the same as solid-state battery. A conductivity record is a material property; a battery claim concerns an integrated cell. - Stable does not mean inert. A useful interface may form a thin passivating interphase, while an apparently wide electrochemical window may hide slow decomposition. - Dendrite is an incomplete explanation. In solids, void formation, local flux constriction, defects, crack initiation, lithium penetration, and pressure are coupled parts of the failure mechanism. A credible paper therefore reports not only capacity retention, but also loading, areal capacity, electrolyte thickness, cell geometry, pressure during assembly and cycling, temperature, rate definition, lithium inventory, replicate count, and failure criterion.</li>
+</ul>
+</div>
+</div>
+</section>
+<section class="report-section" id="domain-profile">
+<h2>Domain Profile</h2>
+<p class="meta"><strong>Classification:</strong> instrument_bound, infrastructure_bound, emerging, interdisciplinary</p>
+<p class="prose">Solid-state batteries are an emerging, interdisciplinary, instrument-bound, and infrastructure-bound field. Its organizing problem is not “find the best solid electrolyte.” It is: move lithium ions quickly while blocking electrons, preserving chemically compatible and mechanically continuous interfaces, and doing so in a thin, high-loading cell that can be manufactured and cycled under practical pressure and temperature. The field is best read as five coupled layers: 1. Bulk transport: crystal chemistry, defects, phase stability, grain boundaries, ionic and electronic conductivity. 2. Interfacial thermodynamics and kinetics: electrochemical stability, reaction products, passivation, charge transfer, and space-charge effects. 3. Chemo-mechanics: contact loss, voids, local flux concentration, fracture, filament penetration, particle expansion, and stack pressure. 4. Cell architecture: electrolyte thickness, cathode loading, areal capacity, negative-to-positive capacity balance, pressure, temperature, rate, and lifetime. 5. Manufacturing and validation: powder handling, densification, coatings, sheet and pouch processing, reproducibility, safety qualification, cost, and yield. The layers form a constraint network: improving one variable can worsen another. A softer electrolyte may improve contact but narrow a processing or stability window; more pressure may suppress voids but increase hardware mass or mechanical damage; a highly conductive phase may react at an electrode and create a resistive interphase.</p>
+<div>
+<h3>Failure Modes</h3>
+<ul>
+<li>Optimizing one property in isolation</li>
+<li>importing liquid-electrolyte intuition unchanged</li>
+<li>calling every short a dendrite</li>
+<li>comparing cells with unmatched loading thickness pressure or temperature</li>
+<li>extrapolating a press-cell result directly to manufacturing readiness.</li>
+</ul>
+</div>
+</section>
+<section class="report-section" id="core-ideas">
+<h2>Core Ideas</h2>
+<div class="item-grid">
+<article class="item-card">
+<h3>Core objects</h3>
+<p class="prose">Solid-electrolyte phases; mobile ions and defects; electrodes; interfaces and interphases; grains and pores; composite electrodes; separators; electron-collecting foils; cell fixtures.</p>
+<p class="meta">Sources: src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7, src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d</p>
+</article>
+<article class="item-card">
+<h3>Generative relation</h3>
+<p class="prose">Composition and structure set defect populations and migration barriers; processing sets microstructure and contact; cycling changes chemistry and stress; those changes reshape local transport and reaction rates.</p>
+<p class="meta">Sources: src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc, src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7</p>
+</article>
+<article class="item-card">
+<h3>Threshold concepts</h3>
+<p class="prose">High bulk conductivity is necessary but insufficient; interphases can be functional or blocking; stripping can prepare a later plating short by creating voids; pressure is part of the electrochemical system; practical performance is areal and cell-level rather than a single gravimetric number.</p>
+<p class="meta">Sources: src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c, src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b, src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d</p>
+</article>
+</div>
+</section>
+<section class="report-section" id="methods">
+<h2>Methods</h2>
+<div class="item-grid">
+<article class="item-card">
+<h3>Methods and warrants</h3>
+<p class="prose">Impedance spectroscopy warrants conductivity only with geometry temperature density blocking-electrode and fitting details; stability claims need chemical analysis; mechanism claims need spatially or chemically resolved observations plus controls; cell claims need complete operating conditions and replicates.</p>
+<p class="meta">Sources: src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893, src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2</p>
+</article>
+</div>
+</section>
+<section class="report-section" id="representations">
+<h2>Representations</h2>
+<div class="item-grid">
+<article class="item-card">
+<h3>Representations</h3>
+<p class="prose">Arrhenius plots; Nyquist and distribution-of-relaxation-time plots; chemical-potential diagrams; phase and stability maps; cross-sectional and tomographic images; pressure-capacity maps; mass and energy budgets; process-flow diagrams.</p>
+<p class="meta">Sources: src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc, src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41</p>
+</article>
+</div>
+</section>
+<section class="report-section" id="evidence-standards">
+<h2>Evidence Standards</h2>
+<p class="prose">Sources are cataloged from the manifest; claim support requires reviewed or verified evidence links.</p>
+<p class="prose">Cataloged source records remain visible as source records but do not satisfy claim evidence requirements.</p>
+<div class="table-scroll" role="region" aria-label="Scrollable table" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Role</th><th scope="col">Requirement</th><th scope="col">Minimum</th><th scope="col">Rationale</th><th scope="col">Waiver</th></tr>
+</thead>
+<tbody>
+<tr><td>foundation</td><td>required</td><td>1</td><td>Whether the scaffold explains transport and material families before device claims</td><td></td></tr>
+<tr><td>method</td><td>required</td><td>1</td><td>Whether reported quantities have a reproducible warrant</td><td></td></tr>
+<tr><td>representation</td><td>required</td><td>1</td><td>Whether diagrams and images correspond to observable mechanisms</td><td></td></tr>
+<tr><td>synthesis</td><td>required</td><td>1</td><td>Whether the field is organized beyond a material list</td><td></td></tr>
+<tr><td>frontier</td><td>required</td><td>1</td><td>Whether open problems are separated from durable foundations</td><td></td></tr>
+<tr><td>infrastructure</td><td>required</td><td>1</td><td>Whether scale-up constraints appear as part of the knowledge structure</td><td></td></tr>
+<tr><td>curriculum</td><td>required</td><td>1</td><td>Whether prerequisites and learning order are explicit</td><td></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section class="report-section" id="sources-evidence">
+<h2>Sources and Evidence</h2>
+<div class="table-scroll" role="region" aria-label="Scrollable table" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Source ID</th><th scope="col">Citation</th><th scope="col">Type</th><th scope="col">Identifier</th><th scope="col">URL</th><th scope="col">Roles</th><th scope="col">Access</th><th scope="col">Verification</th><th scope="col">Last Reviewed</th><th scope="col">Why It Matters</th><th scope="col">Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>src-mit-10-626-electrochemical-energy-systems-ocw-10-df226e8dc9</td><td>MIT 10.626 Electrochemical Energy Systems</td><td>course</td><td>ocw:10.626</td><td>https://ocw.mit.edu/courses/10-626-electrochemical-energy-systems-spring-2014/pages/calendar/</td><td>orientation, curriculum</td><td>official_open
+Official MIT OpenCourseWare page
+budget: $0
+license: CC BY-NC-SA 4.0
+Official course calendar reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Provides a tested sequence from galvanic-cell physics through impedance and thermodynamics.</td><td>Official course calendar reviewed 2026-07-25.</td></tr>
+<tr><td>src-a-lithium-superionic-conductor-doi-10-1038-nmat3066-0b55870764</td><td>A lithium superionic conductor</td><td>research_article</td><td>doi:10.1038/nmat3066</td><td>https://www.nature.com/articles/nmat3066</td><td>foundation, evidence</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher abstract and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Canonical LGPS case showing why bulk room-temperature ionic conductivity became a central material target.</td><td>Publisher abstract and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7</td><td>Fundamentals of inorganic solid-state electrolytes for batteries</td><td>review_article</td><td>doi:10.1038/s41563-019-0431-3</td><td>https://www.nature.com/articles/s41563-019-0431-3</td><td>orientation, foundation, synthesis</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher abstract figures and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Integrates multiscale ion transport with electrochemical mechanical and processing properties.</td><td>Publisher abstract figures and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d</td><td>Interfaces and Interphases in All-Solid-State Batteries with Inorganic Solid Electrolytes</td><td>review_article</td><td>doi:10.1021/acs.chemrev.0c00101</td><td>https://pubs.acs.org/doi/10.1021/acs.chemrev.0c00101</td><td>foundation, synthesis</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher abstract and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Explains why chemical electrochemical and mechanical interface behavior replaced bulk conductivity as the dominant bottleneck.</td><td>Publisher abstract and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2</td><td>How Certain Are the Reported Ionic Conductivities of Thiophosphate-Based Solid Electrolytes?</td><td>interlaboratory_study</td><td>doi:10.1021/acsenergylett.9b02764</td><td>https://pubs.acs.org/doi/10.1021/acsenergylett.9b02764</td><td>method, evidence, standard, critique</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher abstract results and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Quantifies interlaboratory uncertainty in impedance-derived ionic conductivity and activation energy.</td><td>Publisher abstract results and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b</td><td>Critical stripping current leads to dendrite formation on plating in lithium anode solid electrolyte cells</td><td>research_article</td><td>doi:10.1038/s41563-019-0438-9</td><td>https://www.nature.com/articles/s41563-019-0438-9</td><td>method, evidence</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher abstract and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Connects stripping-induced void formation to local current concentration and later plating failure.</td><td>Publisher abstract and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-visualizing-plating-induced-cracking-in-lithium-anode-solid-b0e08a8148</td><td>Visualizing plating-induced cracking in lithium-anode solid-electrolyte cells</td><td>research_article</td><td>doi:10.1038/s41563-021-00967-8</td><td>https://www.nature.com/articles/s41563-021-00967-8</td><td>method, representation, evidence</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher abstract figures and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Uses operando imaging to connect lithium plating with crack initiation and propagation.</td><td>Publisher abstract figures and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c</td><td>Benchmarking the performance of all-solid-state lithium batteries</td><td>benchmark_analysis</td><td>doi:10.1038/s41560-020-0565-1</td><td>https://www.nature.com/articles/s41560-020-0565-1</td><td>synthesis, standard, critique</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher page and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Shifts evaluation from isolated material records to cell-level parameters and practical energy metrics.</td><td>Publisher page and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97</td><td>Challenges in speeding up solid-state battery development</td><td>perspective</td><td>doi:10.1038/s41560-023-01208-9</td><td>https://www.nature.com/articles/s41560-023-01208-9</td><td>orientation, synthesis, frontier, debate</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher page and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Reframes development around cell concepts interfaces anodes and speed-limiting translation problems.</td><td>Publisher page and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893</td><td>Benchmarking the reproducibility of all-solid-state battery cell performance</td><td>interlaboratory_study</td><td>doi:10.1038/s41560-024-01634-3</td><td>https://www.nature.com/articles/s41560-024-01634-3</td><td>method, evidence, standard, dataset, critique</td><td>open_access
+Open publisher article and PDF
+budget: $0
+license: See article license
+Open article methods results and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Tests a shared material system across 21 groups and exposes protocol-driven performance variability.</td><td>Open article methods results and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc</td><td>Characterizing Electrode Materials and Interfaces in Solid-State Batteries</td><td>review_article</td><td>doi:10.1021/acs.chemrev.4c00584</td><td>https://pubs.acs.org/doi/10.1021/acs.chemrev.4c00584</td><td>method, representation, synthesis, frontier</td><td>paywalled
+Publisher page and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher sections abstract and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Maps ex situ in situ and operando tools to buried-interface and degradation questions.</td><td>Publisher sections abstract and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30</td><td>The critical importance of stack pressure in batteries</td><td>review_article</td><td>doi:10.1038/s41560-025-01820-x</td><td>https://www.nature.com/articles/s41560-025-01820-x</td><td>synthesis, frontier, debate</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher abstract figures and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Shows that stack pressure couples contact void formation chemistry and mechanical damage rather than acting as a universally beneficial setting.</td><td>Publisher abstract figures and metadata reviewed 2026-07-25.</td></tr>
+<tr><td>src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41</td><td>Solid-State Battery Roadmap 2035+</td><td>official_roadmap</td><td>report:fraunhofer-isi-ssb-roadmap-2035</td><td>https://www.isi.fraunhofer.de/content/dam/isi/dokumente/cct/2022/SSB_Roadmap.pdf</td><td>synthesis, frontier, infrastructure</td><td>official_open
+Official Fraunhofer ISI PDF
+budget: $0
+license: See Fraunhofer terms
+Official 112-page report reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Connects electrolyte and electrode choices to cell concepts pilot production and market translation.</td><td>Official 112-page report reviewed 2026-07-25.</td></tr>
+<tr><td>src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd</td><td>Mechanically compliant and cost-effective solid electrolyte for all-solid-state batteries</td><td>research_article</td><td>doi:10.1038/s41467-025-68210-5</td><td>https://www.nature.com/articles/s41467-025-68210-5</td><td>evidence, frontier</td><td>open_access
+Open publisher article and PDF
+budget: $0
+license: See article license
+Open article abstract methods and reported cell conditions reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Exemplifies multi-objective electrolyte design across conductivity compliance cost loading and cell retention.</td><td>Open article abstract methods and reported cell conditions reviewed 2026-07-25.</td></tr>
+<tr><td>src-interfaces-in-all-solid-state-li-metal-batteries-e7dc8c10ed</td><td>Interfaces in All-Solid-State Li Metal Batteries: From Fundamental Research to Practical Applications</td><td>review_article</td><td>doi:10.1021/acs.chemrev.5c00679</td><td>https://pubs.acs.org/doi/10.1021/acs.chemrev.5c00679</td><td>orientation, synthesis, frontier</td><td>paywalled
+Publisher abstract and institutional full-text route
+budget: Institutional or article purchase
+license: See publisher terms
+metadata only
+Publisher abstract and metadata reviewed 2026-07-25.</td><td>reviewed</td><td>2026-07-25</td><td>Provides a 2026 synthesis of anode cathode and internal electrolyte interface problems from fundamentals to application.</td><td>Publisher abstract and metadata reviewed 2026-07-25.</td></tr>
+</tbody>
+</table>
+</div>
+<h3>Evidence Links</h3>
+<div class="table-scroll" role="region" aria-label="Scrollable table" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Evidence ID</th><th scope="col">Claim ID</th><th scope="col">Claim</th><th scope="col">Source ID</th><th scope="col">Source</th><th scope="col">Status</th><th scope="col">Support</th><th scope="col">Locator or Note</th><th scope="col">Reviewed</th></tr>
+</thead>
+<tbody>
+<tr><td>ev-inorganic-electrolyte-fundamentals-7b2c1d8f49</td><td>claim-solid-state-battery-research-is-a-coupled-bulk-6000b02751</td><td>Solid-state battery research is a coupled bulk-interface-mechanics-cell-manufacturing problem rather than an electrolyte-conductivity ranking.</td><td>src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7</td><td>Fundamentals of inorganic solid-state electrolytes for batteries</td><td>reviewed</td><td>supports</td><td>Abstract and Figures 2–7</td><td>2026-07-25</td></tr>
+<tr><td>ev-development-challenges-perspective-44ab1f865c</td><td>claim-solid-state-battery-research-is-a-coupled-bulk-6000b02751</td><td>Solid-state battery research is a coupled bulk-interface-mechanics-cell-manufacturing problem rather than an electrolyte-conductivity ranking.</td><td>src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97</td><td>Challenges in speeding up solid-state battery development</td><td>reviewed</td><td>supports</td><td>Article framing and annotated references</td><td>2026-07-25</td></tr>
+<tr><td>ev-fraunhofer-roadmap-70b15fd2c8</td><td>claim-solid-state-battery-research-is-a-coupled-bulk-6000b02751</td><td>Solid-state battery research is a coupled bulk-interface-mechanics-cell-manufacturing problem rather than an electrolyte-conductivity ranking.</td><td>src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41</td><td>Solid-State Battery Roadmap 2035+</td><td>reviewed</td><td>supports</td><td>Sections 5.1–5.2, Materials to Cell and Cell to Application roadmaps</td><td>2026-07-25</td></tr>
+<tr><td>ev-lgps-superionic-conductor-9f07bc51a4</td><td>claim-high-room-temperature-ionic-conductivity-is-necessary-for-05ee579852</td><td>High room-temperature ionic conductivity is necessary for many cell concepts but does not by itself establish interface stability or practical cell performance.</td><td>src-a-lithium-superionic-conductor-doi-10-1038-nmat3066-0b55870764</td><td>A lithium superionic conductor</td><td>reviewed</td><td>supports</td><td>Abstract and Figures 1–4</td><td>2026-07-25</td></tr>
+<tr><td>ev-interface-interphase-review-ae6035f178</td><td>claim-high-room-temperature-ionic-conductivity-is-necessary-for-05ee579852</td><td>High room-temperature ionic conductivity is necessary for many cell concepts but does not by itself establish interface stability or practical cell performance.</td><td>src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d</td><td>Interfaces and Interphases in All-Solid-State Batteries with Inorganic Solid Electrolytes</td><td>reviewed</td><td>supports</td><td>Abstract</td><td>2026-07-25</td></tr>
+<tr><td>ev-cell-performance-benchmark-fb62d4a701</td><td>claim-high-room-temperature-ionic-conductivity-is-necessary-for-05ee579852</td><td>High room-temperature ionic conductivity is necessary for many cell concepts but does not by itself establish interface stability or practical cell performance.</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c</td><td>Benchmarking the performance of all-solid-state lithium batteries</td><td>reviewed</td><td>supports</td><td>Main text performance-benchmark framing and Ragone comparison</td><td>2026-07-25</td></tr>
+<tr><td>ev-conductivity-round-robin-6f2a8bbd43</td><td>claim-impedance-derived-ionic-conductivity-requires-explicit-geometry-temperature-6c19a6a077</td><td>Impedance-derived ionic conductivity requires explicit geometry temperature density contact fitting and replication metadata before values can be compared across laboratories.</td><td>src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2</td><td>How Certain Are the Reported Ionic Conductivities of Thiophosphate-Based Solid Electrolytes?</td><td>reviewed</td><td>supports</td><td>Abstract and reported interlaboratory ranges</td><td>2026-07-25</td></tr>
+<tr><td>ev-critical-stripping-voids-5d47ea0b92</td><td>claim-lithium-stripping-can-create-interfacial-voids-that-concentrate-1d2b6eeb27</td><td>Lithium stripping can create interfacial voids that concentrate later plating flux and contribute to cracking penetration and short circuit.</td><td>src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b</td><td>Critical stripping current leads to dendrite formation on plating in lithium anode solid electrolyte cells</td><td>reviewed</td><td>supports</td><td>Abstract</td><td>2026-07-25</td></tr>
+<tr><td>ev-operando-plating-cracks-d69ac3e502</td><td>claim-lithium-stripping-can-create-interfacial-voids-that-concentrate-1d2b6eeb27</td><td>Lithium stripping can create interfacial voids that concentrate later plating flux and contribute to cracking penetration and short circuit.</td><td>src-visualizing-plating-induced-cracking-in-lithium-anode-solid-b0e08a8148</td><td>Visualizing plating-induced cracking in lithium-anode solid-electrolyte cells</td><td>reviewed</td><td>supports</td><td>Abstract and figure summaries</td><td>2026-07-25</td></tr>
+<tr><td>ev-cell-performance-benchmark-fb62d4a701</td><td>claim-capacity-retention-is-not-a-portable-performance-metric-f45faad55a</td><td>Capacity retention is not a portable performance metric unless electrolyte thickness loading areal capacity lithium inventory pressure temperature rate and cell geometry are reported.</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c</td><td>Benchmarking the performance of all-solid-state lithium batteries</td><td>reviewed</td><td>supports</td><td>Main text performance-benchmark framing and Ragone comparison</td><td>2026-07-25</td></tr>
+<tr><td>ev-cell-reproducibility-21-labs-13e5087b6a</td><td>claim-capacity-retention-is-not-a-portable-performance-metric-f45faad55a</td><td>Capacity retention is not a portable performance metric unless electrolyte thickness loading areal capacity lithium inventory pressure temperature rate and cell geometry are reported.</td><td>src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893</td><td>Benchmarking the reproducibility of all-solid-state battery cell performance</td><td>reviewed</td><td>supports</td><td>Abstract; Main text on cell set-ups and processing-performance correlations</td><td>2026-07-25</td></tr>
+<tr><td>ev-characterization-interface-review-893eb106fc</td><td>claim-capacity-retention-is-not-a-portable-performance-metric-f45faad55a</td><td>Capacity retention is not a portable performance metric unless electrolyte thickness loading areal capacity lithium inventory pressure temperature rate and cell geometry are reported.</td><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc</td><td>Characterizing Electrode Materials and Interfaces in Solid-State Batteries</td><td>reviewed</td><td>supports</td><td>Introduction; characterization overview; conclusion</td><td>2026-07-25</td></tr>
+<tr><td>ev-cell-reproducibility-21-labs-13e5087b6a</td><td>claim-a-21-group-study-found-large-variability-under-fbe637f353</td><td>A 21-group study found large variability under shared materials and electrochemical protocol and recommended fuller parameter reporting plus triplicate data.</td><td>src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893</td><td>Benchmarking the reproducibility of all-solid-state battery cell performance</td><td>reviewed</td><td>supports</td><td>Abstract; Main text on cell set-ups and processing-performance correlations</td><td>2026-07-25</td></tr>
+<tr><td>ev-characterization-interface-review-893eb106fc</td><td>claim-stack-pressure-is-a-coupled-electrochemical-and-mechanical-0bc6616c64</td><td>Stack pressure is a coupled electrochemical and mechanical control variable with both beneficial and harmful regimes rather than a universally beneficial setting.</td><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc</td><td>Characterizing Electrode Materials and Interfaces in Solid-State Batteries</td><td>reviewed</td><td>supports</td><td>Introduction; characterization overview; conclusion</td><td>2026-07-25</td></tr>
+<tr><td>ev-stack-pressure-review-c5e7d94320</td><td>claim-stack-pressure-is-a-coupled-electrochemical-and-mechanical-0bc6616c64</td><td>Stack pressure is a coupled electrochemical and mechanical control variable with both beneficial and harmful regimes rather than a universally beneficial setting.</td><td>src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30</td><td>The critical importance of stack pressure in batteries</td><td>reviewed</td><td>supports</td><td>Abstract and Figures 1–6 summaries</td><td>2026-07-25</td></tr>
+<tr><td>ev-cell-performance-benchmark-fb62d4a701</td><td>claim-commercial-relevance-depends-on-thin-separators-high-loading-767d88acb2</td><td>Commercial relevance depends on thin separators high-loading electrodes low inactive fractions scalable processing and reproducible cells in addition to material properties.</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c</td><td>Benchmarking the performance of all-solid-state lithium batteries</td><td>reviewed</td><td>supports</td><td>Main text performance-benchmark framing and Ragone comparison</td><td>2026-07-25</td></tr>
+<tr><td>ev-development-challenges-perspective-44ab1f865c</td><td>claim-commercial-relevance-depends-on-thin-separators-high-loading-767d88acb2</td><td>Commercial relevance depends on thin separators high-loading electrodes low inactive fractions scalable processing and reproducible cells in addition to material properties.</td><td>src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97</td><td>Challenges in speeding up solid-state battery development</td><td>reviewed</td><td>supports</td><td>Article framing and annotated references</td><td>2026-07-25</td></tr>
+<tr><td>ev-fraunhofer-roadmap-70b15fd2c8</td><td>claim-commercial-relevance-depends-on-thin-separators-high-loading-767d88acb2</td><td>Commercial relevance depends on thin separators high-loading electrodes low inactive fractions scalable processing and reproducible cells in addition to material properties.</td><td>src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41</td><td>Solid-State Battery Roadmap 2035+</td><td>reviewed</td><td>supports</td><td>Sections 5.1–5.2, Materials to Cell and Cell to Application roadmaps</td><td>2026-07-25</td></tr>
+<tr><td>ev-compliant-oxychloride-2026-4dd8a2f713</td><td>claim-a-2026-compliant-oxychloride-study-illustrates-a-multi-b06b8158fb</td><td>A 2026 compliant oxychloride study illustrates a multi-objective design direction that reports conductivity mechanics estimated cost loading and retention together.</td><td>src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd</td><td>Mechanically compliant and cost-effective solid electrolyte for all-solid-state batteries</td><td>reviewed</td><td>supports</td><td>Abstract and reported cell conditions</td><td>2026-07-25</td></tr>
+<tr><td>ev-mit-electrochemical-systems-c20a0e4b11</td><td>claim-a-robust-learning-path-moves-from-electrochemical-thermodynamics-2952adc68d</td><td>A robust learning path moves from electrochemical thermodynamics and transport to interfaces mechanics measurement cell benchmarking and manufacturing.</td><td>src-mit-10-626-electrochemical-energy-systems-ocw-10-df226e8dc9</td><td>MIT 10.626 Electrochemical Energy Systems</td><td>reviewed</td><td>supports</td><td>Calendar, sessions 2–11</td><td>2026-07-25</td></tr>
+<tr><td>ev-inorganic-electrolyte-fundamentals-7b2c1d8f49</td><td>claim-a-robust-learning-path-moves-from-electrochemical-thermodynamics-2952adc68d</td><td>A robust learning path moves from electrochemical thermodynamics and transport to interfaces mechanics measurement cell benchmarking and manufacturing.</td><td>src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7</td><td>Fundamentals of inorganic solid-state electrolytes for batteries</td><td>reviewed</td><td>supports</td><td>Abstract and Figures 2–7</td><td>2026-07-25</td></tr>
+<tr><td>ev-fraunhofer-roadmap-70b15fd2c8</td><td>claim-a-robust-learning-path-moves-from-electrochemical-thermodynamics-2952adc68d</td><td>A robust learning path moves from electrochemical thermodynamics and transport to interfaces mechanics measurement cell benchmarking and manufacturing.</td><td>src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41</td><td>Solid-State Battery Roadmap 2035+</td><td>reviewed</td><td>supports</td><td>Sections 5.1–5.2, Materials to Cell and Cell to Application roadmaps</td><td>2026-07-25</td></tr>
+<tr><td>ev-characterization-interface-review-893eb106fc</td><td>claim-low-pressure-operation-as-of-2026-07-25-e24a90af75</td><td>Low-pressure operation: As of 2026-07-25, maintaining contact without heavy external compression remains a central translation problem; pressure can help contact yet also alter failure and hardware requirements.</td><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc</td><td>Characterizing Electrode Materials and Interfaces in Solid-State Batteries</td><td>reviewed</td><td>supports</td><td>Introduction; characterization overview; conclusion</td><td>2026-07-25</td></tr>
+<tr><td>ev-stack-pressure-review-c5e7d94320</td><td>claim-low-pressure-operation-as-of-2026-07-25-e24a90af75</td><td>Low-pressure operation: As of 2026-07-25, maintaining contact without heavy external compression remains a central translation problem; pressure can help contact yet also alter failure and hardware requirements.</td><td>src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30</td><td>The critical importance of stack pressure in batteries</td><td>reviewed</td><td>supports</td><td>Abstract and Figures 1–6 summaries</td><td>2026-07-25</td></tr>
+<tr><td>ev-interface-interphase-review-ae6035f178</td><td>claim-interface-design-versus-interface-elimination-as-of-2026-1eebb8dd95</td><td>Interface design versus interface elimination: As of 2026-07-25, the useful target is often a controlled ion-conducting electron-blocking interphase rather than an impossible absence of reaction.</td><td>src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d</td><td>Interfaces and Interphases in All-Solid-State Batteries with Inorganic Solid Electrolytes</td><td>reviewed</td><td>supports</td><td>Abstract</td><td>2026-07-25</td></tr>
+<tr><td>ev-interface-review-2026-2a917f6cb5</td><td>claim-interface-design-versus-interface-elimination-as-of-2026-1eebb8dd95</td><td>Interface design versus interface elimination: As of 2026-07-25, the useful target is often a controlled ion-conducting electron-blocking interphase rather than an impossible absence of reaction.</td><td>src-interfaces-in-all-solid-state-li-metal-batteries-e7dc8c10ed</td><td>Interfaces in All-Solid-State Li Metal Batteries: From Fundamental Research to Practical Applications</td><td>reviewed</td><td>supports</td><td>Abstract and review scope</td><td>2026-07-25</td></tr>
+<tr><td>ev-conductivity-round-robin-6f2a8bbd43</td><td>claim-reproducible-cell-assembly-as-of-2026-07-25-6a67422fc1</td><td>Reproducible cell assembly: As of 2026-07-25, shared materials still yield wide performance variation across laboratories because processing and fixture details differ.</td><td>src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2</td><td>How Certain Are the Reported Ionic Conductivities of Thiophosphate-Based Solid Electrolytes?</td><td>reviewed</td><td>supports</td><td>Abstract and reported interlaboratory ranges</td><td>2026-07-25</td></tr>
+<tr><td>ev-cell-reproducibility-21-labs-13e5087b6a</td><td>claim-reproducible-cell-assembly-as-of-2026-07-25-6a67422fc1</td><td>Reproducible cell assembly: As of 2026-07-25, shared materials still yield wide performance variation across laboratories because processing and fixture details differ.</td><td>src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893</td><td>Benchmarking the reproducibility of all-solid-state battery cell performance</td><td>reviewed</td><td>supports</td><td>Abstract; Main text on cell set-ups and processing-performance correlations</td><td>2026-07-25</td></tr>
+<tr><td>ev-cell-performance-benchmark-fb62d4a701</td><td>claim-practical-composite-electrodes-as-of-2026-07-25-be25a6bc0e</td><td>Practical composite electrodes: As of 2026-07-25, high loading thin separators low inactive fraction and stable ionic-electronic-mechanical networks must be achieved together.</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c</td><td>Benchmarking the performance of all-solid-state lithium batteries</td><td>reviewed</td><td>supports</td><td>Main text performance-benchmark framing and Ragone comparison</td><td>2026-07-25</td></tr>
+<tr><td>ev-fraunhofer-roadmap-70b15fd2c8</td><td>claim-practical-composite-electrodes-as-of-2026-07-25-be25a6bc0e</td><td>Practical composite electrodes: As of 2026-07-25, high loading thin separators low inactive fraction and stable ionic-electronic-mechanical networks must be achieved together.</td><td>src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41</td><td>Solid-State Battery Roadmap 2035+</td><td>reviewed</td><td>supports</td><td>Sections 5.1–5.2, Materials to Cell and Cell to Application roadmaps</td><td>2026-07-25</td></tr>
+<tr><td>ev-inorganic-electrolyte-fundamentals-7b2c1d8f49</td><td>claim-multi-objective-electrolyte-discovery-as-of-2026-07-18a206fd46</td><td>Multi-objective electrolyte discovery: As of 2026-07-25, conductivity is being optimized jointly with compliance stability processability abundance and cost.</td><td>src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7</td><td>Fundamentals of inorganic solid-state electrolytes for batteries</td><td>reviewed</td><td>supports</td><td>Abstract and Figures 2–7</td><td>2026-07-25</td></tr>
+<tr><td>ev-compliant-oxychloride-2026-4dd8a2f713</td><td>claim-multi-objective-electrolyte-discovery-as-of-2026-07-18a206fd46</td><td>Multi-objective electrolyte discovery: As of 2026-07-25, conductivity is being optimized jointly with compliance stability processability abundance and cost.</td><td>src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd</td><td>Mechanically compliant and cost-effective solid electrolyte for all-solid-state batteries</td><td>reviewed</td><td>supports</td><td>Abstract and reported cell conditions</td><td>2026-07-25</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section class="report-section" id="claims">
+<h2>Claims</h2>
+<div class="table-scroll" role="region" aria-label="Scrollable table" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">ID</th><th scope="col">Statement</th><th scope="col">Type</th><th scope="col">Evidence Requirement</th><th scope="col">Confidence</th><th scope="col">Temporal</th><th scope="col">Evidence</th><th scope="col">Notes</th></tr>
+</thead>
+<tbody>
+<tr><td>claim-solid-state-battery-research-is-a-coupled-bulk-6000b02751</td><td>Solid-state battery research is a coupled bulk-interface-mechanics-cell-manufacturing problem rather than an electrolyte-conductivity ranking.</td><td>structural</td><td>multiple_reviewed_sources</td><td>high</td><td>as_of: 2026-07-25
+status: durable</td><td>src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7 [reviewed; supports; Abstract and Figures 2–7]
+src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97 [reviewed; supports; Article framing and annotated references]
+src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41 [reviewed; supports; Sections 5.1–5.2, Materials to Cell and Cell to Application roadmaps]</td><td>Organizing thesis of this scaffold.</td></tr>
+<tr><td>claim-high-room-temperature-ionic-conductivity-is-necessary-for-05ee579852</td><td>High room-temperature ionic conductivity is necessary for many cell concepts but does not by itself establish interface stability or practical cell performance.</td><td>structural</td><td>multiple_reviewed_sources</td><td>high</td><td>as_of: 2026-07-25
+status: durable</td><td>src-a-lithium-superionic-conductor-doi-10-1038-nmat3066-0b55870764 [reviewed; supports; Abstract and Figures 1–4]
+src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d [reviewed; supports; Abstract]
+src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c [reviewed; supports; Main text performance-benchmark framing and Ragone comparison]</td><td>Separates a material milestone from a device claim.</td></tr>
+<tr><td>claim-impedance-derived-ionic-conductivity-requires-explicit-geometry-temperature-6c19a6a077</td><td>Impedance-derived ionic conductivity requires explicit geometry temperature density contact fitting and replication metadata before values can be compared across laboratories.</td><td>methodological</td><td>reviewed_source</td><td>high</td><td>as_of: 2026-07-25
+status: durable</td><td>src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2 [reviewed; supports; Abstract and reported interlaboratory ranges]</td><td>The cited round robin quantifies substantial interlaboratory spread.</td></tr>
+<tr><td>claim-lithium-stripping-can-create-interfacial-voids-that-concentrate-1d2b6eeb27</td><td>Lithium stripping can create interfacial voids that concentrate later plating flux and contribute to cracking penetration and short circuit.</td><td>structural</td><td>multiple_reviewed_sources</td><td>high</td><td>as_of: 2026-07-25
+status: durable</td><td>src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b [reviewed; supports; Abstract]
+src-visualizing-plating-induced-cracking-in-lithium-anode-solid-b0e08a8148 [reviewed; supports; Abstract and figure summaries]</td><td>Mechanism is conditional on cell materials defects and operating conditions.</td></tr>
+<tr><td>claim-capacity-retention-is-not-a-portable-performance-metric-f45faad55a</td><td>Capacity retention is not a portable performance metric unless electrolyte thickness loading areal capacity lithium inventory pressure temperature rate and cell geometry are reported.</td><td>methodological</td><td>multiple_reviewed_sources</td><td>high</td><td>as_of: 2026-07-25
+status: durable</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c [reviewed; supports; Main text performance-benchmark framing and Ragone comparison]
+src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893 [reviewed; supports; Abstract; Main text on cell set-ups and processing-performance correlations]
+src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc [reviewed; supports; Introduction; characterization overview; conclusion]</td><td>A comparison rule rather than a universal performance threshold.</td></tr>
+<tr><td>claim-a-21-group-study-found-large-variability-under-fbe637f353</td><td>A 21-group study found large variability under shared materials and electrochemical protocol and recommended fuller parameter reporting plus triplicate data.</td><td>currentness</td><td>reviewed_source</td><td>high</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893 [reviewed; supports; Abstract; Main text on cell set-ups and processing-performance correlations]</td><td>Evidence dated 2024-09-18 and reviewed 2026-07-25.</td></tr>
+<tr><td>claim-stack-pressure-is-a-coupled-electrochemical-and-mechanical-0bc6616c64</td><td>Stack pressure is a coupled electrochemical and mechanical control variable with both beneficial and harmful regimes rather than a universally beneficial setting.</td><td>structural</td><td>multiple_reviewed_sources</td><td>high</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc [reviewed; supports; Introduction; characterization overview; conclusion]
+src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30 [reviewed; supports; Abstract and Figures 1–6 summaries]</td><td>Evidence reviewed 2026-07-25; optimal regimes remain chemistry- and architecture-dependent.</td></tr>
+<tr><td>claim-commercial-relevance-depends-on-thin-separators-high-loading-767d88acb2</td><td>Commercial relevance depends on thin separators high-loading electrodes low inactive fractions scalable processing and reproducible cells in addition to material properties.</td><td>structural</td><td>multiple_reviewed_sources</td><td>high</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c [reviewed; supports; Main text performance-benchmark framing and Ragone comparison]
+src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97 [reviewed; supports; Article framing and annotated references]
+src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41 [reviewed; supports; Sections 5.1–5.2, Materials to Cell and Cell to Application roadmaps]</td><td>Translation criteria reviewed 2026-07-25.</td></tr>
+<tr><td>claim-a-2026-compliant-oxychloride-study-illustrates-a-multi-b06b8158fb</td><td>A 2026 compliant oxychloride study illustrates a multi-objective design direction that reports conductivity mechanics estimated cost loading and retention together.</td><td>frontier</td><td>reviewed_source</td><td>medium</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd [reviewed; supports; Abstract and reported cell conditions]</td><td>Single research article dated 2026-01-08; useful as an exemplar not field-wide validation.</td></tr>
+<tr><td>claim-a-robust-learning-path-moves-from-electrochemical-thermodynamics-2952adc68d</td><td>A robust learning path moves from electrochemical thermodynamics and transport to interfaces mechanics measurement cell benchmarking and manufacturing.</td><td>curricular</td><td>multiple_reviewed_sources</td><td>high</td><td>as_of: 2026-07-25
+status: durable</td><td>src-mit-10-626-electrochemical-energy-systems-ocw-10-df226e8dc9 [reviewed; supports; Calendar, sessions 2–11]
+src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7 [reviewed; supports; Abstract and Figures 2–7]
+src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41 [reviewed; supports; Sections 5.1–5.2, Materials to Cell and Cell to Application roadmaps]</td><td>Sequence follows prerequisite dependence rather than publication chronology.</td></tr>
+<tr><td>claim-low-pressure-operation-as-of-2026-07-25-e24a90af75</td><td>Low-pressure operation: As of 2026-07-25, maintaining contact without heavy external compression remains a central translation problem; pressure can help contact yet also alter failure and hardware requirements.</td><td>frontier</td><td>reviewed_source</td><td>unknown</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc [reviewed; supports; Introduction; characterization overview; conclusion]
+src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30 [reviewed; supports; Abstract and Figures 1–6 summaries]</td><td></td></tr>
+<tr><td>claim-interface-design-versus-interface-elimination-as-of-2026-1eebb8dd95</td><td>Interface design versus interface elimination: As of 2026-07-25, the useful target is often a controlled ion-conducting electron-blocking interphase rather than an impossible absence of reaction.</td><td>frontier</td><td>reviewed_source</td><td>unknown</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d [reviewed; supports; Abstract]
+src-interfaces-in-all-solid-state-li-metal-batteries-e7dc8c10ed [reviewed; supports; Abstract and review scope]</td><td></td></tr>
+<tr><td>claim-reproducible-cell-assembly-as-of-2026-07-25-6a67422fc1</td><td>Reproducible cell assembly: As of 2026-07-25, shared materials still yield wide performance variation across laboratories because processing and fixture details differ.</td><td>frontier</td><td>reviewed_source</td><td>unknown</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2 [reviewed; supports; Abstract and reported interlaboratory ranges]
+src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893 [reviewed; supports; Abstract; Main text on cell set-ups and processing-performance correlations]</td><td></td></tr>
+<tr><td>claim-practical-composite-electrodes-as-of-2026-07-25-be25a6bc0e</td><td>Practical composite electrodes: As of 2026-07-25, high loading thin separators low inactive fraction and stable ionic-electronic-mechanical networks must be achieved together.</td><td>frontier</td><td>reviewed_source</td><td>unknown</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c [reviewed; supports; Main text performance-benchmark framing and Ragone comparison]
+src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41 [reviewed; supports; Sections 5.1–5.2, Materials to Cell and Cell to Application roadmaps]</td><td></td></tr>
+<tr><td>claim-multi-objective-electrolyte-discovery-as-of-2026-07-18a206fd46</td><td>Multi-objective electrolyte discovery: As of 2026-07-25, conductivity is being optimized jointly with compliance stability processability abundance and cost.</td><td>frontier</td><td>reviewed_source</td><td>unknown</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td><td>src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7 [reviewed; supports; Abstract and Figures 2–7]
+src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd [reviewed; supports; Abstract and reported cell conditions]</td><td></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section class="report-section" id="curriculum-path">
+<h2>Curriculum Path</h2>
+<div class="table-scroll" role="region" aria-label="Scrollable table" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Seq</th><th scope="col">Title</th><th scope="col">Learning Goal</th><th scope="col">Prerequisites</th><th scope="col">Practice Artifact</th><th scope="col">Progress Criteria</th><th scope="col">Sources</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>Electrochemical grammar</td><td>What fixes voltage electron flow transport and polarization in a cell?</td><td></td><td>Annotated galvanic-cell and equivalent-circuit model</td><td>Derive the role of chemical potential and distinguish ohmic charge-transfer and diffusion losses</td><td>src-mit-10-626-electrochemical-energy-systems-ocw-10-df226e8dc9</td></tr>
+<tr><td>2</td><td>Defects and ion transport</td><td>How do composition structure disorder and temperature produce ionic conductivity?</td><td></td><td>Conductivity mechanism map and Arrhenius critique</td><td>Connect carrier concentration and mobility to an experiment without treating a fitted value as mechanism</td><td>src-a-lithium-superionic-conductor-doi-10-1038-nmat3066-0b55870764, src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7</td></tr>
+<tr><td>3</td><td>Electrolyte families</td><td>Why do sulfides oxides halides polymers and composites occupy different design regions?</td><td></td><td>Family trade-off matrix</td><td>Compare transport stability mechanics processing and cost without naming a universal winner</td><td>src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7</td></tr>
+<tr><td>4</td><td>Stability and interphases</td><td>When does decomposition passivate and when does it block transport?</td><td></td><td>Chemical-potential and interphase causal diagram</td><td>Distinguish thermodynamic stability kinetic stability and functional passivation</td><td>src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d</td></tr>
+<tr><td>5</td><td>Lithium contact and fracture</td><td>How do stripping plating voids pressure defects and cracks interact?</td><td></td><td>Failure-chain diagram with competing hypotheses</td><td>Propose an observation that discriminates local flux concentration from a purely bulk-strength explanation</td><td>src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b, src-visualizing-plating-induced-cracking-in-lithium-anode-solid-b0e08a8148</td></tr>
+<tr><td>6</td><td>Composite cathodes</td><td>How do ionic electronic and mechanical networks coexist in a high-loading electrode?</td><td></td><td>Three-network composite sketch and bottleneck diagnosis</td><td>Identify transport length scales interfacial area and expansion-induced contact changes</td><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc</td></tr>
+<tr><td>7</td><td>Measurement and imaging</td><td>What does each instrument actually warrant?</td><td></td><td>EIS reporting sheet plus operando-method selection memo</td><td>State geometry resolution controls uncertainty and alternative explanations</td><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc, src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2</td></tr>
+<tr><td>8</td><td>Cell-level benchmarking</td><td>Which reported cell is genuinely closer to an application?</td><td></td><td>Normalized comparison sheet for two papers</td><td>Recalculate or flag electrolyte thickness areal capacity pressure temperature inventory and replicate count</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c, src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893</td></tr>
+<tr><td>9</td><td>Manufacturing and scale-up</td><td>Which laboratory choices survive sheet processing pouch assembly cost and yield constraints?</td><td></td><td>Material-to-cell process flow with failure gates</td><td>Separate a material milestone from a cell process and production milestone</td><td>src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97, src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41</td></tr>
+<tr><td>10</td><td>Frontier paper audit</td><td>Does a 2026 material result move the coupled system or only one metric?</td><td></td><td>Two-page claim-evidence-condition audit</td><td>Defend one supported conclusion identify one extrapolation and design the next discriminating experiment</td><td>src-interfaces-in-all-solid-state-li-metal-batteries-e7dc8c10ed, src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section class="report-section" id="frontier-debates">
+<h2>Frontier and Debate</h2>
+<div class="table-scroll" role="region" aria-label="Scrollable table" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">ID</th><th scope="col">Kind</th><th scope="col">Title</th><th scope="col">Summary</th><th scope="col">Why It Matters</th><th scope="col">Required Background</th><th scope="col">Claims</th><th scope="col">Sources</th><th scope="col">Temporal</th></tr>
+</thead>
+<tbody>
+<tr><td>frontier-low-pressure-operation-028f49617b</td><td>frontier</td><td>Low-pressure operation</td><td>As of 2026-07-25, maintaining contact without heavy external compression remains a central translation problem; pressure can help contact yet also alter failure and hardware requirements.</td><td>A cell dependent on tens or hundreds of megapascals may not preserve its laboratory advantage at pack level.</td><td></td><td>claim-low-pressure-operation-as-of-2026-07-25-e24a90af75</td><td>src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc, src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td></tr>
+<tr><td>frontier-interface-design-versus-interface-elimination-67230424a9</td><td>frontier</td><td>Interface design versus interface elimination</td><td>As of 2026-07-25, the useful target is often a controlled ion-conducting electron-blocking interphase rather than an impossible absence of reaction.</td><td>Interphase composition and morphology can dominate resistance lifetime and filament behavior.</td><td></td><td>claim-interface-design-versus-interface-elimination-as-of-2026-1eebb8dd95</td><td>src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d, src-interfaces-in-all-solid-state-li-metal-batteries-e7dc8c10ed</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td></tr>
+<tr><td>frontier-reproducible-cell-assembly-f89894d48d</td><td>frontier</td><td>Reproducible cell assembly</td><td>As of 2026-07-25, shared materials still yield wide performance variation across laboratories because processing and fixture details differ.</td><td>Without replicates and complete protocols a record cell cannot become cumulative knowledge.</td><td></td><td>claim-reproducible-cell-assembly-as-of-2026-07-25-6a67422fc1</td><td>src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893, src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td></tr>
+<tr><td>frontier-practical-composite-electrodes-a45397a681</td><td>frontier</td><td>Practical composite electrodes</td><td>As of 2026-07-25, high loading thin separators low inactive fraction and stable ionic-electronic-mechanical networks must be achieved together.</td><td>Optimizing dilute powder cells can conceal the transport and contact losses that appear at useful areal capacity.</td><td></td><td>claim-practical-composite-electrodes-as-of-2026-07-25-be25a6bc0e</td><td>src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c, src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td></tr>
+<tr><td>frontier-multi-objective-electrolyte-discovery-1b0f464a10</td><td>frontier</td><td>Multi-objective electrolyte discovery</td><td>As of 2026-07-25, conductivity is being optimized jointly with compliance stability processability abundance and cost.</td><td>The best material is architecture-dependent and must be selected against a cell and manufacturing route.</td><td></td><td>claim-multi-objective-electrolyte-discovery-as-of-2026-07-18a206fd46</td><td>src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7, src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd</td><td>as_of: 2026-07-25
+review_after: 2027-01-24
+status: current</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+</div>
+<script type="application/json" id="sok-visual-data">[]</script>
+<script>
+(function () {
+  var dataNode = document.getElementById("sok-visual-data");
+  if (!dataNode) return;
+  var views;
+  try {
+    views = JSON.parse(dataNode.textContent || "[]");
+  } catch (error) {
+    return;
+  }
+  if (!Array.isArray(views) || views.length === 0) return;
+
+  var svgNs = "http://www.w3.org/2000/svg";
+  function el(name, attrs) {
+    var node = document.createElementNS(svgNs, name);
+    Object.keys(attrs || {}).forEach(function (key) {
+      node.setAttribute(key, attrs[key]);
+    });
+    return node;
+  }
+  function textNode(value) {
+    return document.createTextNode(value == null ? "" : String(value));
+  }
+  function shortLabel(label) {
+    label = String(label || "");
+    return label.length > 30 ? label.slice(0, 27) + "..." : label;
+  }
+  function layout(view) {
+    var nodes = view.nodes || [];
+    if (view.kind === "concept_source") {
+      var left = nodes.filter(function (node) { return node.entity_type === "source"; });
+      var right = nodes.filter(function (node) { return node.entity_type !== "source"; });
+      var positions = {};
+      left.forEach(function (node, index) {
+        positions[node.id] = { x: 190, y: 85 + index * (210 / Math.max(1, left.length - 1)) };
+      });
+      right.forEach(function (node, index) {
+        positions[node.id] = { x: 720, y: 85 + index * (210 / Math.max(1, right.length - 1)) };
+      });
+      return positions;
+    }
+    if (view.kind === "frontier_debate") {
+      var cx = 480;
+      var cy = 180;
+      var radius = 125;
+      var out = {};
+      nodes.forEach(function (node, index) {
+        if (index === 0) {
+          out[node.id] = { x: cx, y: cy };
+        } else {
+          var angle = -Math.PI / 2 + (2 * Math.PI * (index - 1)) / Math.max(1, nodes.length - 1);
+          out[node.id] = { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+        }
+      });
+      return out;
+    }
+    var step = 720 / Math.max(1, nodes.length - 1);
+    var base = {};
+    nodes.forEach(function (node, index) {
+      base[node.id] = { x: 120 + index * step, y: 180 + (index % 2 === 0 ? -38 : 38) };
+    });
+    return base;
+  }
+  function connectedIds(view, nodeId) {
+    var ids = {};
+    (view.edges || []).forEach(function (edge) {
+      if (edge.from === nodeId) ids[edge.to] = true;
+      if (edge.to === nodeId) ids[edge.from] = true;
+    });
+    ids[nodeId] = true;
+    return ids;
+  }
+  function render(mount, view) {
+    var positions = layout(view);
+    var markerId = "arrowhead-" + view.id;
+    var svg = el("svg", {
+      "class": "visual-svg",
+      "role": "img",
+      "aria-labelledby": "svg-title-" + view.id + " svg-desc-" + view.id,
+      "viewBox": "0 0 960 360",
+      "preserveAspectRatio": "xMidYMid meet"
+    });
+    var title = el("title", { "id": "svg-title-" + view.id });
+    title.appendChild(textNode(view.title || "Visual view"));
+    svg.appendChild(title);
+    var desc = el("desc", { "id": "svg-desc-" + view.id });
+    desc.appendChild(textNode(view.alt || view.justification || ""));
+    svg.appendChild(desc);
+    var defs = el("defs", {});
+    var marker = el("marker", {
+      "id": markerId,
+      "viewBox": "0 0 10 10",
+      "refX": "9",
+      "refY": "5",
+      "markerWidth": "7",
+      "markerHeight": "7",
+      "orient": "auto-start-reverse"
+    });
+    marker.appendChild(el("path", { "d": "M 0 0 L 10 5 L 0 10 z", "fill": "#6f7f8f" }));
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
+    (view.edges || []).forEach(function (edge, index) {
+      var from = positions[edge.from];
+      var to = positions[edge.to];
+      if (!from || !to) return;
+      var line = el("line", {
+        "class": "visual-edge",
+        "data-from": edge.from,
+        "data-to": edge.to,
+        "x1": from.x,
+        "y1": from.y,
+        "x2": to.x,
+        "y2": to.y,
+        "marker-end": "url(#" + markerId + ")",
+        "aria-label": (edge.label || edge.kind || "edge") + " " + edge.from + " to " + edge.to
+      });
+      line.setAttribute("data-edge-index", String(index));
+      svg.appendChild(line);
+    });
+
+    (view.nodes || []).forEach(function (node) {
+      var point = positions[node.id];
+      if (!point) return;
+      var group = el("g", {
+        "class": "visual-node",
+        "tabindex": "0",
+        "role": "img",
+        "aria-label": node.label + ". " + (node.description || node.entity_type || "node"),
+        "data-node-id": node.id
+      });
+      group.appendChild(el("rect", {
+        "x": point.x - 82,
+        "y": point.y - 24,
+        "width": "164",
+        "height": "48",
+        "rx": "7"
+      }));
+      var text = el("text", {
+        "x": point.x,
+        "y": point.y + 4,
+        "text-anchor": "middle"
+      });
+      text.appendChild(textNode(shortLabel(node.label || node.id)));
+      group.appendChild(text);
+      group.addEventListener("mouseenter", function () { activate(svg, view, node.id); });
+      group.addEventListener("focus", function () { activate(svg, view, node.id); });
+      group.addEventListener("mouseleave", function () { clearActive(svg); });
+      group.addEventListener("blur", function () { clearActive(svg); });
+      svg.appendChild(group);
+    });
+    mount.innerHTML = "";
+    mount.appendChild(svg);
+  }
+  function activate(svg, view, nodeId) {
+    var active = connectedIds(view, nodeId);
+    Array.prototype.forEach.call(svg.querySelectorAll(".visual-node"), function (node) {
+      node.classList.toggle("is-active", !!active[node.getAttribute("data-node-id")]);
+    });
+    Array.prototype.forEach.call(svg.querySelectorAll(".visual-edge"), function (edge) {
+      var from = edge.getAttribute("data-from");
+      var to = edge.getAttribute("data-to");
+      edge.classList.toggle("is-active", from === nodeId || to === nodeId);
+    });
+  }
+  function clearActive(svg) {
+    Array.prototype.forEach.call(svg.querySelectorAll(".is-active"), function (node) {
+      node.classList.remove("is-active");
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-visual-mount]"), function (mount) {
+    var id = mount.getAttribute("data-visual-mount");
+    var view = views.find(function (item) { return item.id === id; });
+    if (view) render(mount, view);
+  });
+})();
+</script>
+</body>
+</html>
