@@ -1,7 +1,7 @@
 {
   "metadata": {
     "schema_version": "sok-report/v1",
-    "generated_at": "2026-07-25T03:32:17Z",
+    "generated_at": "2026-07-25T05:27:20Z",
     "report_type": "human_report",
     "temporal_review": {
       "as_of": "2026-07-25",
@@ -42,6 +42,103 @@
         "extrapolating a press-cell result directly to manufacturing readiness."
       ]
     },
+    "literature_ladder": [
+      {
+        "id": "ladder-prerequisite-mit-10-626-electrochemical-energy-systems-5a89c6c9c1",
+        "layer": "Prerequisite",
+        "start_here": "MIT 10.626 Electrochemical Energy Systems",
+        "read_for": "Galvanic-cell physics impedance thermodynamics and battery models",
+        "do_not_infer": "Solid-state-specific interface mechanisms",
+        "source_ids": [
+          "src-mit-10-626-electrochemical-energy-systems-ocw-10-df226e8dc9"
+        ]
+      },
+      {
+        "id": "ladder-canonical-case-a-lithium-superionic-conductor-6b26e6443b",
+        "layer": "Canonical case",
+        "start_here": "A lithium superionic conductor",
+        "read_for": "How a high-conductivity sulfide changed the feasible design space",
+        "do_not_infer": "That high conductivity alone yields a practical cell",
+        "source_ids": [
+          "src-a-lithium-superionic-conductor-doi-10-1038-nmat3066-0b55870764"
+        ]
+      },
+      {
+        "id": "ladder-foundation-fundamentals-of-inorganic-solid-state-electrolytes-for-95367e4dcd",
+        "layer": "Foundation",
+        "start_here": "Fundamentals of inorganic solid-state electrolytes for batteries",
+        "read_for": "Transport families electrochemical behavior mechanics and processing",
+        "do_not_infer": "A ranking that is independent of cell architecture",
+        "source_ids": [
+          "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7"
+        ]
+      },
+      {
+        "id": "ladder-interface-synthesis-interfaces-and-interphases-in-all-solid-bd6e2a594e",
+        "layer": "Interface synthesis",
+        "start_here": "Interfaces and Interphases in All-Solid-State Batteries with Inorganic Solid Electrolytes",
+        "read_for": "Contact reaction products and interphase transport",
+        "do_not_infer": "That “no reaction” is the only route to stability",
+        "source_ids": [
+          "src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d"
+        ]
+      },
+      {
+        "id": "ladder-measurement-warrant-how-certain-are-the-reported-ionic-f751642426",
+        "layer": "Measurement warrant",
+        "start_here": "How Certain Are the Reported Ionic Conductivities of Thiophosphate-Based Solid Electrolytes?",
+        "read_for": "How much EIS-derived conductivity varies across laboratories",
+        "do_not_infer": "That a single reported decimal is a portable material constant",
+        "source_ids": [
+          "src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2"
+        ]
+      },
+      {
+        "id": "ladder-mechanism-cases-critical-stripping-current-leads-to-dendrite-e6fd6330d7",
+        "layer": "Mechanism cases",
+        "start_here": "Critical stripping current leads to dendrite formation on plating in lithium anode solid electrolyte cells (2019-07-29); Visualizing plating-induced cracking in lithium-anode solid-electrolyte cells",
+        "read_for": "The void-flux-fracture chain and the evidence needed to see it",
+        "do_not_infer": "That all shorts share one mechanism",
+        "source_ids": [
+          "src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b",
+          "src-visualizing-plating-induced-cracking-in-lithium-anode-solid-b0e08a8148"
+        ]
+      },
+      {
+        "id": "ladder-cell-benchmark-benchmarking-the-performance-of-all-solid-a501d1751e",
+        "layer": "Cell benchmark",
+        "start_here": "Benchmarking the performance of all-solid-state lithium batteries; Benchmarking the reproducibility of all-solid-state battery cell performance",
+        "read_for": "Practical metrics reporting variables and protocol sensitivity",
+        "do_not_infer": "That capacity retention is comparable without matched conditions",
+        "source_ids": [
+          "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
+          "src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893"
+        ]
+      },
+      {
+        "id": "ladder-translation-solid-state-battery-roadmap-2035-challenges-in-218d7f00be",
+        "layer": "Translation",
+        "start_here": "Solid-State Battery Roadmap 2035+; Challenges in speeding up solid-state battery development",
+        "read_for": "Manufacturing pathways component choices and commercialization gates",
+        "do_not_infer": "That a forecast is mechanistic evidence",
+        "source_ids": [
+          "src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97",
+          "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41"
+        ]
+      },
+      {
+        "id": "ladder-dated-edge-the-critical-importance-of-stack-pressure-80a8ad1586",
+        "layer": "Dated edge",
+        "start_here": "The critical importance of stack pressure in batteries; Mechanically compliant and cost-effective solid electrolyte for all-solid-state batteries; Interfaces in All-Solid-State Li Metal Batteries: From Fundamental Research to Practical Applications",
+        "read_for": "The 2025-08-13 to 2026-06-29 emphasis on low pressure compliance cost and application-facing interfaces",
+        "do_not_infer": "That a single recent material closes the translation gap",
+        "source_ids": [
+          "src-interfaces-in-all-solid-state-li-metal-batteries-e7dc8c10ed",
+          "src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd",
+          "src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30"
+        ]
+      }
+    ],
     "core_ideas": [
       {
         "id": "concept-core-objects-cbb2c59a11",
@@ -542,6 +639,24 @@
         "evidence_requirement": "multiple_reviewed_sources",
         "evidence_links": [
           {
+            "evidence_id": "ev-src-fundamentals-of-inorganic-solid-state-electrolytes-for-69be0279c8",
+            "source_id": "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-challenges-in-speeding-up-solid-state-battery-692674fb66",
+            "source_id": "src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-solid-state-battery-roadmap-2035-report-fraunhofer-3f4dc0ff4e",
+            "source_id": "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
             "evidence_id": "ev-inorganic-electrolyte-fundamentals-7b2c1d8f49",
             "source_id": "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7",
             "verification_status": "reviewed",
@@ -582,6 +697,24 @@
         "claim_type": "structural",
         "evidence_requirement": "multiple_reviewed_sources",
         "evidence_links": [
+          {
+            "evidence_id": "ev-src-a-lithium-superionic-conductor-doi-10-1038-15fc541bfa",
+            "source_id": "src-a-lithium-superionic-conductor-doi-10-1038-nmat3066-0b55870764",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-interfaces-and-interphases-in-all-solid-state-27073997e0",
+            "source_id": "src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-benchmarking-the-performance-of-all-solid-state-adce660b78",
+            "source_id": "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
           {
             "evidence_id": "ev-lgps-superionic-conductor-9f07bc51a4",
             "source_id": "src-a-lithium-superionic-conductor-doi-10-1038-nmat3066-0b55870764",
@@ -624,6 +757,12 @@
         "evidence_requirement": "reviewed_source",
         "evidence_links": [
           {
+            "evidence_id": "ev-src-how-certain-are-the-reported-ionic-conductivities-6d06a258ee",
+            "source_id": "src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
             "evidence_id": "ev-conductivity-round-robin-6f2a8bbd43",
             "source_id": "src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2",
             "verification_status": "reviewed",
@@ -646,6 +785,18 @@
         "claim_type": "structural",
         "evidence_requirement": "multiple_reviewed_sources",
         "evidence_links": [
+          {
+            "evidence_id": "ev-src-critical-stripping-current-leads-to-dendrite-formation-a2917420ef",
+            "source_id": "src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-visualizing-plating-induced-cracking-in-lithium-anode-901a44e75d",
+            "source_id": "src-visualizing-plating-induced-cracking-in-lithium-anode-solid-b0e08a8148",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
           {
             "evidence_id": "ev-critical-stripping-voids-5d47ea0b92",
             "source_id": "src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b",
@@ -678,6 +829,24 @@
         "claim_type": "methodological",
         "evidence_requirement": "multiple_reviewed_sources",
         "evidence_links": [
+          {
+            "evidence_id": "ev-src-benchmarking-the-performance-of-all-solid-state-adce660b78",
+            "source_id": "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-benchmarking-the-reproducibility-of-all-solid-state-a078892711",
+            "source_id": "src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-characterizing-electrode-materials-and-interfaces-in-solid-927f83d994",
+            "source_id": "src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
           {
             "evidence_id": "ev-cell-performance-benchmark-fb62d4a701",
             "source_id": "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
@@ -720,6 +889,12 @@
         "evidence_requirement": "reviewed_source",
         "evidence_links": [
           {
+            "evidence_id": "ev-src-benchmarking-the-reproducibility-of-all-solid-state-a078892711",
+            "source_id": "src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
             "evidence_id": "ev-cell-reproducibility-21-labs-13e5087b6a",
             "source_id": "src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893",
             "verification_status": "reviewed",
@@ -743,6 +918,18 @@
         "claim_type": "structural",
         "evidence_requirement": "multiple_reviewed_sources",
         "evidence_links": [
+          {
+            "evidence_id": "ev-src-characterizing-electrode-materials-and-interfaces-in-solid-927f83d994",
+            "source_id": "src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-the-critical-importance-of-stack-pressure-in-1e8bb124f7",
+            "source_id": "src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
           {
             "evidence_id": "ev-characterization-interface-review-893eb106fc",
             "source_id": "src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc",
@@ -776,6 +963,24 @@
         "claim_type": "structural",
         "evidence_requirement": "multiple_reviewed_sources",
         "evidence_links": [
+          {
+            "evidence_id": "ev-src-benchmarking-the-performance-of-all-solid-state-adce660b78",
+            "source_id": "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-challenges-in-speeding-up-solid-state-battery-692674fb66",
+            "source_id": "src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-solid-state-battery-roadmap-2035-report-fraunhofer-3f4dc0ff4e",
+            "source_id": "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
           {
             "evidence_id": "ev-cell-performance-benchmark-fb62d4a701",
             "source_id": "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
@@ -819,6 +1024,12 @@
         "evidence_requirement": "reviewed_source",
         "evidence_links": [
           {
+            "evidence_id": "ev-src-mechanically-compliant-and-cost-effective-solid-electrolyte-f0f969873b",
+            "source_id": "src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
             "evidence_id": "ev-compliant-oxychloride-2026-4dd8a2f713",
             "source_id": "src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd",
             "verification_status": "reviewed",
@@ -842,6 +1053,24 @@
         "claim_type": "curricular",
         "evidence_requirement": "multiple_reviewed_sources",
         "evidence_links": [
+          {
+            "evidence_id": "ev-src-mit-10-626-electrochemical-energy-systems-ocw-b739722c83",
+            "source_id": "src-mit-10-626-electrochemical-energy-systems-ocw-10-df226e8dc9",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-fundamentals-of-inorganic-solid-state-electrolytes-for-69be0279c8",
+            "source_id": "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-solid-state-battery-roadmap-2035-report-fraunhofer-3f4dc0ff4e",
+            "source_id": "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
           {
             "evidence_id": "ev-mit-electrochemical-systems-c20a0e4b11",
             "source_id": "src-mit-10-626-electrochemical-energy-systems-ocw-10-df226e8dc9",
@@ -884,6 +1113,18 @@
         "evidence_requirement": "reviewed_source",
         "evidence_links": [
           {
+            "evidence_id": "ev-src-characterizing-electrode-materials-and-interfaces-in-solid-927f83d994",
+            "source_id": "src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-the-critical-importance-of-stack-pressure-in-1e8bb124f7",
+            "source_id": "src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
             "evidence_id": "ev-characterization-interface-review-893eb106fc",
             "source_id": "src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc",
             "verification_status": "reviewed",
@@ -915,6 +1156,18 @@
         "claim_type": "frontier",
         "evidence_requirement": "reviewed_source",
         "evidence_links": [
+          {
+            "evidence_id": "ev-src-interfaces-and-interphases-in-all-solid-state-27073997e0",
+            "source_id": "src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-interfaces-in-all-solid-state-li-metal-06707206c0",
+            "source_id": "src-interfaces-in-all-solid-state-li-metal-batteries-e7dc8c10ed",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
           {
             "evidence_id": "ev-interface-interphase-review-ae6035f178",
             "source_id": "src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d",
@@ -948,6 +1201,18 @@
         "evidence_requirement": "reviewed_source",
         "evidence_links": [
           {
+            "evidence_id": "ev-src-how-certain-are-the-reported-ionic-conductivities-6d06a258ee",
+            "source_id": "src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-benchmarking-the-reproducibility-of-all-solid-state-a078892711",
+            "source_id": "src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
             "evidence_id": "ev-conductivity-round-robin-6f2a8bbd43",
             "source_id": "src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2",
             "verification_status": "reviewed",
@@ -979,6 +1244,18 @@
         "claim_type": "frontier",
         "evidence_requirement": "reviewed_source",
         "evidence_links": [
+          {
+            "evidence_id": "ev-src-benchmarking-the-performance-of-all-solid-state-adce660b78",
+            "source_id": "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-solid-state-battery-roadmap-2035-report-fraunhofer-3f4dc0ff4e",
+            "source_id": "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
           {
             "evidence_id": "ev-cell-performance-benchmark-fb62d4a701",
             "source_id": "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
@@ -1012,6 +1289,18 @@
         "evidence_requirement": "reviewed_source",
         "evidence_links": [
           {
+            "evidence_id": "ev-src-fundamentals-of-inorganic-solid-state-electrolytes-for-69be0279c8",
+            "source_id": "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
+            "evidence_id": "ev-src-mechanically-compliant-and-cost-effective-solid-electrolyte-f0f969873b",
+            "source_id": "src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd",
+            "verification_status": "cataloged",
+            "support_kind": "background"
+          },
+          {
             "evidence_id": "ev-inorganic-electrolyte-fundamentals-7b2c1d8f49",
             "source_id": "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7",
             "verification_status": "reviewed",
@@ -1038,13 +1327,239 @@
         }
       }
     ],
-    "relations": [],
+    "relations": [
+      {
+        "id": "rel-ssb-coupled-system-grounded-by-generative-relation",
+        "kind": "grounds",
+        "from": {
+          "entity_type": "concept",
+          "id": "concept-generative-relation-e1716c1685"
+        },
+        "to": {
+          "entity_type": "claim",
+          "id": "claim-solid-state-battery-research-is-a-coupled-bulk-6000b02751"
+        },
+        "description": "The generative relation states why the report is organized as a coupled system instead of a material ranking.",
+        "source_ids": [
+          "src-challenges-in-speeding-up-solid-state-battery-development-01b9dbaa97",
+          "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7",
+          "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41"
+        ]
+      },
+      {
+        "id": "rel-threshold-qualifies-conductivity-claim",
+        "kind": "qualifies",
+        "from": {
+          "entity_type": "concept",
+          "id": "concept-threshold-concepts-3feedb30e8"
+        },
+        "to": {
+          "entity_type": "claim",
+          "id": "claim-high-room-temperature-ionic-conductivity-is-necessary-for-05ee579852"
+        },
+        "description": "The threshold concept makes conductivity necessary but insufficient for device-level claims.",
+        "source_ids": [
+          "src-a-lithium-superionic-conductor-doi-10-1038-nmat3066-0b55870764",
+          "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
+          "src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d"
+        ]
+      },
+      {
+        "id": "rel-methods-ground-conductivity-comparison",
+        "kind": "grounds",
+        "from": {
+          "entity_type": "method",
+          "id": "method-methods-and-warrants-37d6d29b67"
+        },
+        "to": {
+          "entity_type": "claim",
+          "id": "claim-impedance-derived-ionic-conductivity-requires-explicit-geometry-temperature-6c19a6a077"
+        },
+        "description": "Measurement warrants define when conductivity values are comparable.",
+        "source_ids": [
+          "src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2"
+        ]
+      },
+      {
+        "id": "rel-representations-map-failure-chain",
+        "kind": "represented_by",
+        "from": {
+          "entity_type": "claim",
+          "id": "claim-lithium-stripping-can-create-interfacial-voids-that-concentrate-1d2b6eeb27"
+        },
+        "to": {
+          "entity_type": "representation",
+          "id": "rep-representations-2d4679f495"
+        },
+        "description": "Spatial and electrochemical representations are needed to read the void-flux-fracture chain.",
+        "source_ids": [
+          "src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b",
+          "src-visualizing-plating-induced-cracking-in-lithium-anode-solid-b0e08a8148"
+        ]
+      },
+      {
+        "id": "rel-pressure-qualifies-failure-chain",
+        "kind": "qualifies",
+        "from": {
+          "entity_type": "frontier_debate",
+          "id": "frontier-low-pressure-operation-028f49617b"
+        },
+        "to": {
+          "entity_type": "claim",
+          "id": "claim-stack-pressure-is-a-coupled-electrochemical-and-mechanical-0bc6616c64"
+        },
+        "description": "Low-pressure operation is a frontier because pressure can preserve contact while changing failure and hardware regimes.",
+        "source_ids": [
+          "src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc",
+          "src-the-critical-importance-of-stack-pressure-in-batteries-712d702e30"
+        ]
+      },
+      {
+        "id": "rel-benchmarking-supports-commercial-criteria",
+        "kind": "supports",
+        "from": {
+          "entity_type": "claim",
+          "id": "claim-capacity-retention-is-not-a-portable-performance-metric-f45faad55a"
+        },
+        "to": {
+          "entity_type": "claim",
+          "id": "claim-commercial-relevance-depends-on-thin-separators-high-loading-767d88acb2"
+        },
+        "description": "Cell-level benchmark variables are part of the commercial relevance filter.",
+        "source_ids": [
+          "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
+          "src-benchmarking-the-reproducibility-of-all-solid-state-battery-285d741893",
+          "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41"
+        ]
+      },
+      {
+        "id": "rel-electrochemical-grammar-precedes-transport",
+        "kind": "precedes",
+        "from": {
+          "entity_type": "curriculum_step",
+          "id": "step-electrochemical-grammar-26a789b2ba"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-defects-and-ion-transport-092fcbc55d"
+        },
+        "description": "Electrochemical grammar supplies the voltage transport and polarization vocabulary used in ion-transport mechanisms.",
+        "source_ids": [
+          "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7",
+          "src-mit-10-626-electrochemical-energy-systems-ocw-10-df226e8dc9"
+        ]
+      },
+      {
+        "id": "rel-transport-precedes-families",
+        "kind": "precedes",
+        "from": {
+          "entity_type": "curriculum_step",
+          "id": "step-defects-and-ion-transport-092fcbc55d"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-electrolyte-families-e04f4e9b29"
+        },
+        "description": "Transport mechanisms are needed before comparing material-family design regions.",
+        "source_ids": [
+          "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7"
+        ]
+      },
+      {
+        "id": "rel-families-precedes-interphases",
+        "kind": "precedes",
+        "from": {
+          "entity_type": "curriculum_step",
+          "id": "step-electrolyte-families-e04f4e9b29"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-stability-and-interphases-05396827a9"
+        },
+        "description": "Material-family trade-offs set the context for decomposition passivation and blocked transport.",
+        "source_ids": [
+          "src-fundamentals-of-inorganic-solid-state-electrolytes-for-batteries-a19cb479f7",
+          "src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d"
+        ]
+      },
+      {
+        "id": "rel-interphases-precede-contact-fracture",
+        "kind": "precedes",
+        "from": {
+          "entity_type": "curriculum_step",
+          "id": "step-stability-and-interphases-05396827a9"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-lithium-contact-and-fracture-f41ff53829"
+        },
+        "description": "Interphase behavior has to be understood before reading void crack and filament mechanisms.",
+        "source_ids": [
+          "src-critical-stripping-current-leads-to-dendrite-formation-on-52479e216b",
+          "src-interfaces-and-interphases-in-all-solid-state-batteries-b64a90636d"
+        ]
+      },
+      {
+        "id": "rel-measurement-precedes-benchmarking",
+        "kind": "precedes",
+        "from": {
+          "entity_type": "curriculum_step",
+          "id": "step-measurement-and-imaging-df4061ee29"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-cell-level-benchmarking-6867894355"
+        },
+        "description": "Benchmarking depends on knowing what each measurement and imaging method actually warrants.",
+        "source_ids": [
+          "src-characterizing-electrode-materials-and-interfaces-in-solid-state-9b2c661ccc",
+          "src-how-certain-are-the-reported-ionic-conductivities-of-a0cf451dd2"
+        ]
+      },
+      {
+        "id": "rel-benchmarking-precedes-scale-up",
+        "kind": "precedes",
+        "from": {
+          "entity_type": "curriculum_step",
+          "id": "step-cell-level-benchmarking-6867894355"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-manufacturing-and-scale-up-d490769ef5"
+        },
+        "description": "Manufacturing judgments require cell-level benchmark variables rather than isolated material metrics.",
+        "source_ids": [
+          "src-benchmarking-the-performance-of-all-solid-state-lithium-06c35b6d8c",
+          "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41"
+        ]
+      },
+      {
+        "id": "rel-scale-up-precedes-frontier-audit",
+        "kind": "precedes",
+        "from": {
+          "entity_type": "curriculum_step",
+          "id": "step-manufacturing-and-scale-up-d490769ef5"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-frontier-paper-audit-4ca8cbc1d5"
+        },
+        "description": "A frontier audit should test whether a new result moves the coupled material-to-cell-to-process system.",
+        "source_ids": [
+          "src-mechanically-compliant-and-cost-effective-solid-electrolyte-for-1c959086bd",
+          "src-solid-state-battery-roadmap-2035-report-fraunhofer-isi-24eb8b6f41"
+        ]
+      }
+    ],
     "curriculum_path": [
       {
         "id": "step-electrochemical-grammar-26a789b2ba",
         "sequence": 1,
         "title": "Electrochemical grammar",
         "learning_goal": "What fixes voltage electron flow transport and polarization in a cell?",
+        "prerequisite_ids": [
+          "concept-core-objects-cbb2c59a11"
+        ],
         "practice_artifact": "Annotated galvanic-cell and equivalent-circuit model",
         "progress_criteria": [
           "Derive the role of chemical potential and distinguish ohmic charge-transfer and diffusion losses"
@@ -1058,6 +1573,9 @@
         "sequence": 2,
         "title": "Defects and ion transport",
         "learning_goal": "How do composition structure disorder and temperature produce ionic conductivity?",
+        "prerequisite_ids": [
+          "step-electrochemical-grammar-26a789b2ba"
+        ],
         "practice_artifact": "Conductivity mechanism map and Arrhenius critique",
         "progress_criteria": [
           "Connect carrier concentration and mobility to an experiment without treating a fitted value as mechanism"
@@ -1072,6 +1590,9 @@
         "sequence": 3,
         "title": "Electrolyte families",
         "learning_goal": "Why do sulfides oxides halides polymers and composites occupy different design regions?",
+        "prerequisite_ids": [
+          "step-defects-and-ion-transport-092fcbc55d"
+        ],
         "practice_artifact": "Family trade-off matrix",
         "progress_criteria": [
           "Compare transport stability mechanics processing and cost without naming a universal winner"
@@ -1085,6 +1606,9 @@
         "sequence": 4,
         "title": "Stability and interphases",
         "learning_goal": "When does decomposition passivate and when does it block transport?",
+        "prerequisite_ids": [
+          "step-electrolyte-families-e04f4e9b29"
+        ],
         "practice_artifact": "Chemical-potential and interphase causal diagram",
         "progress_criteria": [
           "Distinguish thermodynamic stability kinetic stability and functional passivation"
@@ -1098,6 +1622,9 @@
         "sequence": 5,
         "title": "Lithium contact and fracture",
         "learning_goal": "How do stripping plating voids pressure defects and cracks interact?",
+        "prerequisite_ids": [
+          "step-stability-and-interphases-05396827a9"
+        ],
         "practice_artifact": "Failure-chain diagram with competing hypotheses",
         "progress_criteria": [
           "Propose an observation that discriminates local flux concentration from a purely bulk-strength explanation"
@@ -1112,6 +1639,10 @@
         "sequence": 6,
         "title": "Composite cathodes",
         "learning_goal": "How do ionic electronic and mechanical networks coexist in a high-loading electrode?",
+        "prerequisite_ids": [
+          "step-electrolyte-families-e04f4e9b29",
+          "step-stability-and-interphases-05396827a9"
+        ],
         "practice_artifact": "Three-network composite sketch and bottleneck diagnosis",
         "progress_criteria": [
           "Identify transport length scales interfacial area and expansion-induced contact changes"
@@ -1125,6 +1656,10 @@
         "sequence": 7,
         "title": "Measurement and imaging",
         "learning_goal": "What does each instrument actually warrant?",
+        "prerequisite_ids": [
+          "step-electrochemical-grammar-26a789b2ba",
+          "step-lithium-contact-and-fracture-f41ff53829"
+        ],
         "practice_artifact": "EIS reporting sheet plus operando-method selection memo",
         "progress_criteria": [
           "State geometry resolution controls uncertainty and alternative explanations"
@@ -1139,6 +1674,10 @@
         "sequence": 8,
         "title": "Cell-level benchmarking",
         "learning_goal": "Which reported cell is genuinely closer to an application?",
+        "prerequisite_ids": [
+          "step-composite-cathodes-d0bb4c4bb9",
+          "step-measurement-and-imaging-df4061ee29"
+        ],
         "practice_artifact": "Normalized comparison sheet for two papers",
         "progress_criteria": [
           "Recalculate or flag electrolyte thickness areal capacity pressure temperature inventory and replicate count"
@@ -1153,6 +1692,9 @@
         "sequence": 9,
         "title": "Manufacturing and scale-up",
         "learning_goal": "Which laboratory choices survive sheet processing pouch assembly cost and yield constraints?",
+        "prerequisite_ids": [
+          "step-cell-level-benchmarking-6867894355"
+        ],
         "practice_artifact": "Material-to-cell process flow with failure gates",
         "progress_criteria": [
           "Separate a material milestone from a cell process and production milestone"
@@ -1167,6 +1709,10 @@
         "sequence": 10,
         "title": "Frontier paper audit",
         "learning_goal": "Does a 2026 material result move the coupled system or only one metric?",
+        "prerequisite_ids": [
+          "step-manufacturing-and-scale-up-d490769ef5",
+          "step-measurement-and-imaging-df4061ee29"
+        ],
         "practice_artifact": "Two-page claim-evidence-condition audit",
         "progress_criteria": [
           "Defend one supported conclusion identify one extrapolation and design the next discriminating experiment"
@@ -1273,30 +1819,251 @@
           "temporal_status": "current"
         }
       }
-    ]
-  },
-  "diagnostics": {
-    "summary": "export-json emitted 4 diagnostic(s) while converting bounded Markdown.",
-    "checks": [
+    ],
+    "visual_views": [
       {
-        "check_id": "export.unsupported-section",
-        "severity": "warning",
-        "message": "Markdown source section Literature Ladder was ignored; --sources is the source-of-truth manifest"
+        "id": "view-ssb-knowledge-spine",
+        "kind": "knowledge_spine",
+        "title": "Solid-state battery knowledge spine",
+        "justification": "Show the substantive path from coupled system framing through conductivity limits measurement warrants failure mechanisms pressure and commercialization criteria. Visual guidance: Read every result from left to right: material chemistry → measured transport → interface evolution → mechanical contact → cell conditions → manufacturing consequence If a paper skips a link, treat the downstream conclusion as an inference and ask what observation would test it.",
+        "nodes": [
+          {
+            "id": "vnode-claim-claim-capacity-retention-is-not-a-portable-187ac52bac",
+            "label": "Capacity retention is not a portable performance metric unless electrolyte thickness loading areal capacity lithium inventory pressure temperature rate and cell geometry are reported.",
+            "entity_type": "claim",
+            "ref_id": "claim-capacity-retention-is-not-a-portable-performance-metric-f45faad55a"
+          },
+          {
+            "id": "vnode-claim-claim-commercial-relevance-depends-on-thin-separators-f5c9b628c1",
+            "label": "Commercial relevance depends on thin separators high-loading electrodes low inactive fractions scalable processing and reproducible cells in addition to material properties.",
+            "entity_type": "claim",
+            "ref_id": "claim-commercial-relevance-depends-on-thin-separators-high-loading-767d88acb2"
+          },
+          {
+            "id": "vnode-claim-claim-high-room-temperature-ionic-conductivity-is-2ac2f3e87a",
+            "label": "High room-temperature ionic conductivity is necessary for many cell concepts but does not by itself establish interface stability or practical cell performance.",
+            "entity_type": "claim",
+            "ref_id": "claim-high-room-temperature-ionic-conductivity-is-necessary-for-05ee579852"
+          },
+          {
+            "id": "vnode-claim-claim-impedance-derived-ionic-conductivity-requires-explicit-88f0a37ff9",
+            "label": "Impedance-derived ionic conductivity requires explicit geometry temperature density contact fitting and replication metadata before values can be compared across laboratories.",
+            "entity_type": "claim",
+            "ref_id": "claim-impedance-derived-ionic-conductivity-requires-explicit-geometry-temperature-6c19a6a077"
+          },
+          {
+            "id": "vnode-claim-claim-lithium-stripping-can-create-interfacial-voids-411d86316c",
+            "label": "Lithium stripping can create interfacial voids that concentrate later plating flux and contribute to cracking penetration and short circuit.",
+            "entity_type": "claim",
+            "ref_id": "claim-lithium-stripping-can-create-interfacial-voids-that-concentrate-1d2b6eeb27"
+          },
+          {
+            "id": "vnode-claim-claim-solid-state-battery-research-is-a-5328cfa9e8",
+            "label": "Solid-state battery research is a coupled bulk-interface-mechanics-cell-manufacturing problem rather than an electrolyte-conductivity ranking.",
+            "entity_type": "claim",
+            "ref_id": "claim-solid-state-battery-research-is-a-coupled-bulk-6000b02751"
+          },
+          {
+            "id": "vnode-claim-claim-stack-pressure-is-a-coupled-electrochemical-24c84807f7",
+            "label": "Stack pressure is a coupled electrochemical and mechanical control variable with both beneficial and harmful regimes rather than a universally beneficial setting.",
+            "entity_type": "claim",
+            "ref_id": "claim-stack-pressure-is-a-coupled-electrochemical-and-mechanical-0bc6616c64"
+          },
+          {
+            "id": "vnode-concept-concept-generative-relation-e1716c1685-545e401a3f",
+            "label": "Generative relation",
+            "entity_type": "concept",
+            "ref_id": "concept-generative-relation-e1716c1685",
+            "description": "Emphasized by the Markdown visual view declaration."
+          },
+          {
+            "id": "vnode-concept-concept-threshold-concepts-3feedb30e8-cc7067224d",
+            "label": "Threshold concepts",
+            "entity_type": "concept",
+            "ref_id": "concept-threshold-concepts-3feedb30e8",
+            "description": "Emphasized by the Markdown visual view declaration."
+          },
+          {
+            "id": "vnode-frontier-debate-frontier-low-pressure-operation-028f49617b-cf9c2f29a3",
+            "label": "Low-pressure operation",
+            "entity_type": "frontier_debate",
+            "ref_id": "frontier-low-pressure-operation-028f49617b"
+          },
+          {
+            "id": "vnode-method-method-methods-and-warrants-37d6d29b67-63b913808e",
+            "label": "Methods and warrants",
+            "entity_type": "method",
+            "ref_id": "method-methods-and-warrants-37d6d29b67",
+            "description": "Emphasized by the Markdown visual view declaration."
+          },
+          {
+            "id": "vnode-representation-rep-representations-2d4679f495-2eb65946c8",
+            "label": "Representations",
+            "entity_type": "representation",
+            "ref_id": "rep-representations-2d4679f495",
+            "description": "Emphasized by the Markdown visual view declaration."
+          }
+        ],
+        "edges": [
+          {
+            "from": "vnode-concept-concept-generative-relation-e1716c1685-545e401a3f",
+            "to": "vnode-claim-claim-solid-state-battery-research-is-a-5328cfa9e8",
+            "kind": "grounds",
+            "relation_id": "rel-ssb-coupled-system-grounded-by-generative-relation",
+            "label": "The generative relation states why the report is organized as a coupled system instead of a material ranking."
+          },
+          {
+            "from": "vnode-concept-concept-threshold-concepts-3feedb30e8-cc7067224d",
+            "to": "vnode-claim-claim-high-room-temperature-ionic-conductivity-is-2ac2f3e87a",
+            "kind": "qualifies",
+            "relation_id": "rel-threshold-qualifies-conductivity-claim",
+            "label": "The threshold concept makes conductivity necessary but insufficient for device-level claims."
+          },
+          {
+            "from": "vnode-method-method-methods-and-warrants-37d6d29b67-63b913808e",
+            "to": "vnode-claim-claim-impedance-derived-ionic-conductivity-requires-explicit-88f0a37ff9",
+            "kind": "grounds",
+            "relation_id": "rel-methods-ground-conductivity-comparison",
+            "label": "Measurement warrants define when conductivity values are comparable."
+          },
+          {
+            "from": "vnode-claim-claim-lithium-stripping-can-create-interfacial-voids-411d86316c",
+            "to": "vnode-representation-rep-representations-2d4679f495-2eb65946c8",
+            "kind": "represented_by",
+            "relation_id": "rel-representations-map-failure-chain",
+            "label": "Spatial and electrochemical representations are needed to read the void-flux-fracture chain."
+          },
+          {
+            "from": "vnode-frontier-debate-frontier-low-pressure-operation-028f49617b-cf9c2f29a3",
+            "to": "vnode-claim-claim-stack-pressure-is-a-coupled-electrochemical-24c84807f7",
+            "kind": "qualifies",
+            "relation_id": "rel-pressure-qualifies-failure-chain",
+            "label": "Low-pressure operation is a frontier because pressure can preserve contact while changing failure and hardware regimes."
+          },
+          {
+            "from": "vnode-claim-claim-capacity-retention-is-not-a-portable-187ac52bac",
+            "to": "vnode-claim-claim-commercial-relevance-depends-on-thin-separators-f5c9b628c1",
+            "kind": "supports",
+            "relation_id": "rel-benchmarking-supports-commercial-criteria",
+            "label": "Cell-level benchmark variables are part of the commercial relevance filter."
+          }
+        ]
       },
       {
-        "check_id": "export.unsupported-section",
-        "severity": "warning",
-        "message": "Markdown visual section Visual Map was not converted; JSON visual_views require explicit structured data"
-      },
-      {
-        "check_id": "export.unsupported-section",
-        "severity": "warning",
-        "message": "Markdown visual section Visual Summary was not converted; JSON visual_views require explicit structured data"
-      },
-      {
-        "check_id": "export.unsupported-section",
-        "severity": "warning",
-        "message": "Markdown source section Sources and Further Reading was ignored; --sources is the source-of-truth manifest"
+        "id": "view-ssb-curriculum-path",
+        "kind": "dependency_path",
+        "title": "Solid-state battery curriculum path",
+        "justification": "Show the prerequisite order from electrochemical grammar to frontier paper auditing. Visual guidance: Read every result from left to right: material chemistry → measured transport → interface evolution → mechanical contact → cell conditions → manufacturing consequence If a paper skips a link, treat the downstream conclusion as an inference and ask what observation would test it.",
+        "nodes": [
+          {
+            "id": "vnode-curriculum-step-step-cell-level-benchmarking-6867894355-37184c436b",
+            "label": "Cell-level benchmarking",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-cell-level-benchmarking-6867894355"
+          },
+          {
+            "id": "vnode-curriculum-step-step-defects-and-ion-transport-092fcbc55d-4fe2b5358a",
+            "label": "Defects and ion transport",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-defects-and-ion-transport-092fcbc55d"
+          },
+          {
+            "id": "vnode-curriculum-step-step-electrochemical-grammar-26a789b2ba-6382c91992",
+            "label": "Electrochemical grammar",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-electrochemical-grammar-26a789b2ba",
+            "description": "Emphasized by the Markdown visual view declaration."
+          },
+          {
+            "id": "vnode-curriculum-step-step-electrolyte-families-e04f4e9b29-53a653137d",
+            "label": "Electrolyte families",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-electrolyte-families-e04f4e9b29"
+          },
+          {
+            "id": "vnode-curriculum-step-step-frontier-paper-audit-4ca8cbc1d5-b2ed3ec243",
+            "label": "Frontier paper audit",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-frontier-paper-audit-4ca8cbc1d5",
+            "description": "Emphasized by the Markdown visual view declaration."
+          },
+          {
+            "id": "vnode-curriculum-step-step-lithium-contact-and-fracture-f41ff53829-c3b40dc934",
+            "label": "Lithium contact and fracture",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-lithium-contact-and-fracture-f41ff53829"
+          },
+          {
+            "id": "vnode-curriculum-step-step-manufacturing-and-scale-up-d490769ef5-c06d2fd893",
+            "label": "Manufacturing and scale-up",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-manufacturing-and-scale-up-d490769ef5"
+          },
+          {
+            "id": "vnode-curriculum-step-step-measurement-and-imaging-df4061ee29-06b056c2b7",
+            "label": "Measurement and imaging",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-measurement-and-imaging-df4061ee29",
+            "description": "Emphasized by the Markdown visual view declaration."
+          },
+          {
+            "id": "vnode-curriculum-step-step-stability-and-interphases-05396827a9-334c757c4b",
+            "label": "Stability and interphases",
+            "entity_type": "curriculum_step",
+            "ref_id": "step-stability-and-interphases-05396827a9"
+          }
+        ],
+        "edges": [
+          {
+            "from": "vnode-curriculum-step-step-electrochemical-grammar-26a789b2ba-6382c91992",
+            "to": "vnode-curriculum-step-step-defects-and-ion-transport-092fcbc55d-4fe2b5358a",
+            "kind": "precedes",
+            "relation_id": "rel-electrochemical-grammar-precedes-transport",
+            "label": "Electrochemical grammar supplies the voltage transport and polarization vocabulary used in ion-transport mechanisms."
+          },
+          {
+            "from": "vnode-curriculum-step-step-defects-and-ion-transport-092fcbc55d-4fe2b5358a",
+            "to": "vnode-curriculum-step-step-electrolyte-families-e04f4e9b29-53a653137d",
+            "kind": "precedes",
+            "relation_id": "rel-transport-precedes-families",
+            "label": "Transport mechanisms are needed before comparing material-family design regions."
+          },
+          {
+            "from": "vnode-curriculum-step-step-electrolyte-families-e04f4e9b29-53a653137d",
+            "to": "vnode-curriculum-step-step-stability-and-interphases-05396827a9-334c757c4b",
+            "kind": "precedes",
+            "relation_id": "rel-families-precedes-interphases",
+            "label": "Material-family trade-offs set the context for decomposition passivation and blocked transport."
+          },
+          {
+            "from": "vnode-curriculum-step-step-stability-and-interphases-05396827a9-334c757c4b",
+            "to": "vnode-curriculum-step-step-lithium-contact-and-fracture-f41ff53829-c3b40dc934",
+            "kind": "precedes",
+            "relation_id": "rel-interphases-precede-contact-fracture",
+            "label": "Interphase behavior has to be understood before reading void crack and filament mechanisms."
+          },
+          {
+            "from": "vnode-curriculum-step-step-measurement-and-imaging-df4061ee29-06b056c2b7",
+            "to": "vnode-curriculum-step-step-cell-level-benchmarking-6867894355-37184c436b",
+            "kind": "precedes",
+            "relation_id": "rel-measurement-precedes-benchmarking",
+            "label": "Benchmarking depends on knowing what each measurement and imaging method actually warrants."
+          },
+          {
+            "from": "vnode-curriculum-step-step-cell-level-benchmarking-6867894355-37184c436b",
+            "to": "vnode-curriculum-step-step-manufacturing-and-scale-up-d490769ef5-c06d2fd893",
+            "kind": "precedes",
+            "relation_id": "rel-benchmarking-precedes-scale-up",
+            "label": "Manufacturing judgments require cell-level benchmark variables rather than isolated material metrics."
+          },
+          {
+            "from": "vnode-curriculum-step-step-manufacturing-and-scale-up-d490769ef5-c06d2fd893",
+            "to": "vnode-curriculum-step-step-frontier-paper-audit-4ca8cbc1d5-b2ed3ec243",
+            "kind": "precedes",
+            "relation_id": "rel-scale-up-precedes-frontier-audit",
+            "label": "A frontier audit should test whether a new result moves the coupled material-to-cell-to-process system."
+          }
+        ]
       }
     ]
   }

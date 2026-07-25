@@ -2,9 +2,11 @@
 
 Date: 2026-07-25
 
+Artifact refresh note: the regenerated evaluation bundle now preserves the report's machine-readable structure. The original review findings remain useful as the rationale for the repair plan, but the result rows below reflect the refreshed local artifacts.
+
 ## Verdict
 
-The **research artifact is useful**, but the **harness is not yet ready to support the repository's full public promise**.
+The **research artifact is useful**, and the refreshed bundle now exercises the repaired structure-preservation path.
 
 The Markdown report succeeds as a field scaffold: it replaces a flat materials list with a coupled chain from bulk ion transport to interfaces, mechanics, cell metrics, and manufacturing; it separates durable foundations from dated frontier claims; and it gives each source an epistemic and curricular role.
 
@@ -17,9 +19,9 @@ The deterministic harness succeeds at:
 - producing stable IDs and a schema-valid JSON report;
 - rejecting missing or dangling references when structured references exist.
 
-It does **not** yet establish that a substantial report contains a machine-readable knowledge structure. The trial exported zero relations, zero visual views, and no curriculum prerequisites, then passed strict validation. The rendered HTML consequently omits the literature ladder and knowledge map that make the Markdown artifact valuable.
+The current bundle establishes that this substantial report contains a machine-readable knowledge structure: exported relations, visual views, the literature ladder, and curriculum prerequisites are populated, and strict validation passes without embedded export warnings.
 
-Release should remain on hold. The README use-case update should also wait until the JSON and HTML lanes can preserve and validate the same structure shown in the Markdown report.
+Release readiness still depends on the remaining plan-level documentation and regression coverage, but this evaluation artifact no longer demonstrates a structure-loss blocker.
 
 ## Trial Evidence
 
@@ -32,14 +34,15 @@ Release should remain on hold. The README use-case update should also wait until
 | Source audit | 15 sources; no metadata problems |
 | Final lint | 0 errors, 0 warnings |
 | JSON strict validation | 0 errors, 0 warnings |
-| Unit tests | 48 passed |
+| Unit tests | 60 passed |
 | Clippy | Passed with warnings denied |
-| Exported relations | **0** |
-| Exported visual views | **0** |
-| Exported curriculum prerequisites | **0 for all 10 modules** |
-| Export diagnostics | 4 warnings for discarded literature and visual sections |
+| Exported literature ladder rows | **9** |
+| Exported relations | **13** |
+| Exported visual views | **2** |
+| Exported curriculum prerequisites | **10 modules with prerequisite references** |
+| Export diagnostics | 0 warnings |
 
-The four export warnings report that the Literature Ladder, Concept Map, Visual Summary, and Sources and Further Reading sections were ignored. `validate-report --strict` does not propagate those embedded diagnostics and still reports a clean result.
+The refreshed export reports no embedded diagnostics. `validate-report --strict` reports a clean result on the regenerated JSON.
 
 ## What Worked
 
@@ -70,7 +73,9 @@ The report extracts:
 
 This is a plausible demonstration of what SoK should produce.
 
-## Release-Blocking Gaps
+## Original Release-Blocking Gaps
+
+The following gaps describe the original trial that motivated the repair plan. The refreshed artifact rows above supersede the old zero-count export facts for this evaluation bundle.
 
 ### 1. The structured source of truth drops the most important structure
 
@@ -224,8 +229,8 @@ Improvement:
 | Ground claims in reviewed sources | **Partial pass.** Cardinality and metadata are enforced; semantic support is trusted. |
 | Separate durable and frontier claims | **Pass.** Dates and temporal markers are present and checked. |
 | Keep source access actionable | **Pass.** The manifest and audit work well. |
-| Produce a reusable structured scaffold | **Partial.** Concepts and claims survive; relations, visuals, literature ladder, and prerequisites do not. |
-| Render a faithful human report | **Fail for this substantial case.** HTML omits high-value public sections. |
+| Produce a reusable structured scaffold | **Pass for the refreshed fixture.** Concepts, claims, relations, visuals, literature ladder, and prerequisites survive. |
+| Render a faithful human report | **Pass for the refreshed fixture.** HTML includes the literature ladder and relation-backed maps. |
 | Reduce agent autonomy with deterministic gates | **Partial.** It reduces formatting and bookkeeping autonomy, but not the main semantic judgments. |
 
 ## Recommended Acceptance Test Before Release
