@@ -763,7 +763,11 @@ The report focuses on point-set foundations before algebraic examples.
         .iter()
         .find(|claim| claim.statement == claim_statement)
         .unwrap();
-    assert!(cataloged_claim.evidence_links.is_empty());
+    assert_eq!(cataloged_claim.evidence_links.len(), 1);
+    assert_eq!(
+        cataloged_claim.evidence_links[0].verification_status,
+        report::VerificationStatus::Cataloged
+    );
     assert!(cataloged
         .diagnostics
         .as_ref()
@@ -835,12 +839,18 @@ The report focuses on point-set foundations before algebraic examples.
         .iter()
         .find(|claim| claim.statement == claim_statement)
         .unwrap();
-    assert_eq!(reviewed_claim.evidence_links.len(), 1);
-    assert_eq!(
-        reviewed_claim.evidence_links[0].verification_status,
-        report::VerificationStatus::Reviewed
+    assert_eq!(reviewed_claim.evidence_links.len(), 2);
+    assert!(
+        reviewed_claim.evidence_links.iter().any(|link| {
+            link.verification_status == report::VerificationStatus::Cataloged
+                && link.source_id == source_id
+        }),
+        "cataloged claim evidence should remain visible but non-supporting"
     );
-    assert_eq!(reviewed_claim.evidence_links[0].source_id, source_id);
+    assert!(reviewed_claim.evidence_links.iter().any(|link| {
+        link.verification_status == report::VerificationStatus::Reviewed
+            && link.source_id == source_id
+    }));
 
     let public_payload = serde_json::to_string(&exported.report).unwrap();
     assert_not_contains(&public_payload, "raw_learner_profile");
@@ -1093,6 +1103,7 @@ fn reviewed_or_verified_evidence_needs_usable_support_metadata() {
     };
     assert!(!cataloged.can_satisfy_claim_link());
     assert!(cataloged.to_evidence_link().is_none());
+    assert!(cataloged.to_visible_evidence_link().is_some());
 
     let no_locator_or_note = report::EvidenceEntry {
         locator: String::new(),
@@ -1106,6 +1117,26 @@ fn reviewed_or_verified_evidence_needs_usable_support_metadata() {
         ..reviewed.clone()
     };
     assert!(!background.can_satisfy_claim_link());
+
+    let qualifies = report::EvidenceEntry {
+        support_kind: report::SupportKind::Qualifies,
+        ..reviewed.clone()
+    };
+    assert!(!qualifies.can_satisfy_claim_link());
+    assert!(qualifies.to_visible_evidence_link().is_some());
+
+    let contradicts = report::EvidenceEntry {
+        support_kind: report::SupportKind::Contradicts,
+        ..reviewed.clone()
+    };
+    assert!(!contradicts.can_satisfy_claim_link());
+    assert!(contradicts.to_visible_evidence_link().is_some());
+
+    let missing_reviewed_at = report::EvidenceEntry {
+        reviewed_at: String::new(),
+        ..reviewed.clone()
+    };
+    assert!(!missing_reviewed_at.can_satisfy_claim_link());
 
     let verified_with_note = report::EvidenceEntry {
         verification_status: report::VerificationStatus::Verified,
@@ -1626,6 +1657,302 @@ fn validate_report_strict_mode_fails_on_warnings_but_default_does_not() {
 }
 
 #[test]
+fn validate_report_surfaces_embedded_export_diagnostics_in_strict_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("embedded-warning-report.json");
+    let mut value = load_repo_json("reports/examples/sok-report.json");
+    value["diagnostics"] = json!({
+        "summary": "export diagnostics",
+        "checks": [
+            {
+                "check_id": report::CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                "severity": "warning",
+                "message": "Relation endpoint could not be resolved during export.",
+                "target_path": "/report/relations/0",
+                "entity_id": "rel-quotient-depends-invariance"
+            }
+        ]
+    });
+    report::write_json_file(&report_path, &value).unwrap();
+
+    let validation = report::validate_report_file(&report_path).unwrap();
+    assert_eq!(validation.error_count(), 0);
+    assert_validation_check(
+        &validation,
+        report::CHECK_EXPORT_UNRESOLVED_REFERENCE,
+        report::DiagnosticSeverity::Warning,
+    );
+
+    assert_eq!(
+        run_cli(vec![
+            "validate-report".to_string(),
+            "--input".to_string(),
+            report_path.display().to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+    assert_eq!(
+        run_cli(vec![
+            "validate-report".to_string(),
+            "--input".to_string(),
+            report_path.display().to_string(),
+            "--strict".to_string(),
+        ])
+        .unwrap(),
+        1
+    );
+
+    let waived_path = dir.path().join("accepted-loss-report.json");
+    value["diagnostics"]["checks"][0]["status"] = json!("not_applicable");
+    value["diagnostics"]["checks"][0]["message"] =
+        json!("Accepted loss waiver: unresolved export reference is intentional in this fixture.");
+    report::write_json_file(&waived_path, &value).unwrap();
+    let waived = report::validate_report_file(&waived_path).unwrap();
+    assert_eq!(waived.warning_count(), 0, "{:?}", waived.diagnostics);
+    assert_validation_check(
+        &waived,
+        report::CHECK_EXPORT_UNRESOLVED_REFERENCE,
+        report::DiagnosticSeverity::Info,
+    );
+    assert_eq!(
+        run_cli(vec![
+            "validate-report".to_string(),
+            "--input".to_string(),
+            waived_path.display().to_string(),
+            "--strict".to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn validate_report_requires_structure_for_substantial_final_reports() {
+    let mut missing_relations = load_repo_json("reports/examples/sok-report.json");
+    missing_relations["report"]["relations"] = json!([]);
+    let validation = report::validate_report_value(&missing_relations);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_STRUCTURE_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut missing_prerequisites = load_repo_json("reports/examples/sok-report.json");
+    for step in missing_prerequisites["report"]["curriculum_path"]
+        .as_array_mut()
+        .unwrap()
+    {
+        step["prerequisite_ids"] = json!([]);
+    }
+    let validation = report::validate_report_value(&missing_prerequisites);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_STRUCTURE_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut waived = missing_prerequisites.clone();
+    waived["report"]["structure_waivers"] = json!([
+        {
+            "scope": "curriculum_prerequisites",
+            "rationale": "This fixture intentionally omits prerequisites to test waiver behavior."
+        }
+    ]);
+    let validation = report::validate_report_value(&waived);
+    assert_no_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_STRUCTURE_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut missing_visual = load_repo_json("reports/examples/sok-report.json");
+    missing_visual["report"]
+        .as_object_mut()
+        .unwrap()
+        .remove("visual_views");
+    missing_visual["diagnostics"] = json!({
+        "checks": [
+            {
+                "check_id": report::CHECK_EXPORT_UNSUPPORTED_SECTION,
+                "severity": "warning",
+                "message": "Visual Summary was present in source Markdown but no structured Visual Views table preserved it."
+            }
+        ]
+    });
+    let validation = report::validate_report_value(&missing_visual);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_STRUCTURE_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+
+    missing_visual["report"]["structure_waivers"] = json!([
+        {
+            "scope": "visual_views",
+            "rationale": "A text-only report intentionally omits the visual summary."
+        }
+    ]);
+    let validation = report::validate_report_value(&missing_visual);
+    assert_no_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_STRUCTURE_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+    assert_validation_check(
+        &validation,
+        report::CHECK_EXPORT_UNSUPPORTED_SECTION,
+        report::DiagnosticSeverity::Info,
+    );
+}
+
+#[test]
+fn validate_report_checks_new_structure_endpoints() {
+    let mut bad_ladder_source = load_repo_json("reports/examples/sok-report.json");
+    bad_ladder_source["report"]["literature_ladder"] = json!([
+        {
+            "id": "ladder-bad-source",
+            "layer": "foundation",
+            "start_here": "Start with a missing source.",
+            "read_for": "Endpoint validation.",
+            "do_not_infer": "Do not infer missing sources.",
+            "source_ids": ["src-missing-source"]
+        }
+    ]);
+    let validation = report::validate_report_value(&bad_ladder_source);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_EVIDENCE_SOURCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut bad_claim_source = load_repo_json("reports/examples/sok-report.json");
+    bad_claim_source["report"]["claims"][0]["evidence_links"][0]["source_id"] =
+        json!("src-missing-source");
+    let validation = report::validate_report_value(&bad_claim_source);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_EVIDENCE_SOURCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut bad_frontier_claim = load_repo_json("reports/examples/sok-report.json");
+    bad_frontier_claim["report"]["frontier_debates"][0]["claim_ids"] = json!(["claim-missing"]);
+    let validation = report::validate_report_value(&bad_frontier_claim);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_RELATION_ENDPOINT,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut bad_visual_ref = load_repo_json("reports/examples/sok-report.json");
+    bad_visual_ref["report"]["visual_views"][0]["nodes"][0]["ref_id"] = json!("step-missing");
+    let validation = report::validate_report_value(&bad_visual_ref);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_VISUAL_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut bad_visual_node = load_repo_json("reports/examples/sok-report.json");
+    bad_visual_node["report"]["visual_views"][0]["edges"][0]["from"] = json!("vnode-missing");
+    let validation = report::validate_report_value(&bad_visual_node);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_VISUAL_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut bad_visual_relation = load_repo_json("reports/examples/sok-report.json");
+    bad_visual_relation["report"]["visual_views"][0]["edges"][0]["relation_id"] =
+        json!("rel-missing");
+    let validation = report::validate_report_value(&bad_visual_relation);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_VISUAL_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
+fn validate_report_evidence_support_semantics_are_strict() {
+    let mut qualifies_only = load_repo_json("reports/examples/sok-report.json");
+    qualifies_only["report"]["claims"][0]["evidence_links"] = json!([
+        {
+            "source_id": "src-munkres-topology",
+            "verification_status": "reviewed",
+            "support_kind": "qualifies",
+            "locator": "introductory chapters",
+            "support_note": "This narrows but does not affirm the claim.",
+            "reviewed_at": "2026-07-16"
+        }
+    ]);
+    let validation = report::validate_report_value(&qualifies_only);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_EVIDENCE_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_EVIDENCE_SUPPORT,
+        report::DiagnosticSeverity::Warning,
+    );
+
+    let mut contradicts = load_repo_json("reports/examples/sok-report.json");
+    contradicts["report"]["claims"][0]["evidence_links"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "source_id": "src-hatcher-algebraic-topology",
+            "verification_status": "reviewed",
+            "support_kind": "contradicts",
+            "locator": "opening chapters",
+            "support_note": "This conflicts with an overbroad form of the claim.",
+            "reviewed_at": "2026-07-16"
+        }));
+    let validation = report::validate_report_value(&contradicts);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_EVIDENCE_SUPPORT,
+        report::DiagnosticSeverity::Warning,
+    );
+    assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
+
+    let mut missing_reviewed_at = load_repo_json("reports/examples/sok-report.json");
+    missing_reviewed_at["report"]["claims"][0]["evidence_links"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("reviewed_at");
+    let validation = report::validate_report_value(&missing_reviewed_at);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_EVIDENCE_SUPPORT,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut cataloged_visible = load_repo_json("reports/examples/sok-report.json");
+    cataloged_visible["report"]["claims"][0]["evidence_links"] = json!([
+        {
+            "source_id": "src-munkres-topology",
+            "verification_status": "cataloged",
+            "support_kind": "supports"
+        }
+    ]);
+    let validation = report::validate_report_value(&cataloged_visible);
+    assert_validation_check(
+        &validation,
+        report::CHECK_EVIDENCE_CATALOGED_ONLY,
+        report::DiagnosticSeverity::Warning,
+    );
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_EVIDENCE_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
 fn validate_report_output_order_is_deterministic() {
     let mut value = load_repo_json("reports/examples/sok-report.json");
     value["report"]["sources"][1]["access"]["route"] = json!("unknown");
@@ -2135,6 +2462,35 @@ fn lint_flags_currentness_prose_without_dates() {
     )
     .unwrap();
     assert_validation_check(
+        &lint,
+        report::CHECK_VALIDATE_CURRENTNESS_PROSE,
+        report::DiagnosticSeverity::Warning,
+    );
+}
+
+#[test]
+fn lint_currentness_ignores_common_technical_current_compounds() {
+    let dir = tempfile::tempdir().unwrap();
+    let (report_path, sources_path, evidence_path, claim_statement) =
+        write_lint_final_bundle(dir.path(), true);
+    fs::write(
+        &report_path,
+        format!(
+            "{}\n\nCurrent density, current collector design, current focusing, stripping current, and critical current are technical quantities in this paragraph.\n",
+            canonical_lint_final_markdown(&claim_statement)
+        ),
+    )
+    .unwrap();
+
+    let lint = report::lint_markdown_report(
+        &report_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert_eq!(lint.error_count(), 0, "{:?}", lint.diagnostics);
+    assert_no_validation_check(
         &lint,
         report::CHECK_VALIDATE_CURRENTNESS_PROSE,
         report::DiagnosticSeverity::Warning,
@@ -3262,6 +3618,22 @@ fn assert_validation_check(
             .iter()
             .any(|check| check.check_id == check_id && check.severity == severity),
         "expected validation diagnostics to include {severity:?} {check_id}; got {:?}",
+        validation.diagnostics.checks
+    );
+}
+
+fn assert_no_validation_check(
+    validation: &report::ReportValidation,
+    check_id: &str,
+    severity: report::DiagnosticSeverity,
+) {
+    assert!(
+        !validation
+            .diagnostics
+            .checks
+            .iter()
+            .any(|check| check.check_id == check_id && check.severity == severity),
+        "expected validation diagnostics not to include {severity:?} {check_id}; got {:?}",
         validation.diagnostics.checks
     );
 }

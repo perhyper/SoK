@@ -44,6 +44,7 @@ pub const CHECK_VALIDATE_RELATION_KIND: &str = "validate.relation.kind";
 pub const CHECK_VALIDATE_CURRICULUM_REFERENCE: &str = "validate.curriculum.reference";
 pub const CHECK_VALIDATE_SOURCE_ACCESS: &str = "validate.source-access";
 pub const CHECK_VALIDATE_VISUAL_REFERENCE: &str = "validate.visual.reference";
+pub const CHECK_VALIDATE_STRUCTURE_REQUIRED: &str = "validate.structure.required";
 pub const CHECK_LINT_STRUCTURAL: &str = "lint.structural";
 pub const CHECK_LINT_SCAFFOLD_UNRESOLVED: &str = "lint.scaffold-unresolved";
 pub const CHECK_LINT_FINAL_PUBLIC_LEAKAGE: &str = "lint.final-public-leakage";
@@ -749,6 +750,7 @@ pub fn validate_report_value(value: &Value) -> ReportValidation {
 
     if let Some(document) = document {
         let index = ReportIdIndex::from_report(&document.report, &mut checks);
+        validate_embedded_diagnostics(&document, &mut checks);
         validate_public_report_boundary(value, document.metadata.report_type, &mut checks);
         validate_reference_consistency(&document.report, &index, &mut checks);
         validate_claim_evidence_requirements(&document.report, &index, &mut checks);
@@ -758,6 +760,7 @@ pub fn validate_report_value(value: &Value) -> ReportValidation {
         validate_visual_references(&document.report, &index, &mut checks);
         validate_source_access_metadata(&document.report, &mut checks);
         validate_structure_waivers(&document.report, &mut checks);
+        validate_required_structure(&document, &mut checks);
     }
 
     ReportValidation::new(checks)
@@ -805,6 +808,7 @@ where
     lint_stage_boundary(&markdown, &parsed, stage, &mut checks);
     lint_source_role_coverage(&parsed, &sources, &mut checks);
     lint_evidence_sources(&evidence, &sources, &mut checks);
+    lint_evidence_semantics(&evidence, &mut checks);
     lint_claim_evidence_support(&parsed, &sources, &evidence, stage, &mut checks);
     lint_markdown_currentness(&markdown, &mut checks);
 
@@ -1525,6 +1529,42 @@ impl ReportIdIndex {
     }
 }
 
+fn validate_embedded_diagnostics(document: &ReportDocument, checks: &mut Vec<DiagnosticCheck>) {
+    let Some(diagnostics) = &document.diagnostics else {
+        return;
+    };
+    for (index, embedded) in diagnostics.checks.iter().enumerate() {
+        let mut check = embedded.clone();
+        if check.target_path.trim().is_empty() {
+            check.target_path = format!("/diagnostics/checks/{index}");
+        }
+        if embedded_diagnostic_has_accepted_loss_waiver(document, &check) {
+            check.severity = DiagnosticSeverity::Info;
+        }
+        checks.push(check);
+    }
+}
+
+fn embedded_diagnostic_has_accepted_loss_waiver(
+    document: &ReportDocument,
+    check: &DiagnosticCheck,
+) -> bool {
+    if check.status == Some(DiagnosticStatus::NotApplicable)
+        && normalize_id_text(&check.message).contains("accepted loss")
+    {
+        return true;
+    }
+    embedded_visual_loss_diagnostic(check)
+        && has_structure_waiver(&document.report, StructureWaiverScope::VisualViews)
+}
+
+fn embedded_visual_loss_diagnostic(check: &DiagnosticCheck) -> bool {
+    check.check_id == CHECK_EXPORT_UNSUPPORTED_SECTION && {
+        let message = normalize_id_text(&check.message);
+        message.contains("visual summary") || message.contains("visual map")
+    }
+}
+
 fn validate_public_report_boundary(
     value: &Value,
     report_type: ReportType,
@@ -1826,6 +1866,8 @@ fn validate_claim_evidence_requirements(
         let path = format!("/report/claims/{claim_index}");
         let mut usable_reviewed_sources = BTreeSet::new();
         let mut usable_verified_sources = BTreeSet::new();
+        let mut saw_cataloged = false;
+        let mut saw_qualifying_without_support = false;
         for (link_index, link) in claim.evidence_links.iter().enumerate() {
             let link_path = format!("{path}/evidence_links/{link_index}");
             if !index.sources.contains(&link.source_id) {
@@ -1840,37 +1882,47 @@ fn validate_claim_evidence_requirements(
                     .with_target(&link_path, &claim.id),
                 );
             }
-            if matches!(
-                link.verification_status,
-                VerificationStatus::Reviewed | VerificationStatus::Verified
-            ) && link.locator.trim().is_empty()
-                && link.support_note.trim().is_empty()
-            {
-                checks.push(
-                    DiagnosticCheck::error(
-                        CHECK_VALIDATE_EVIDENCE_SUPPORT,
-                        format!(
-                            "claim {} evidence link {} needs a locator or support_note",
-                            claim.id, link.source_id
-                        ),
-                    )
-                    .with_target(&link_path, &claim.id),
-                );
-            }
-            if link.support_kind == SupportKind::Background {
-                checks.push(
-                    DiagnosticCheck::error(
-                        CHECK_VALIDATE_EVIDENCE_SUPPORT,
-                        format!(
-                            "claim {} evidence link {} is background and cannot satisfy claim support",
-                            claim.id, link.source_id
-                        ),
-                    )
-                    .with_target(&link_path, &claim.id),
-                );
+            if link.verification_status == VerificationStatus::Cataloged {
+                saw_cataloged = true;
                 continue;
             }
-            if link.locator.trim().is_empty() && link.support_note.trim().is_empty() {
+            validate_reviewed_evidence_link_metadata(claim, link, &link_path, checks);
+
+            match link.support_kind {
+                SupportKind::Supports => {}
+                SupportKind::Qualifies => {
+                    saw_qualifying_without_support = true;
+                    continue;
+                }
+                SupportKind::Contradicts => {
+                    checks.push(
+                        DiagnosticCheck::warning(
+                            CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                            format!(
+                                "claim {} has contradictory evidence from {}; record a conflict or lower-confidence interpretation",
+                                claim.id, link.source_id
+                            ),
+                        )
+                        .with_target(&link_path, &claim.id),
+                    );
+                    continue;
+                }
+                SupportKind::Background | SupportKind::Example => {
+                    continue;
+                }
+            }
+
+            if !reviewed_link_can_support_claim(link) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                        format!(
+                            "claim {} evidence link {} cannot satisfy claim support without reviewed support metadata",
+                            claim.id, link.source_id
+                        ),
+                    )
+                    .with_target(&link_path, &claim.id),
+                );
                 continue;
             }
             match link.verification_status {
@@ -1897,6 +1949,30 @@ fn validate_claim_evidence_requirements(
             | EvidenceRequirement::ReviewedSource => !usable_reviewed_sources.is_empty(),
         };
         if !satisfied {
+            if saw_cataloged {
+                checks.push(
+                    DiagnosticCheck::warning(
+                        CHECK_EVIDENCE_CATALOGED_ONLY,
+                        format!(
+                            "claim {} has cataloged evidence links, but cataloged evidence cannot satisfy reviewed support",
+                            claim.id
+                        ),
+                    )
+                    .with_target(&path, &claim.id),
+                );
+            }
+            if saw_qualifying_without_support {
+                checks.push(
+                    DiagnosticCheck::warning(
+                        CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                        format!(
+                            "claim {} has qualifying evidence but no affirmative supporting evidence",
+                            claim.id
+                        ),
+                    )
+                    .with_target(&path, &claim.id),
+                );
+            }
             checks.push(
                 DiagnosticCheck::error(
                     CHECK_VALIDATE_EVIDENCE_REQUIRED,
@@ -1909,6 +1985,64 @@ fn validate_claim_evidence_requirements(
             );
         }
     }
+}
+
+fn validate_reviewed_evidence_link_metadata(
+    claim: &Claim,
+    link: &EvidenceLink,
+    link_path: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    if !matches!(
+        link.verification_status,
+        VerificationStatus::Reviewed | VerificationStatus::Verified
+    ) {
+        return;
+    }
+    if link.reviewed_at.trim().is_empty() {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                format!(
+                    "claim {} evidence link {} needs reviewed_at",
+                    claim.id, link.source_id
+                ),
+            )
+            .with_target(link_path, &claim.id),
+        );
+    } else if !looks_like_iso_date(&link.reviewed_at) {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                format!(
+                    "claim {} evidence link {} reviewed_at must be YYYY-MM-DD",
+                    claim.id, link.source_id
+                ),
+            )
+            .with_target(link_path, &claim.id),
+        );
+    }
+    if link.locator.trim().is_empty() && link.support_note.trim().is_empty() {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                format!(
+                    "claim {} evidence link {} needs a locator or support_note",
+                    claim.id, link.source_id
+                ),
+            )
+            .with_target(link_path, &claim.id),
+        );
+    }
+}
+
+fn reviewed_link_can_support_claim(link: &EvidenceLink) -> bool {
+    matches!(
+        link.verification_status,
+        VerificationStatus::Reviewed | VerificationStatus::Verified
+    ) && link.support_kind == SupportKind::Supports
+        && looks_like_iso_date(&link.reviewed_at)
+        && (!link.locator.trim().is_empty() || !link.support_note.trim().is_empty())
 }
 
 fn claim_requires_reviewed_or_verified_evidence(claim: &Claim) -> bool {
@@ -2462,6 +2596,90 @@ fn validate_structure_waivers(report: &PublicReport, checks: &mut Vec<Diagnostic
     }
 }
 
+fn validate_required_structure(document: &ReportDocument, checks: &mut Vec<DiagnosticCheck>) {
+    if document.metadata.report_type != ReportType::HumanReport {
+        return;
+    }
+    let report = &document.report;
+    if substantial_final_report(report) {
+        if report.relations.is_empty()
+            && !has_structure_waiver(report, StructureWaiverScope::Relations)
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_STRUCTURE_REQUIRED,
+                    "substantial human_report needs non-empty report.relations or a structure waiver",
+                )
+                .with_target("/report/relations", ""),
+            );
+        }
+        let has_curriculum_prerequisite = report
+            .curriculum_path
+            .iter()
+            .any(|step| !step.prerequisite_ids.is_empty());
+        if !has_curriculum_prerequisite
+            && !has_structure_waiver(report, StructureWaiverScope::CurriculumPrerequisites)
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_STRUCTURE_REQUIRED,
+                    "substantial human_report needs at least one curriculum prerequisite or a structure waiver",
+                )
+                .with_target("/report/curriculum_path", ""),
+            );
+        }
+    }
+
+    if report.visual_views.is_empty()
+        && embedded_visual_intent_was_declared(document)
+        && !has_structure_waiver(report, StructureWaiverScope::VisualViews)
+    {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_STRUCTURE_REQUIRED,
+                "source Markdown declared a visual map or visual summary, but report.visual_views is empty",
+            )
+            .with_target("/report/visual_views", ""),
+        );
+    }
+}
+
+fn substantial_final_report(report: &PublicReport) -> bool {
+    if report.curriculum_path.len() > 1 {
+        return true;
+    }
+    if report.claims.len() > 2 || report.frontier_debates.len() > 1 {
+        return true;
+    }
+    let structural_count = report.core_ideas.len()
+        + report.methods.len()
+        + report.representations.len()
+        + report.literature_ladder.len()
+        + report.curriculum_path.len()
+        + report.frontier_debates.len();
+    structural_count >= 7
+}
+
+fn embedded_visual_intent_was_declared(document: &ReportDocument) -> bool {
+    document
+        .diagnostics
+        .as_ref()
+        .map(|diagnostics| {
+            diagnostics
+                .checks
+                .iter()
+                .any(embedded_visual_loss_diagnostic)
+        })
+        .unwrap_or(false)
+}
+
+fn has_structure_waiver(report: &PublicReport, scope: StructureWaiverScope) -> bool {
+    report
+        .structure_waivers
+        .iter()
+        .any(|waiver| waiver.scope == scope && !waiver.rationale.trim().is_empty())
+}
+
 fn source_access_requires_notes(status: AccessStatus) -> bool {
     matches!(
         status,
@@ -2490,12 +2708,70 @@ fn structured_temporal_metadata_absent(marker: &TemporalMarker) -> bool {
 
 fn has_currentness_words(text: &str) -> bool {
     let normalized = normalize_id_text(text);
-    normalized.split_whitespace().any(|word| {
-        matches!(
-            word,
-            "current" | "currently" | "recent" | "recently" | "latest"
-        )
-    })
+    let words = normalized.split_whitespace().collect::<Vec<_>>();
+    if words
+        .iter()
+        .any(|word| matches!(*word, "currently" | "recent" | "recently" | "latest"))
+    {
+        return true;
+    }
+    if contains_word_pair(&words, "as", "of") {
+        return true;
+    }
+    if contains_review_date_construction(&words) {
+        return true;
+    }
+    for index in 0..words.len().saturating_sub(1) {
+        if words[index] != "current" {
+            continue;
+        }
+        let next = words[index + 1];
+        if is_exempt_current_compound(next) {
+            continue;
+        }
+        if matches!(
+            next,
+            "state"
+                | "status"
+                | "evidence"
+                | "literature"
+                | "consensus"
+                | "practice"
+                | "recommendation"
+                | "recommendations"
+                | "guidance"
+                | "frontier"
+                | "standard"
+                | "standards"
+                | "version"
+                | "review"
+                | "snapshot"
+        ) {
+            return true;
+        }
+    }
+    false
+}
+
+fn contains_word_pair(words: &[&str], left: &str, right: &str) -> bool {
+    words
+        .windows(2)
+        .any(|pair| pair.first() == Some(&left) && pair.get(1) == Some(&right))
+}
+
+fn contains_review_date_construction(words: &[&str]) -> bool {
+    contains_word_pair(words, "reviewed", "on")
+        || contains_word_pair(words, "reviewed", "at")
+        || contains_word_pair(words, "review", "date")
+        || contains_word_pair(words, "review", "dated")
+        || contains_word_pair(words, "last", "reviewed")
+}
+
+fn is_exempt_current_compound(next_word: &str) -> bool {
+    matches!(
+        next_word,
+        "density" | "collector" | "focusing" | "stripping" | "critical"
+    )
 }
 
 fn source_date_after_as_of(source_date: &str, as_of: &str) -> bool {
@@ -3122,6 +3398,61 @@ fn lint_evidence_sources(
     for mut check in evidence_source_diagnostics(evidence, &source_ids) {
         check.severity = DiagnosticSeverity::Error;
         checks.push(check);
+    }
+}
+
+fn lint_evidence_semantics(evidence: &[EvidenceEntry], checks: &mut Vec<DiagnosticCheck>) {
+    for entry in evidence {
+        if !matches!(
+            entry.verification_status,
+            VerificationStatus::Reviewed | VerificationStatus::Verified
+        ) {
+            continue;
+        }
+        if entry.reviewed_at.trim().is_empty() {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                    format!("evidence {} needs reviewed_at", entry.evidence_id),
+                )
+                .with_target("/evidence", &entry.evidence_id),
+            );
+        } else if !looks_like_iso_date(&entry.reviewed_at) {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                    format!(
+                        "evidence {} reviewed_at must be YYYY-MM-DD",
+                        entry.evidence_id
+                    ),
+                )
+                .with_target("/evidence", &entry.evidence_id),
+            );
+        }
+        if entry.locator.trim().is_empty() && entry.support_note.trim().is_empty() {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                    format!(
+                        "evidence {} needs a locator or support_note",
+                        entry.evidence_id
+                    ),
+                )
+                .with_target("/evidence", &entry.evidence_id),
+            );
+        }
+        if entry.support_kind == SupportKind::Contradicts {
+            checks.push(
+                DiagnosticCheck::warning(
+                    CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                    format!(
+                        "evidence {} is contradictory and must be handled as conflict or low-confidence context",
+                        entry.evidence_id
+                    ),
+                )
+                .with_target("/evidence", &entry.evidence_id),
+            );
+        }
     }
 }
 
@@ -4257,6 +4588,7 @@ fn build_claims(
         let intended_source_ids = source_lookup.resolve_ref_list(&seed.source_refs);
         let mut evidence_links = Vec::new();
         let mut saw_cataloged_only = false;
+        let mut saw_satisfying_evidence = false;
 
         for entry in evidence {
             if !intended_source_ids.is_empty() && !intended_source_ids.contains(&entry.source_id) {
@@ -4272,18 +4604,30 @@ fn build_claims(
             {
                 continue;
             }
-            if let Some(link) = entry.to_evidence_link() {
-                if !evidence_links.iter().any(|existing: &EvidenceLink| {
-                    existing.evidence_id == link.evidence_id && existing.source_id == link.source_id
-                }) {
+            if entry.can_satisfy_claim_link() {
+                saw_satisfying_evidence = true;
+            }
+            if entry.verification_status == VerificationStatus::Cataloged {
+                saw_cataloged_only = true;
+            }
+            if let Some(link) = entry.to_visible_evidence_link() {
+                if let Some(existing_index) =
+                    evidence_links.iter().position(|existing: &EvidenceLink| {
+                        duplicate_claim_evidence_link(existing, &link)
+                    })
+                {
+                    if link.verification_status == VerificationStatus::Cataloged
+                        && !entry.claim_ids.is_empty()
+                    {
+                        evidence_links[existing_index] = link;
+                    }
+                } else {
                     evidence_links.push(link);
                 }
-            } else if entry.verification_status == VerificationStatus::Cataloged {
-                saw_cataloged_only = true;
             }
         }
 
-        if evidence_links.is_empty() && (!intended_source_ids.is_empty() || saw_cataloged_only) {
+        if !saw_satisfying_evidence && (!intended_source_ids.is_empty() || saw_cataloged_only) {
             let check_id = if saw_cataloged_only {
                 CHECK_EVIDENCE_CATALOGED_ONLY
             } else {
@@ -4334,6 +4678,15 @@ fn build_claims(
         });
     }
     claims
+}
+
+fn duplicate_claim_evidence_link(existing: &EvidenceLink, next: &EvidenceLink) -> bool {
+    if existing.verification_status == VerificationStatus::Cataloged
+        && next.verification_status == VerificationStatus::Cataloged
+    {
+        return existing.source_id == next.source_id;
+    }
+    existing.evidence_id == next.evidence_id && existing.source_id == next.source_id
 }
 
 fn build_relations(
@@ -5494,15 +5847,32 @@ impl EvidenceEntry {
         matches!(
             self.verification_status,
             VerificationStatus::Reviewed | VerificationStatus::Verified
-        ) && self.has_usable_support_metadata()
-            && self.support_kind != SupportKind::Background
+        ) && self.support_kind == SupportKind::Supports
+            && self.has_usable_support_metadata()
+            && looks_like_iso_date(&self.reviewed_at)
     }
 
     pub fn to_evidence_link(&self) -> Option<EvidenceLink> {
         if !self.can_satisfy_claim_link() {
             return None;
         }
-        Some(EvidenceLink {
+        Some(self.as_evidence_link())
+    }
+
+    pub fn to_visible_evidence_link(&self) -> Option<EvidenceLink> {
+        match self.verification_status {
+            VerificationStatus::Cataloged => Some(self.as_evidence_link()),
+            VerificationStatus::Reviewed | VerificationStatus::Verified
+                if self.has_usable_support_metadata() && looks_like_iso_date(&self.reviewed_at) =>
+            {
+                Some(self.as_evidence_link())
+            }
+            _ => None,
+        }
+    }
+
+    fn as_evidence_link(&self) -> EvidenceLink {
+        EvidenceLink {
             evidence_id: self.evidence_id.clone(),
             source_id: self.source_id.clone(),
             verification_status: self.verification_status,
@@ -5510,7 +5880,7 @@ impl EvidenceEntry {
             locator: self.locator.clone(),
             support_note: self.support_note.clone(),
             reviewed_at: self.reviewed_at.clone(),
-        })
+        }
     }
 }
 
