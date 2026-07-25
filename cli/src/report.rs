@@ -93,6 +93,8 @@ pub struct PublicReport {
     pub field: String,
     pub scope: Scope,
     pub domain_profile: DomainProfile,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub literature_ladder: Vec<LiteratureLadderRow>,
     pub core_ideas: Vec<KnowledgeItem>,
     pub methods: Vec<KnowledgeItem>,
     pub representations: Vec<KnowledgeItem>,
@@ -104,6 +106,8 @@ pub struct PublicReport {
     pub frontier_debates: Vec<FrontierDebateItem>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub visual_views: Vec<VisualView>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub structure_waivers: Vec<StructureWaiver>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -161,6 +165,18 @@ pub struct KnowledgeItem {
     pub source_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temporal: Option<TemporalMarker>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LiteratureLadderRow {
+    pub id: String,
+    pub layer: String,
+    pub start_here: String,
+    pub read_for: String,
+    pub do_not_infer: String,
+    pub source_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub notes: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -555,6 +571,21 @@ pub struct VisualViewEdge {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct StructureWaiver {
+    pub scope: StructureWaiverScope,
+    pub rationale: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StructureWaiverScope {
+    Relations,
+    CurriculumPrerequisites,
+    #[default]
+    VisualViews,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InternalContext {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub raw_learner_profile: String,
@@ -722,6 +753,7 @@ pub fn validate_report_value(value: &Value) -> ReportValidation {
         validate_relation_consistency(&document.report, &index, &mut checks);
         validate_visual_references(&document.report, &index, &mut checks);
         validate_source_access_metadata(&document.report, &mut checks);
+        validate_structure_waivers(&document.report, &mut checks);
     }
 
     ReportValidation::new(checks)
@@ -828,6 +860,7 @@ fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>
             "field",
             "scope",
             "domain_profile",
+            "literature_ladder",
             "core_ideas",
             "methods",
             "representations",
@@ -838,6 +871,7 @@ fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>
             "curriculum_path",
             "frontier_debates",
             "visual_views",
+            "structure_waivers",
         ],
         checks,
     );
@@ -917,7 +951,25 @@ fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>
     ] {
         require_array(report, key, "/report", checks);
     }
+    for key in ["literature_ladder", "visual_views", "structure_waivers"] {
+        if report.contains_key(key) {
+            require_array(report, key, "/report", checks);
+        }
+    }
 
+    validate_required_array_item_fields(
+        report,
+        "literature_ladder",
+        &[
+            "id",
+            "layer",
+            "start_here",
+            "read_for",
+            "do_not_infer",
+            "source_ids",
+        ],
+        checks,
+    );
     validate_required_array_item_fields(
         report,
         "sources",
@@ -970,6 +1022,12 @@ fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>
             "why_it_matters",
             "temporal",
         ],
+        checks,
+    );
+    validate_required_array_item_fields(
+        report,
+        "structure_waivers",
+        &["scope", "rationale"],
         checks,
     );
 }
@@ -1269,6 +1327,22 @@ fn validate_known_enum_strings(value: &Value, checks: &mut Vec<DiagnosticCheck>)
             }
         }
     }
+
+    if let Some(waivers) = report.get("structure_waivers").and_then(Value::as_array) {
+        for (index, waiver) in waivers.iter().enumerate() {
+            let Some(waiver) = waiver.as_object() else {
+                continue;
+            };
+            validate_string_enum(
+                waiver,
+                "scope",
+                &["relations", "curriculum_prerequisites", "visual_views"],
+                CHECK_VALIDATE_SCHEMA_REQUIRED,
+                &format!("/report/structure_waivers/{index}"),
+                checks,
+            );
+        }
+    }
 }
 
 fn validate_string_enum(
@@ -1540,6 +1614,61 @@ fn validate_reference_consistency(
     index: &ReportIdIndex,
     checks: &mut Vec<DiagnosticCheck>,
 ) {
+    for (item_index, item) in report.literature_ladder.iter().enumerate() {
+        if !is_stable_id(&item.id) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!(
+                        "/report/literature_ladder/{item_index}/id is not a stable id: {:?}",
+                        item.id
+                    ),
+                )
+                .with_target(
+                    format!("/report/literature_ladder/{item_index}/id"),
+                    &item.id,
+                ),
+            );
+        }
+        for (field, value) in [
+            ("layer", &item.layer),
+            ("start_here", &item.start_here),
+            ("read_for", &item.read_for),
+            ("do_not_infer", &item.do_not_infer),
+        ] {
+            if value.trim().is_empty() {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_SCHEMA_REQUIRED,
+                        format!("/report/literature_ladder/{item_index}/{field} must be a non-empty string"),
+                    )
+                    .with_target(
+                        format!("/report/literature_ladder/{item_index}/{field}"),
+                        &item.id,
+                    ),
+                );
+            }
+        }
+        if item.source_ids.is_empty() {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_EVIDENCE_SOURCE,
+                    format!("literature ladder row {} has no source_ids", item.id),
+                )
+                .with_target(
+                    format!("/report/literature_ladder/{item_index}/source_ids"),
+                    &item.id,
+                ),
+            );
+        }
+        validate_source_refs(
+            &item.source_ids,
+            index,
+            &format!("/report/literature_ladder/{item_index}/source_ids"),
+            &item.id,
+            checks,
+        );
+    }
     for (item_index, item) in report.core_ideas.iter().enumerate() {
         validate_source_refs(
             &item.source_ids,
@@ -2303,6 +2432,23 @@ fn validate_source_access_metadata(report: &PublicReport, checks: &mut Vec<Diagn
     }
 }
 
+fn validate_structure_waivers(report: &PublicReport, checks: &mut Vec<DiagnosticCheck>) {
+    for (waiver_index, waiver) in report.structure_waivers.iter().enumerate() {
+        if waiver.rationale.trim().is_empty() {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    "structure waiver rationale must be a non-empty string",
+                )
+                .with_target(
+                    format!("/report/structure_waivers/{waiver_index}/rationale"),
+                    "",
+                ),
+            );
+        }
+    }
+}
+
 fn source_access_requires_notes(status: AccessStatus) -> bool {
     matches!(
         status,
@@ -2621,6 +2767,7 @@ where
             field,
             scope,
             domain_profile,
+            literature_ladder: Vec::new(),
             core_ideas,
             methods,
             representations,
@@ -2631,6 +2778,7 @@ where
             curriculum_path,
             frontier_debates,
             visual_views: Vec::new(),
+            structure_waivers: Vec::new(),
         },
         internal_context: match stage {
             ExportStage::Scaffold => Some(build_internal_context(&parsed)),

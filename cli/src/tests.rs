@@ -979,10 +979,12 @@ fn sok_report_schema_declares_json_first_contract() {
         "verification_status",
         "temporal_marker",
         "relation",
+        "literature_ladder_row",
         "curriculum_step",
         "diagnostic",
         "visual_view_node",
         "visual_view_edge",
+        "structure_waiver",
     ] {
         assert!(defs.contains_key(name), "schema should define {name}");
     }
@@ -1011,13 +1013,39 @@ fn sok_report_schema_declares_json_first_contract() {
         defs["public_report"]["properties"]
             .as_object()
             .unwrap()
+            .contains_key("literature_ladder"),
+        "schema should describe optional literature ladder rows"
+    );
+    assert!(
+        defs["public_report"]["properties"]
+            .as_object()
+            .unwrap()
             .contains_key("visual_views"),
         "schema should describe optional visual views"
+    );
+    assert!(
+        defs["public_report"]["properties"]
+            .as_object()
+            .unwrap()
+            .contains_key("structure_waivers"),
+        "schema should describe optional structure waivers"
+    );
+    assert!(
+        !json_array_contains(report_required, "literature_ladder"),
+        "literature ladder rows should be declared but not globally required"
     );
     assert!(
         !json_array_contains(report_required, "visual_views"),
         "visual views should be declared but not globally required"
     );
+    assert!(
+        !json_array_contains(report_required, "structure_waivers"),
+        "structure waivers should be declared but not globally required"
+    );
+    assert!(json_array_contains(
+        &defs["structure_waiver"]["properties"]["scope"]["enum"],
+        "curriculum_prerequisites"
+    ));
 }
 
 #[test]
@@ -1043,6 +1071,66 @@ fn sok_report_fixtures_match_smoke_contract() {
     assert_not_contains(&scaffold_public, "raw_learner_profile");
     assert_not_contains(&scaffold_public, "original_goal");
     assert_not_contains(&scaffold_public, "handoff_notes");
+}
+
+#[test]
+fn sok_report_optional_structure_fields_round_trip_and_validate() {
+    let mut structured = load_repo_json("reports/examples/sok-report.json");
+    structured["report"]["literature_ladder"] = json!([
+        {
+            "id": "ladder-foundation-munkres",
+            "layer": "foundation",
+            "start_here": "Begin with point-set definitions before algebraic topology.",
+            "read_for": "Read for spaces, continuous maps, compactness, and quotient examples.",
+            "do_not_infer": "Do not infer that visual deformation metaphors replace formal definitions.",
+            "source_ids": ["src-munkres-topology"],
+            "notes": "Compact fixture row for public contract coverage."
+        }
+    ]);
+
+    validate_sok_report_smoke(&structured).unwrap();
+    let validation = report::validate_report_value(&structured);
+    assert_eq!(validation.error_count(), 0);
+    assert_eq!(validation.warning_count(), 0);
+
+    let document: report::ReportDocument = serde_json::from_value(structured.clone()).unwrap();
+    assert_eq!(document.report.literature_ladder.len(), 1);
+    assert_eq!(
+        document.report.literature_ladder[0].source_ids,
+        vec!["src-munkres-topology".to_string()]
+    );
+    assert_eq!(
+        structured["report"]["relations"][0]["from"]["id"],
+        json!("concept-quotient")
+    );
+    assert_eq!(
+        structured["report"]["curriculum_path"][1]["prerequisite_ids"][0],
+        json!("step-point-set")
+    );
+    assert_eq!(
+        structured["report"]["visual_views"][0]["edges"][0]["relation_id"],
+        json!("rel-step-algebraic-after-point-set")
+    );
+
+    let mut waived = load_repo_json("reports/examples/sok-report.json");
+    waived["report"]
+        .as_object_mut()
+        .unwrap()
+        .remove("visual_views");
+    waived["report"]["structure_waivers"] = json!([
+        {
+            "scope": "visual_views",
+            "rationale": "A short text-only report may intentionally omit visual views when no relation-backed view improves reading."
+        }
+    ]);
+    validate_sok_report_smoke(&waived).unwrap();
+    let waiver_document: report::ReportDocument = serde_json::from_value(waived).unwrap();
+    assert_eq!(waiver_document.report.visual_views.len(), 0);
+    assert_eq!(waiver_document.report.structure_waivers.len(), 1);
+    assert_eq!(
+        waiver_document.report.structure_waivers[0].scope,
+        report::StructureWaiverScope::VisualViews
+    );
 }
 
 #[test]
@@ -2523,12 +2611,14 @@ fn validate_sok_report_smoke(value: &Value) -> std::result::Result<(), String> {
     collect_item_ids(report, "frontier_debates", "frontier_debate", &mut ids)?;
 
     validate_sources(report)?;
+    validate_literature_ladder_refs(report, &ids)?;
     validate_knowledge_source_refs(report, &ids)?;
     validate_claim_evidence(report, &ids)?;
     validate_curriculum_refs(report, &ids)?;
     validate_frontier_refs(report, &ids)?;
     let relation_ids = validate_relations(report, &ids)?;
     validate_visual_views(report, &ids, &relation_ids)?;
+    validate_structure_waivers(report)?;
     Ok(())
 }
 
@@ -2629,6 +2719,30 @@ fn validate_knowledge_source_refs(
                 .ok_or_else(|| format!("report.{section} item should be object"))?;
             validate_source_id_array(item, "source_ids", ids, &format!("report.{section}[]"))?;
         }
+    }
+    Ok(())
+}
+
+fn validate_literature_ladder_refs(
+    report: &serde_json::Map<String, Value>,
+    ids: &HashMap<String, BTreeSet<String>>,
+) -> std::result::Result<(), String> {
+    let Some(rows) = report.get("literature_ladder") else {
+        return Ok(());
+    };
+    let rows = rows
+        .as_array()
+        .ok_or_else(|| "report.literature_ladder should be array".to_string())?;
+    for row in rows {
+        let row = row
+            .as_object()
+            .ok_or_else(|| "report.literature_ladder item should be object".to_string())?;
+        validate_stable_id(require_string(row, "id", "report.literature_ladder[]")?)?;
+        require_string(row, "layer", "report.literature_ladder[]")?;
+        require_string(row, "start_here", "report.literature_ladder[]")?;
+        require_string(row, "read_for", "report.literature_ladder[]")?;
+        require_string(row, "do_not_infer", "report.literature_ladder[]")?;
+        validate_source_id_array(row, "source_ids", ids, "report.literature_ladder[]")?;
     }
     Ok(())
 }
@@ -2839,6 +2953,31 @@ fn validate_visual_views(
                 }
             }
         }
+    }
+    Ok(())
+}
+
+fn validate_structure_waivers(
+    report: &serde_json::Map<String, Value>,
+) -> std::result::Result<(), String> {
+    let Some(waivers) = report.get("structure_waivers") else {
+        return Ok(());
+    };
+    let waivers = waivers
+        .as_array()
+        .ok_or_else(|| "report.structure_waivers should be array".to_string())?;
+    for waiver in waivers {
+        let waiver = waiver
+            .as_object()
+            .ok_or_else(|| "structure waiver should be object".to_string())?;
+        let scope = require_string(waiver, "scope", "report.structure_waivers[]")?;
+        if !matches!(
+            scope,
+            "relations" | "curriculum_prerequisites" | "visual_views"
+        ) {
+            return Err(format!("invalid structure waiver scope {scope:?}"));
+        }
+        require_string(waiver, "rationale", "report.structure_waivers[]")?;
     }
     Ok(())
 }
