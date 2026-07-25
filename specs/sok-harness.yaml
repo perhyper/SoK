@@ -56,6 +56,12 @@ quality_gates:
     rule: Recommended sources include type, identifier, access route, free or paid status, and budget estimate or library guidance.
   - id: pedagogical_ladder
     rule: Literature is assigned a curricular role, not merely listed.
+  - id: preserved_report_structure
+    rule: Final-report exports preserve canonical Literature Ladder rows, explicit Relations rows, Curriculum Roadmap prerequisites, and relation-backed Visual Views when the Markdown declares them.
+  - id: evidence_support_semantics
+    rule: Only reviewed or verified supports evidence with reviewed_at plus locator or support_note can satisfy claim support; cataloged, qualifies, contradicts, background, and example links remain visible but non-supporting.
+  - id: strict_final_validation
+    rule: Strict validation fails on embedded export warnings or errors, dangling endpoints, missing substantial-report structure without a structure waiver, public/internal boundary leaks, weak evidence semantics, and undated currentness claims.
   - id: domain_fit
     rule: Formal fields may use prerequisite/proof graphs; ill-structured fields should use cases, networks, debates, or schools; infrastructure-bound fields must include instruments, datasets, collaborations, standards, and strategic reports.
   - id: source_role_fit
@@ -70,6 +76,12 @@ outputs:
   json_report: required_structured_source_of_truth
   html_interactive_report: optional_view_for_validated_human_report
   graph_views: optional_structured_views_selected_from_relations
+  canonical_final_markdown_surfaces:
+    literature_ladder: "## Literature Ladder table with Layer, Start here, Read for, Do not infer, Source IDs"
+    relations: "## Relations table with Relation ID, Relation kind, From type/reference, To type/reference, Rationale, Source IDs"
+    curriculum_prerequisites: "## Curriculum Roadmap table with Prerequisite IDs or Prerequisites"
+    visual_views: "## Visual Views table with View ID, View kind, Title, Purpose, Relation IDs, Node emphasis"
+    claims: "## Claims table with Statement, Claim type, Evidence requirement, Source IDs, Confidence, Temporal status, Notes"
 agent_cli:
   language: rust
   manifest: cli/Cargo.toml
@@ -137,6 +149,17 @@ agent_cli:
       outputs:
         - sok-report.json
         - report.html
+      required_markdown_surfaces_for_substantial_reports:
+        - Literature Ladder
+        - Relations
+        - Curriculum Roadmap prerequisites
+        - Visual Views when a visual map or summary is declared
+        - Claims
+      strict_validation_expectations:
+        - no embedded export warnings or errors unless accepted loss is waived
+        - relation endpoints, visual nodes and edges, literature sources, claim sources, and curriculum prerequisites resolve to public report entities
+        - substantial final reports keep relations and at least one curriculum prerequisite unless structure_waivers explain the omission
+        - reviewed or verified claim support uses support_kind supports with reviewed_at plus locator or support_note
       public_boundary: internal_context and diagnostics are not rendered
   quality_gate_commands:
     - make fmt

@@ -2750,6 +2750,7 @@ fn documented_final_report_lane_lints_exports_validates_and_renders_html() {
             sources_path.display().to_string(),
             "--evidence".to_string(),
             evidence_path.display().to_string(),
+            "--strict".to_string(),
         ])
         .unwrap(),
         0
@@ -2809,6 +2810,109 @@ fn documented_final_report_lane_lints_exports_validates_and_renders_html() {
     assert_not_contains(&html, "internal_context");
     assert_not_contains(&html, "diagnostics");
     assert_not_contains(&html, "Scaffold Quality Notes");
+    assert_not_contains(&html.to_ascii_lowercase(), "mermaid");
+}
+
+#[test]
+fn solid_state_battery_evaluation_final_lane_preserves_reader_structure() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path =
+        repo_path("reports/evaluations/release-candidate-solid-state-batteries/report.md");
+    let sources_path =
+        repo_path("reports/evaluations/release-candidate-solid-state-batteries/sources.csv");
+    let evidence_path = repo_path(
+        "reports/evaluations/release-candidate-solid-state-batteries/reviewed-evidence.jsonl",
+    );
+    let tracked_json_path =
+        repo_path("reports/evaluations/release-candidate-solid-state-batteries/sok-report.json");
+    let output_json_path = dir.path().join("solid-state-batteries-sok-report.json");
+    let output_html_path = dir.path().join("solid-state-batteries-report.html");
+
+    let tracked: report::ReportDocument = report::read_json_file(&tracked_json_path).unwrap();
+    assert_solid_state_reader_structure(&tracked);
+    let tracked_validation =
+        report::validate_report_value(&serde_json::to_value(&tracked).unwrap());
+    assert_eq!(
+        tracked_validation.error_count(),
+        0,
+        "{:?}",
+        tracked_validation.diagnostics
+    );
+    assert_eq!(
+        tracked_validation.warning_count(),
+        0,
+        "{:?}",
+        tracked_validation.diagnostics
+    );
+
+    assert_eq!(
+        run_cli(vec![
+            "lint".to_string(),
+            "--stage".to_string(),
+            "final".to_string(),
+            "--report".to_string(),
+            report_path.display().to_string(),
+            "--sources".to_string(),
+            sources_path.display().to_string(),
+            "--evidence".to_string(),
+            evidence_path.display().to_string(),
+            "--strict".to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+    assert_eq!(
+        run_cli(vec![
+            "export-json".to_string(),
+            "--stage".to_string(),
+            "final".to_string(),
+            "--report".to_string(),
+            report_path.display().to_string(),
+            "--sources".to_string(),
+            sources_path.display().to_string(),
+            "--evidence".to_string(),
+            evidence_path.display().to_string(),
+            "--output".to_string(),
+            output_json_path.display().to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+
+    let exported: report::ReportDocument = report::read_json_file(&output_json_path).unwrap();
+    assert_solid_state_reader_structure(&exported);
+    assert!(exported.diagnostics.is_none());
+
+    assert_eq!(
+        run_cli(vec![
+            "validate-report".to_string(),
+            "--input".to_string(),
+            output_json_path.display().to_string(),
+            "--strict".to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+    assert_eq!(
+        run_cli(vec![
+            "render-html".to_string(),
+            "--input".to_string(),
+            output_json_path.display().to_string(),
+            "--output".to_string(),
+            output_html_path.display().to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+
+    let html = fs::read_to_string(&output_html_path).unwrap();
+    assert_contains(&html, "Solid-State Batteries");
+    assert_contains(&html, "Solid-state battery knowledge spine");
+    assert_contains(&html, "Solid-state battery curriculum path");
+    assert_contains(&html, "Reading Ladder");
+    assert_contains(&html, "Claim Evidence Guide");
+    assert_not_contains(&html, "internal_context");
+    assert_not_contains(&html, "diagnostics");
     assert_not_contains(&html.to_ascii_lowercase(), "mermaid");
 }
 
@@ -3241,6 +3345,53 @@ The report focuses on point-set foundations before algebraic examples.
 | {claim_statement} | structural | reviewed_source | Open Review | high | durable | Public claim. |
 "#
     )
+}
+
+fn assert_solid_state_reader_structure(document: &report::ReportDocument) {
+    assert_eq!(
+        document.metadata.report_type,
+        report::ReportType::HumanReport
+    );
+    assert_eq!(document.report.field, "Solid-State Batteries");
+    assert!(
+        !document.report.relations.is_empty(),
+        "solid-state evaluation must preserve explicit relations"
+    );
+    assert!(
+        !document.report.visual_views.is_empty(),
+        "solid-state evaluation must preserve declared visual views"
+    );
+    assert!(
+        !document.report.literature_ladder.is_empty(),
+        "solid-state evaluation must preserve literature ladder rows"
+    );
+    assert!(
+        document
+            .report
+            .curriculum_path
+            .iter()
+            .any(|step| !step.prerequisite_ids.is_empty()),
+        "solid-state evaluation must preserve at least one curriculum prerequisite"
+    );
+
+    let relation_ids = document
+        .report
+        .relations
+        .iter()
+        .map(|relation| relation.id.as_str())
+        .collect::<BTreeSet<_>>();
+    assert!(document.report.visual_views.iter().any(|view| {
+        !view.edges.is_empty()
+            && view
+                .edges
+                .iter()
+                .all(|edge| relation_ids.contains(edge.relation_id.as_str()))
+    }));
+    assert!(document
+        .report
+        .literature_ladder
+        .iter()
+        .all(|row| !row.source_ids.is_empty()));
 }
 
 fn repo_path(relative: &str) -> PathBuf {

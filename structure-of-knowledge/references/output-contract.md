@@ -50,25 +50,42 @@ Core structure matrix:
 | Element | In this field | First-pass representation | Deeper synthesis | Why it matters |
 |---|---|---|---|---|
 
-Literature ladder:
+Canonical final-report literature ladder:
 
-| Layer | Source | Type | Access route | Budget | Difficulty | Read for | Skip/skim notes |
-|---|---|---|---|---:|---:|---|---|
+| Layer | Start here | Read for | Do not infer | Source IDs | Notes |
+|---|---|---|---|---|---|
 
 Source role probe:
 
 | Source role | Status | Candidate source pattern | What it tests | Waiver or revision rule |
 |---|---|---|---|---|
 
-Curriculum roadmap:
+Canonical final-report curriculum roadmap:
 
-| Phase | Module | Essential question | Readings | Practice artifact | Progress criteria |
-|---|---|---|---|---|---|
+| Phase | Module | Essential question | Readings | Practice artifact | Progress criteria | Prerequisite IDs |
+|---|---|---|---|---|---|---|
 
 Frontier map:
 
 | Problem or debate | Current state | Key sources | Required background | Why it is hard |
 |---|---|---|---|---|
+
+Canonical final-report relations:
+
+| Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale | Source IDs |
+|---|---|---|---|---|---|---|---|
+
+Canonical final-report visual views:
+
+| View ID | View kind | Title | Purpose | Relation IDs | Node emphasis |
+|---|---|---|---|---|---|
+
+Canonical final-report claims:
+
+| Statement | Claim type | Evidence requirement | Source IDs | Confidence | Temporal status | Notes |
+|---|---|---|---|---|---|---|
+
+`Source IDs`, relation endpoints, prerequisite references, and visual node emphasis may use stable JSON IDs or unambiguous source titles / row labels from the bounded Markdown and manifest. Ambiguous or unresolved references must become diagnostics, not silent guesses. Valid relation endpoint types are `concept`, `method`, `representation`, `claim`, `source`, `curriculum_step`, and `frontier_debate`. Valid relation kinds include `depends_on`, `supports`, `qualifies`, `contradicts`, `precedes`, `introduces`, `uses_method`, `represented_by`, `grounds`, `motivates`, `part_of`, and `maps_to`.
 
 ## Structured Visual Views
 
@@ -105,6 +122,12 @@ flowchart LR
 ```
 
 When rendering HTML, the renderer should instantiate only declared `visual_views` that have enough nodes and edges. A report with no justified graph must remain complete and readable without an empty visualization shell.
+
+## Strict Final Validation
+
+Before publication, final reports should pass `sok lint --stage final`, `sok export-json --stage final`, `sok validate-report --strict`, and then `sok render-html`. Strict validation treats embedded export warnings as blocking unless an accepted-loss waiver is explicit. Substantial final reports need preserved relations, at least one curriculum prerequisite, and relation-backed visual views when the Markdown declared a visual map or visual summary; intentional omissions require `structure_waivers`.
+
+Claim support is semantic. `support_kind: supports` can satisfy an affirmative claim when the evidence is `reviewed` or `verified` and includes `reviewed_at` plus a locator or support note. `qualifies` narrows or contextualizes an already supported claim, `contradicts` records conflict or confidence limits, and `background` / `example` remain visible but non-supporting. `cataloged` evidence from source ingestion never satisfies claim support by itself.
 
 ## Tone and Depth
 

@@ -80,6 +80,8 @@ Maintain a compact matrix while researching:
 
 In the JSON-first workflow, keep `sources.csv` and reviewed evidence JSONL distinct. `sok ingest last` may normalize source rows into `cataloged` evidence candidates for the current run, but cataloged entries do not satisfy claim evidence. A claim is supported only by reviewed or verified evidence with a usable locator or support note.
 
+Reviewed evidence must also record support semantics. Use `support_kind: supports` only for evidence that affirmatively supports the claim. Use `qualifies` for scope limits or conditions, `contradicts` for conflicts, and `background` or `example` for context. Only reviewed or verified `supports` evidence with `reviewed_at` plus a locator or support note can satisfy final-report claim support.
+
 ## Currentness Rules
 
 - Browse or otherwise verify any claim about "current", "recent", "latest", active standards, tools, datasets, leaderboards, regulations, or open problems.
@@ -107,4 +109,4 @@ For final reports:
 - Give enough bibliographic detail for the user to find the source.
 - Separate "recommended first reading" from "historically important but difficult."
 - For every recommended reading, say how to find it. If it is a book, mark it as a book and provide ISBN or publisher/library route when available. If it is a paper, provide DOI, arXiv ID, stable URL, or venue information. If it is paywalled or paid, estimate the budget or state that institutional/library access is the preferred route.
-- Before rendering or publication, export the bounded final report to `sok-report.json` and run `sok validate-report --strict`. Treat that JSON as the structured source of truth; HTML is only a view of validated public fields.
+- Before rendering or publication, export the bounded final report to `sok-report.json` and run `sok validate-report --strict`. Treat that JSON as the structured source of truth; HTML is only a view of validated public fields. Strict validation also checks embedded export diagnostics, relation and visual endpoints, literature-ladder source references, curriculum prerequisites, currentness metadata, and public/internal boundary separation.

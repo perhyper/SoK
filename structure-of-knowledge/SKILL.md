@@ -60,12 +60,15 @@ For a narrow answer, use this file and load only the reference that matches the 
    - Keep internal scaffold artifacts and human-facing reports separate. Scaffolds may include learner profile, original goal, assumptions, placeholders, and quality notes; final reports must not expose that machinery.
    - Treat `sok-report.json` as the structured source of truth for downstream tooling. Markdown scaffolds and canonical Markdown reports are bounded inputs; HTML is a rendered public view.
    - Provide a narrative report and visualization only when the structured relations justify it. Graph views should be selected from `relations` and `visual_views`; Mermaid is optional and not required.
+   - For final reports that will be exported, use canonical Markdown surfaces: `## Literature Ladder`, `## Relations`, `## Curriculum Roadmap`, `## Visual Views`, and `## Claims`. Put curriculum dependencies in a `Prerequisite IDs` or `Prerequisites` column, and put graph intent in `Visual Views` rows that reference explicit relation IDs.
+   - Do not infer semantic relations from Mermaid arrows, node proximity, or section order. Relations come from structured relation rows, curriculum prerequisites, or another explicit author-owned surface.
 
 6. Quality check.
    - Verify that claims about current literature, active debates, standards, or tools are sourced with dates.
    - Verify that recommended readings include access metadata and usable acquisition routes.
    - Ensure the curriculum starts from the learner's actual entry point but still preserves the field's intellectual integrity.
    - Confirm the output is not a flat topic list: it must explain relations, hierarchy or network structure, inquiry methods, and progression.
+   - For final-report publication, treat `sok validate-report --strict` as blocking. Strict validation fails on embedded export warnings or errors, missing relation/prerequisite/visual structure without a waiver, dangling endpoints, public/internal boundary leaks, weak evidence support semantics, and stale or undated currentness claims.
 
 ## Helper Script
 
@@ -126,4 +129,4 @@ The CLI is not a substitute for research. It provides a stable execution frame s
 Recommended bounded lanes:
 
 - Scaffold lane: create or receive scaffold Markdown, maintain `sources.csv`, optionally run `"$SOK_CLI" ingest last`, run `"$SOK_CLI" lint --stage scaffold`, then `"$SOK_CLI" export-json --stage scaffold`. This JSON may contain `internal_context`; do not present it as a finished report and do not render it to HTML.
-- Final-report lane: complete a canonical human report Markdown file, review evidence into JSONL entries, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, then `"$SOK_CLI" render-html`. Only this lane produces human-facing HTML.
+- Final-report lane: complete a canonical human report Markdown file, review evidence into JSONL entries, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, then `"$SOK_CLI" render-html`. Only this lane produces human-facing HTML. Reviewed or verified evidence with `support_kind: supports`, `reviewed_at`, and a locator or support note can satisfy claims; `qualifies` narrows an already supported claim, `contradicts` records conflict, and `cataloged` source rows remain non-supporting.

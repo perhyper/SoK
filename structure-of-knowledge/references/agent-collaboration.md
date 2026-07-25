@@ -60,14 +60,14 @@ Primary commands:
 3. Fill `sources.csv` during research, not after writing.
 4. Optionally run `"$SOK_CLI" ingest last --sources sources.csv --output evidence.jsonl` to create a bounded cataloged evidence ledger for the current run.
 5. For internal scaffolds, run `"$SOK_CLI" lint --stage scaffold` and `"$SOK_CLI" export-json --stage scaffold`; keep `internal_context` private and do not render scaffold JSON as HTML.
-6. For final human-facing reports, add reviewed or verified evidence rows, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, and only then `"$SOK_CLI" render-html`.
+6. For final human-facing reports, add reviewed or verified evidence rows, use canonical final Markdown tables for literature ladders, relations, curriculum prerequisites, visual views, and claims, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, and only then `"$SOK_CLI" render-html`.
 7. Run `"$SOK_CLI" audit-sources --strict` before final delivery when source manifests are being delivered independently.
 8. Run `"$SOK_CLI" download-sources --dry-run` before downloading.
 9. Download only sources with clearly default-allowed access status.
 10. Treat paid books, paywalled papers, subscription resources, restricted sources, unknown access, missing access metadata, and unclear licenses as metadata-only unless the user supplies access or permission.
 11. Treat existing syllabi and curricula as evidence of pedagogical consensus, not as the boundary of the field.
 
-`sok-report.json` is the structured source of truth for validation, rendering, and downstream tools. Markdown is a bounded input and HTML is a public view. Graph views are chosen from structured relations and `visual_views`; Mermaid is optional and not required.
+`sok-report.json` is the structured source of truth for validation, rendering, and downstream tools. Markdown is a bounded input and HTML is a public view. Graph views are chosen from structured relations and `visual_views`; Mermaid is optional and not required. Strict validation is expected to fail on lossy export diagnostics, dangling relation or visual endpoints, missing substantial-report structure without a waiver, and evidence that is only cataloged, qualifying, contradictory, background, or missing review metadata.
 
 ## Mode Guidance
 

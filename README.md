@@ -126,6 +126,8 @@ specificity       Generate a concreteness checklist for an underspecified domain
 
 The report pipeline is bounded to the files from the current run. It does not create a persistent wiki, daemon, database, or cross-run evidence store. Markdown is an input surface: an internal scaffold from `sok scaffold`, or a canonical human report Markdown file. The structured source of truth is `sok-report.json`; HTML is only a rendered public view.
 
+For final human reports, canonical Markdown tables preserve reader-facing structure in JSON: `## Literature Ladder`, `## Relations`, `## Curriculum Roadmap` with `Prerequisite IDs` or `Prerequisites`, `## Visual Views`, and `## Claims`. Relation-backed visuals are rendered only from exported `visual_views`; Mermaid diagrams can help drafting but are not treated as semantic relations.
+
 Use the scaffold lane when an agent needs internal working context:
 
 ```bash
@@ -159,7 +161,8 @@ cli/target/release/sok lint \
   --stage final \
   --report reports/examples/json-first-human-report.md \
   --sources reports/examples/json-first-sources.csv \
-  --evidence reports/examples/json-first-reviewed-evidence.jsonl
+  --evidence reports/examples/json-first-reviewed-evidence.jsonl \
+  --strict
 cli/target/release/sok export-json \
   --stage final \
   --report reports/examples/json-first-human-report.md \
@@ -175,6 +178,8 @@ cli/target/release/sok render-html \
 ```
 
 Only `human_report` JSON that passes validation should be rendered. The renderer uses an explicit public-field allowlist and ignores `internal_context` and `diagnostics`.
+
+Strict validation also checks that reviewed claim support uses `support_kind: supports` with `reviewed_at` plus a locator or support note. Qualifying, contradictory, background, example, and cataloged evidence can remain visible, but they do not satisfy claim support by themselves.
 
 ## Generate an Agent Scaffold
 

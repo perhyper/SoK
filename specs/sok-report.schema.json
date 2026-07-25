@@ -100,6 +100,7 @@
         "scope": { "$ref": "#/$defs/scope" },
         "domain_profile": { "$ref": "#/$defs/domain_profile" },
         "literature_ladder": {
+          "description": "Canonical reading ladder exported from ## Literature Ladder rows. Strict validation checks that each row keeps a source-backed layer, start point, reading purpose, and do-not-infer caveat.",
           "type": "array",
           "items": { "$ref": "#/$defs/literature_ladder_row" }
         },
@@ -125,10 +126,12 @@
           "items": { "$ref": "#/$defs/claim" }
         },
         "relations": {
+          "description": "Explicit semantic relations exported from structured relation rows. Relations are not inferred from Mermaid arrows, visual proximity, or node ordering.",
           "type": "array",
           "items": { "$ref": "#/$defs/relation" }
         },
         "curriculum_path": {
+          "description": "Curriculum sequence exported from ## Curriculum Roadmap. Optional prerequisite_ids carry explicit prerequisite references resolved from Prerequisite IDs or Prerequisites columns.",
           "type": "array",
           "items": { "$ref": "#/$defs/curriculum_step" }
         },
@@ -137,10 +140,12 @@
           "items": { "$ref": "#/$defs/frontier_debate_item" }
         },
         "visual_views": {
+          "description": "Declared visual views exported from ## Visual Views. Edges should reference validated relation IDs rather than inferred graph layout.",
           "type": "array",
           "items": { "$ref": "#/$defs/visual_view" }
         },
         "structure_waivers": {
+          "description": "Explicit rationale for intentionally omitting substantial-report relations, curriculum prerequisites, or visual views.",
           "type": "array",
           "items": { "$ref": "#/$defs/structure_waiver" }
         }
@@ -215,6 +220,7 @@
       }
     },
     "literature_ladder_row": {
+      "description": "One source-backed reading-ladder row preserving how to start, what to read for, and what not to infer from the source.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -424,6 +430,7 @@
       }
     },
     "evidence_link": {
+      "description": "Visible claim-to-source evidence link. In strict validation, reviewed or verified supports links need reviewed_at plus a locator or support_note to satisfy claim support.",
       "type": "object",
       "additionalProperties": false,
       "required": ["source_id", "verification_status", "support_kind"],
@@ -432,6 +439,7 @@
         "source_id": { "$ref": "#/$defs/stable_id" },
         "verification_status": { "$ref": "#/$defs/verification_status" },
         "support_kind": {
+          "description": "supports can satisfy an affirmative claim when reviewed or verified; qualifies narrows a supported claim; contradicts records conflict; background and example are non-supporting context.",
           "type": "string",
           "enum": ["supports", "qualifies", "contradicts", "background", "example"]
         },
@@ -444,6 +452,7 @@
       }
     },
     "relation": {
+      "description": "Explicit semantic relation between public report entities. Relation endpoints must resolve to exported concepts, methods, representations, claims, sources, curriculum steps, or frontier/debate items.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind", "from", "to"],
@@ -476,6 +485,7 @@
       }
     },
     "relation_endpoint": {
+      "description": "Endpoint of a semantic relation, identified by public entity type and stable ID.",
       "type": "object",
       "additionalProperties": false,
       "required": ["entity_type", "id"],
@@ -515,6 +525,7 @@
         "title": { "$ref": "#/$defs/non_empty_string" },
         "learning_goal": { "$ref": "#/$defs/non_empty_string" },
         "prerequisite_ids": {
+          "description": "Explicit prerequisite references resolved from canonical Curriculum Roadmap prerequisite columns. IDs may point to curriculum steps or other public report entities.",
           "type": "array",
           "items": { "$ref": "#/$defs/stable_id" }
         },
@@ -586,6 +597,7 @@
       }
     },
     "visual_view": {
+      "description": "Relation-backed visual intent. Renderers should instantiate views only from declared nodes and edges that resolve to public report data.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind", "title", "justification", "nodes", "edges"],
@@ -649,6 +661,7 @@
       }
     },
     "structure_waiver": {
+      "description": "Substantial-report structure waiver used when absent relations, curriculum prerequisites, or visual views are intentional and documented.",
       "type": "object",
       "additionalProperties": false,
       "required": ["scope", "rationale"],
