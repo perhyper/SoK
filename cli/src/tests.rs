@@ -852,6 +852,224 @@ The report focuses on point-set foundations before algebraic examples.
 }
 
 #[test]
+fn export_json_preserves_structured_markdown_knowledge_surfaces() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("solid-state-battery-shaped-report.md");
+    let sources_path = dir.path().join("sources.csv");
+
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+Open Review,review_article,doi:10.0000/open,https://example.test/open,2025-01-01,open_access,Official URL,$0,CC BY,foundation,Supports coupled-system framing.,Use in module 1,Reviewed metadata.\n\
+Interface Study,article,doi:10.0000/interface,https://example.test/interface,2024-06-01,open_access,Official URL,$0,CC BY,method,Explains interface measurements.,Use in module 2,Reviewed metadata.\n",
+    )
+    .unwrap();
+
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: Solid-State Batteries
+
+## Domain Decomposition
+
+Solid-state batteries are an emerging, interdisciplinary field whose practical structure couples transport, interfaces, mechanics, cell architecture, and manufacturing constraints.
+
+## Orientation
+
+Read the field as a coupled system rather than as an electrolyte-conductivity ranking.
+
+## Deep Structure
+
+| Element | In this field | Sources |
+|---|---|---|
+| Core objects | Solid electrolytes, interfaces, electrodes, defects, and cell fixtures. | Open Review |
+| Methods and warrants | Impedance claims require geometry, density, electrodes, temperature, fitting, and replication details. | Interface Study |
+| Representations | Arrhenius plots, Nyquist plots, cross-sections, pressure-capacity maps, and process-flow diagrams. | Interface Study |
+
+## Literature Ladder
+
+| Layer | Start here | Read for | Do not infer | Source IDs |
+|---|---|---|---|---|
+| Foundation | Open Review | Coupled transport-interface-mechanics-cell framing | That conductivity alone yields a practical cell | Open Review |
+
+## Curriculum Roadmap
+
+| Phase | Module | Essential question | Readings | Practice artifact | Progress criteria | Prerequisites |
+|---|---|---|---|---|---|---|
+| 1 | Electrochemical grammar | What fixes voltage, transport, and polarization in a cell? | Open Review | Annotated cell model | Explain coupled losses | Core objects |
+| 2 | Interface measurement | What does each instrument warrant? | Interface Study | EIS reporting sheet | State controls and uncertainty | Electrochemical grammar; Methods and warrants |
+
+## Relations
+
+| Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale | Source IDs |
+|---|---|---|---|---|---|---|---|
+| rel-interface-measurement-after-grammar | depends_on | curriculum_step | Interface measurement | curriculum_step | Electrochemical grammar | Instrument warrants depend on cell grammar. | Interface Study |
+| rel-core-uses-methods | uses_method | concept | Core objects | method | Methods and warrants | The core objects are made comparable through measurement warrants. | Open Review; Interface Study |
+
+## Visual Summary
+
+Read every result as material chemistry to measured transport to interface evolution to mechanical contact to cell conditions.
+
+## Visual Views
+
+| View ID | View kind | Title | Purpose | Relation IDs | Node emphasis |
+|---|---|---|---|---|---|
+| view-ssb-dependency-path | dependency_path | Solid-state battery dependency path | Show the learning order that keeps measurement claims grounded. | rel-interface-measurement-after-grammar; rel-core-uses-methods | Methods and warrants |
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Final,
+    )
+    .unwrap();
+
+    assert_eq!(exported.report.literature_ladder.len(), 1);
+    assert_eq!(exported.report.literature_ladder[0].layer, "Foundation");
+    assert_eq!(exported.report.literature_ladder[0].source_ids.len(), 1);
+
+    assert_eq!(exported.report.relations.len(), 2);
+    let relation = exported
+        .report
+        .relations
+        .iter()
+        .find(|relation| relation.id == "rel-interface-measurement-after-grammar")
+        .unwrap();
+    assert_eq!(relation.kind, report::RelationKind::DependsOn);
+    assert_eq!(
+        relation.from.entity_type,
+        report::EntityType::CurriculumStep
+    );
+    assert_eq!(relation.to.entity_type, report::EntityType::CurriculumStep);
+    assert_eq!(relation.source_ids.len(), 1);
+
+    let interface_step = exported
+        .report
+        .curriculum_path
+        .iter()
+        .find(|step| step.title == "Interface measurement")
+        .unwrap();
+    assert!(interface_step
+        .prerequisite_ids
+        .iter()
+        .any(|id| id.starts_with("step-electrochemical-grammar-")));
+    assert!(interface_step
+        .prerequisite_ids
+        .iter()
+        .any(|id| id.starts_with("method-methods-and-warrants-")));
+
+    assert_eq!(exported.report.visual_views.len(), 1);
+    let view = &exported.report.visual_views[0];
+    assert_eq!(view.id, "view-ssb-dependency-path");
+    assert_eq!(view.kind, report::VisualViewKind::DependencyPath);
+    assert_eq!(view.edges.len(), 2);
+    assert!(view
+        .edges
+        .iter()
+        .any(|edge| edge.relation_id == "rel-core-uses-methods"));
+    assert_contains(
+        &view.justification,
+        "Read every result as material chemistry",
+    );
+    assert!(view.nodes.iter().any(|node| {
+        node.entity_type == report::EntityType::Method && node.description.contains("Emphasized")
+    }));
+
+    let diagnostics = exported
+        .diagnostics
+        .as_ref()
+        .map(|diagnostics| &diagnostics.checks)
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        !diagnostics.iter().any(|check| {
+            check.check_id == report::CHECK_EXPORT_UNSUPPORTED_SECTION
+                && (check.message.contains("Literature Ladder")
+                    || check.message.contains("visual")
+                    || check.message.contains("Visual"))
+        }),
+        "supported ladder and visual sections should not produce unsupported-section diagnostics: {diagnostics:?}"
+    );
+
+    let validation = report::validate_report_value(&serde_json::to_value(&exported).unwrap());
+    assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
+}
+
+#[test]
+fn export_json_reports_unresolved_structured_markdown_references() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("broken-relations.md");
+    let sources_path = dir.path().join("sources.csv");
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+Open Review,review_article,doi:10.0000/open,https://example.test/open,2025-01-01,open_access,Official URL,$0,CC BY,foundation,Supports coupled-system framing.,Use in module 1,Reviewed metadata.\n",
+    )
+    .unwrap();
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: Solid-State Batteries
+
+## Domain Decomposition
+
+Solid-state batteries couple transport and cell design.
+
+## Deep Structure
+
+| Element | In this field |
+|---|---|
+| Core objects | Solid electrolytes and interfaces. |
+| Open Review | A concept label that intentionally collides with a source title. |
+| Methods and warrants | Measurement warrants. |
+| Representations | Nyquist plots. |
+
+## Curriculum Roadmap
+
+| Phase | Module | Essential question | Readings | Practice artifact | Progress criteria | Prerequisites |
+|---|---|---|---|---|---|---|
+| 1 | Electrochemical grammar | What fixes cell behavior? | Open Review | Cell model | Explain losses | Open Review |
+
+## Relations
+
+| Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale |
+|---|---|---|---|---|---|---|
+| rel-missing-endpoint | depends_on | concept | Missing concept | curriculum_step | Electrochemical grammar | This endpoint should not resolve. |
+
+## Visual Summary
+
+This summary has no structured visual view to attach to.
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Final,
+    )
+    .unwrap();
+
+    assert!(exported.report.relations.is_empty());
+    assert!(exported.report.visual_views.is_empty());
+    let diagnostics = exported.diagnostics.as_ref().unwrap();
+    assert!(diagnostics
+        .checks
+        .iter()
+        .any(|check| check.check_id == report::CHECK_EXPORT_UNRESOLVED_REFERENCE));
+    assert!(diagnostics
+        .checks
+        .iter()
+        .any(|check| check.check_id == report::CHECK_EXPORT_AMBIGUOUS_REFERENCE));
+    assert!(diagnostics.checks.iter().any(|check| {
+        check.check_id == report::CHECK_EXPORT_UNSUPPORTED_SECTION
+            && check.message.contains("Visual Summary")
+    }));
+}
+
+#[test]
 fn reviewed_or_verified_evidence_needs_usable_support_metadata() {
     let reviewed = report::EvidenceEntry {
         evidence_id: "ev-example-reviewed-1111111111".to_string(),

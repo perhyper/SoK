@@ -468,7 +468,11 @@
         },
         "from": { "$ref": "#/$defs/relation_endpoint" },
         "to": { "$ref": "#/$defs/relation_endpoint" },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "source_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        }
       }
     },
     "relation_endpoint": {

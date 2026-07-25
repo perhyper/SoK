@@ -23,6 +23,8 @@ pub const CHECK_EXPORT_MISSING_PUBLIC_FIELD: &str = "export.missing-public-field
 pub const CHECK_EXPORT_INTERNAL_SECTION_IN_FINAL: &str = "export.internal-section-in-final";
 pub const CHECK_EXPORT_UNKNOWN_EVIDENCE_SOURCE: &str = "export.unknown-evidence-source";
 pub const CHECK_EXPORT_CLAIM_NEEDS_EVIDENCE: &str = "export.claim-needs-evidence";
+pub const CHECK_EXPORT_UNRESOLVED_REFERENCE: &str = "export.unresolved-reference";
+pub const CHECK_EXPORT_AMBIGUOUS_REFERENCE: &str = "export.ambiguous-reference";
 pub const CHECK_VALIDATE_SCHEMA_JSON: &str = "validate.schema.json";
 pub const CHECK_VALIDATE_SCHEMA_REQUIRED: &str = "validate.schema.required";
 pub const CHECK_VALIDATE_SCHEMA_DESERIALIZE: &str = "validate.schema.deserialize";
@@ -388,6 +390,8 @@ pub struct Relation {
     pub to: RelationEndpoint,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -414,7 +418,7 @@ pub struct RelationEndpoint {
     pub id: String,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum EntityType {
     #[default]
@@ -1782,6 +1786,15 @@ fn validate_reference_consistency(
             }
         }
     }
+    for (relation_index, relation) in report.relations.iter().enumerate() {
+        validate_source_refs(
+            &relation.source_ids,
+            index,
+            &format!("/report/relations/{relation_index}/source_ids"),
+            &relation.id,
+            checks,
+        );
+    }
 }
 
 fn validate_source_refs(
@@ -2590,11 +2603,13 @@ enum CanonicalSection {
     DeepStructure,
     SourceRoleProbe,
     LiteratureLadder,
+    Relations,
     CurriculumRoadmap,
     PracticeAssessment,
     FrontierDebates,
     VisualMap,
     VisualSummary,
+    VisualViews,
     SourcesFurtherReading,
     SourcePointers,
     SoKUsefulnessNotes,
@@ -2611,8 +2626,12 @@ struct ParsedMarkdownReport {
     orientation: String,
     deep_structure_rows: Vec<BTreeMap<String, String>>,
     source_role_rows: Vec<BTreeMap<String, String>>,
+    literature_ladder_rows: Vec<BTreeMap<String, String>>,
+    relation_rows: Vec<BTreeMap<String, String>>,
     curriculum_rows: Vec<BTreeMap<String, String>>,
     frontier_rows: Vec<BTreeMap<String, String>>,
+    visual_view_rows: Vec<BTreeMap<String, String>>,
+    visual_summary: String,
     claim_rows: Vec<BTreeMap<String, String>>,
     practice_text: String,
     usefulness_notes: Vec<String>,
@@ -2687,7 +2706,8 @@ where
     let (core_ideas, methods, representations) =
         build_knowledge_items(&parsed, &source_lookup, &mut diagnostics);
     let evidence_standards = build_evidence_standards(&parsed);
-    let curriculum_path = build_curriculum_path(&parsed, &source_lookup, &mut diagnostics);
+    let literature_ladder = build_literature_ladder(&parsed, &source_lookup, &mut diagnostics);
+    let mut curriculum_path = build_curriculum_path(&parsed, &source_lookup, &mut diagnostics);
     let (frontier_debates, frontier_claims) =
         build_frontier_debates(&parsed, &source_lookup, &as_of, &review_after);
     let mut claim_seeds = build_claim_seeds(&parsed);
@@ -2701,6 +2721,24 @@ where
         &review_after,
         &mut diagnostics,
     );
+    let entity_index = ExportEntityIndex::new(
+        &core_ideas,
+        &methods,
+        &representations,
+        &sources,
+        &claims,
+        &curriculum_path,
+        &frontier_debates,
+    );
+    apply_curriculum_prerequisites(
+        &parsed,
+        &mut curriculum_path,
+        &entity_index,
+        &mut diagnostics,
+    );
+    let relations = build_relations(&parsed, &entity_index, &source_lookup, &mut diagnostics);
+    let visual_views = build_visual_views(&parsed, &relations, &entity_index, &mut diagnostics);
+    warn_if_unpreserved_visual_sections(&parsed, &visual_views, &mut diagnostics);
 
     warn_if_empty_public_sections(
         &core_ideas,
@@ -2767,17 +2805,17 @@ where
             field,
             scope,
             domain_profile,
-            literature_ladder: Vec::new(),
+            literature_ladder,
             core_ideas,
             methods,
             representations,
             evidence_standards,
             sources,
             claims,
-            relations: Vec::new(),
+            relations,
             curriculum_path,
             frontier_debates,
-            visual_views: Vec::new(),
+            visual_views,
             structure_waivers: Vec::new(),
         },
         internal_context: match stage {
@@ -2850,6 +2888,16 @@ fn parse_markdown_report(markdown: &str) -> ParsedMarkdownReport {
                     .source_role_rows
                     .extend(parse_first_markdown_table(&section.body));
             }
+            CanonicalSection::LiteratureLadder => {
+                parsed
+                    .literature_ladder_rows
+                    .extend(parse_first_markdown_table(&section.body));
+            }
+            CanonicalSection::Relations => {
+                parsed
+                    .relation_rows
+                    .extend(parse_first_markdown_table(&section.body));
+            }
             CanonicalSection::CurriculumRoadmap => {
                 parsed
                     .curriculum_rows
@@ -2874,18 +2922,20 @@ fn parse_markdown_report(markdown: &str) -> ParsedMarkdownReport {
             CanonicalSection::ScaffoldQualityNotes => {
                 parsed.quality_notes = bullet_or_paragraph_lines(&section.body);
             }
-            CanonicalSection::VisualMap | CanonicalSection::VisualSummary => {
-                parsed.diagnostics.push(DiagnosticCheck::warning(
-                    CHECK_EXPORT_UNSUPPORTED_SECTION,
-                    format!(
-                        "Markdown visual section {} was not converted; JSON visual_views require explicit structured data",
-                        canonical_section_label(canonical)
-                    ),
-                ));
+            CanonicalSection::VisualSummary => {
+                parsed.visual_summary = public_section_text(&section.body);
             }
-            CanonicalSection::LiteratureLadder
-            | CanonicalSection::SourcesFurtherReading
-            | CanonicalSection::SourcePointers => {
+            CanonicalSection::VisualViews => {
+                parsed
+                    .visual_view_rows
+                    .extend(parse_first_markdown_table(&section.body));
+            }
+            CanonicalSection::VisualMap => {
+                // Mermaid or prose maps are recognized here but intentionally not
+                // interpreted as semantic relations. Export diagnostics are emitted
+                // later if no structured Visual Views table preserves the intent.
+            }
+            CanonicalSection::SourcesFurtherReading | CanonicalSection::SourcePointers => {
                 parsed.diagnostics.push(DiagnosticCheck::warning(
                     CHECK_EXPORT_UNSUPPORTED_SECTION,
                     format!(
@@ -3287,6 +3337,9 @@ fn canonical_section(title: &str) -> Option<CanonicalSection> {
         "literature ladder" | "literature ladder with access metadata" => {
             Some(CanonicalSection::LiteratureLadder)
         }
+        "relations" | "relation table" | "semantic relations" | "knowledge relations" => {
+            Some(CanonicalSection::Relations)
+        }
         "curriculum roadmap" | "research roadmap" => Some(CanonicalSection::CurriculumRoadmap),
         "practice and assessment" => Some(CanonicalSection::PracticeAssessment),
         "frontier debates and open problems"
@@ -3297,6 +3350,9 @@ fn canonical_section(title: &str) -> Option<CanonicalSection> {
         | "frontier and debate"
         | "frontier open problems and debates" => Some(CanonicalSection::FrontierDebates),
         "visual summary" => Some(CanonicalSection::VisualSummary),
+        "visual views" | "visual view declarations" | "visual declarations" => {
+            Some(CanonicalSection::VisualViews)
+        }
         "concept and prerequisite map"
         | "debate and case network"
         | "instrument data and standards map"
@@ -3318,11 +3374,13 @@ fn canonical_section_label(section: CanonicalSection) -> &'static str {
         CanonicalSection::DeepStructure => "Deep Structure",
         CanonicalSection::SourceRoleProbe => "Source Role Probe",
         CanonicalSection::LiteratureLadder => "Literature Ladder",
+        CanonicalSection::Relations => "Relations",
         CanonicalSection::CurriculumRoadmap => "Curriculum Roadmap",
         CanonicalSection::PracticeAssessment => "Practice and Assessment",
         CanonicalSection::FrontierDebates => "Frontier, Debates, and Open Problems",
         CanonicalSection::VisualMap => "Visual Map",
         CanonicalSection::VisualSummary => "Visual Summary",
+        CanonicalSection::VisualViews => "Visual Views",
         CanonicalSection::SourcesFurtherReading => "Sources and Further Reading",
         CanonicalSection::SourcePointers => "Source Pointers",
         CanonicalSection::SoKUsefulnessNotes => "SoK Usefulness Notes",
@@ -3817,6 +3875,106 @@ fn build_evidence_standards(parsed: &ParsedMarkdownReport) -> EvidenceStandards 
     }
 }
 
+fn build_literature_ladder(
+    parsed: &ParsedMarkdownReport,
+    source_lookup: &SourceLookup,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Vec<LiteratureLadderRow> {
+    let mut rows = Vec::new();
+    for (index, row) in parsed.literature_ladder_rows.iter().enumerate() {
+        let layer = lookup_cell_any(row, &["Layer", "Level"]);
+        let start_here = lookup_cell_any(row, &["Start here", "Start", "Entry point"]);
+        let read_for = lookup_cell_any(row, &["Read for", "Read for / use for", "Use for"]);
+        let do_not_infer = lookup_cell_any(row, &["Do not infer", "Do-not-infer", "Caveat"]);
+        let missing = [
+            ("Layer", layer.as_str()),
+            ("Start here", start_here.as_str()),
+            ("Read for", read_for.as_str()),
+            ("Do not infer", do_not_infer.as_str()),
+        ]
+        .into_iter()
+        .filter_map(|(field, value)| value.trim().is_empty().then_some(field))
+        .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                    format!(
+                        "Literature Ladder row {} is missing required field(s): {}",
+                        index + 1,
+                        missing.join(", ")
+                    ),
+                )
+                .with_target(format!("/report/literature_ladder/{index}"), ""),
+            );
+            continue;
+        }
+
+        let explicit_id = lookup_cell_any(row, &["ID", "Row ID", "Ladder ID"]);
+        let id = if explicit_id.trim().is_empty() {
+            content_id("ladder", &[&layer, &start_here])
+        } else if is_stable_id(&explicit_id) {
+            explicit_id
+        } else {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                    format!(
+                        "Literature Ladder row {} has non-stable id {:?}; generated a stable id",
+                        index + 1,
+                        explicit_id
+                    ),
+                )
+                .with_target(
+                    format!("/report/literature_ladder/{index}/id"),
+                    &explicit_id,
+                ),
+            );
+            content_id("ladder", &[&layer, &start_here])
+        };
+
+        let source_refs = first_non_empty([
+            lookup_cell_any(
+                row,
+                &[
+                    "Source IDs",
+                    "Source ids",
+                    "Sources",
+                    "Readings",
+                    "Source references",
+                ],
+            )
+            .as_str(),
+            start_here.as_str(),
+        ]);
+        let source_ids = source_lookup.resolve_refs(&source_refs);
+        if source_ids.is_empty() {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                    format!(
+                        "Literature Ladder row {} could not resolve source reference(s) {:?}",
+                        index + 1,
+                        source_refs
+                    ),
+                )
+                .with_target(format!("/report/literature_ladder/{index}/source_ids"), &id),
+            );
+        }
+
+        rows.push(LiteratureLadderRow {
+            id,
+            layer,
+            start_here,
+            read_for,
+            do_not_infer,
+            source_ids,
+            notes: lookup_cell_any(row, &["Notes", "Note"]),
+        });
+    }
+    rows
+}
+
 fn parse_source_requirement(raw: &str) -> SourceRoleRequirementKind {
     let text = normalize_id_text(raw);
     if text.contains("waiv") {
@@ -3839,11 +3997,7 @@ fn build_curriculum_path(
 ) -> Vec<CurriculumStep> {
     let mut steps = Vec::new();
     for (index, row) in parsed.curriculum_rows.iter().enumerate() {
-        let title = first_non_empty([
-            lookup_cell_any(row, &["Module"]).as_str(),
-            lookup_cell_any(row, &["Phase"]).as_str(),
-            lookup_cell_any(row, &["Title"]).as_str(),
-        ]);
+        let title = curriculum_row_title(row);
         if title.is_empty() || is_placeholder_text(&title) {
             continue;
         }
@@ -3884,6 +4038,102 @@ fn build_curriculum_path(
         ));
     }
     steps
+}
+
+fn curriculum_row_title(row: &BTreeMap<String, String>) -> String {
+    first_non_empty([
+        lookup_cell_any(row, &["Module"]).as_str(),
+        lookup_cell_any(row, &["Phase"]).as_str(),
+        lookup_cell_any(row, &["Title"]).as_str(),
+    ])
+}
+
+fn apply_curriculum_prerequisites(
+    parsed: &ParsedMarkdownReport,
+    steps: &mut [CurriculumStep],
+    entity_index: &ExportEntityIndex,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) {
+    let mut refs_by_step_id = BTreeMap::new();
+    for row in &parsed.curriculum_rows {
+        let title = curriculum_row_title(row);
+        if title.is_empty() || is_placeholder_text(&title) {
+            continue;
+        }
+        let raw_refs = lookup_cell_any(
+            row,
+            &[
+                "Prerequisite IDs",
+                "Prerequisite ids",
+                "Prerequisites",
+                "Prereq IDs",
+                "Prereqs",
+            ],
+        );
+        if raw_refs.trim().is_empty() {
+            continue;
+        }
+        refs_by_step_id.insert(content_id("step", &[&title]), split_ref_list(&raw_refs));
+    }
+
+    for (step_index, step) in steps.iter_mut().enumerate() {
+        let Some(refs) = refs_by_step_id.get(&step.id) else {
+            continue;
+        };
+        let mut prerequisite_ids = BTreeSet::new();
+        for reference in refs {
+            match entity_index.resolve_any(reference) {
+                ExportReferenceResolution::Resolved(entity) => {
+                    if entity.id == step.id {
+                        diagnostics.push(
+                            DiagnosticCheck::warning(
+                                CHECK_VALIDATE_CURRICULUM_REFERENCE,
+                                format!(
+                                    "curriculum step {} lists itself as a prerequisite",
+                                    step.id
+                                ),
+                            )
+                            .with_target(
+                                format!("/report/curriculum_path/{step_index}/prerequisite_ids"),
+                                &step.id,
+                            ),
+                        );
+                    } else {
+                        prerequisite_ids.insert(entity.id);
+                    }
+                }
+                ExportReferenceResolution::Missing => diagnostics.push(
+                    DiagnosticCheck::warning(
+                        CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                        format!(
+                            "curriculum step {} could not resolve prerequisite reference {:?}",
+                            step.id, reference
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/curriculum_path/{step_index}/prerequisite_ids"),
+                        &step.id,
+                    ),
+                ),
+                ExportReferenceResolution::Ambiguous(candidates) => diagnostics.push(
+                    DiagnosticCheck::warning(
+                        CHECK_EXPORT_AMBIGUOUS_REFERENCE,
+                        format!(
+                            "curriculum step {} prerequisite reference {:?} is ambiguous: {}",
+                            step.id,
+                            reference,
+                            candidates.join(", ")
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/curriculum_path/{step_index}/prerequisite_ids"),
+                        &step.id,
+                    ),
+                ),
+            }
+        }
+        step.prerequisite_ids = prerequisite_ids.into_iter().collect();
+    }
 }
 
 fn build_frontier_debates(
@@ -4086,6 +4336,491 @@ fn build_claims(
     claims
 }
 
+fn build_relations(
+    parsed: &ParsedMarkdownReport,
+    entity_index: &ExportEntityIndex,
+    source_lookup: &SourceLookup,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Vec<Relation> {
+    let mut relations = Vec::new();
+    let mut seen_ids = BTreeSet::new();
+    for (index, row) in parsed.relation_rows.iter().enumerate() {
+        let kind_text = lookup_cell_any(row, &["Relation kind", "Kind", "Type"]);
+        let Some(kind) = parse_relation_kind_input(&kind_text) else {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                    format!(
+                        "Relations row {} has unsupported or missing relation kind {:?}",
+                        index + 1,
+                        kind_text
+                    ),
+                )
+                .with_target(format!("/report/relations/{index}/kind"), ""),
+            );
+            continue;
+        };
+
+        let Some(from) = resolve_relation_endpoint_from_row(
+            row,
+            index,
+            "from",
+            &["From type", "Source type", "Subject type"],
+            &[
+                "From reference",
+                "From ref",
+                "From",
+                "Source reference",
+                "Subject",
+            ],
+            entity_index,
+            diagnostics,
+        ) else {
+            continue;
+        };
+        let Some(to) = resolve_relation_endpoint_from_row(
+            row,
+            index,
+            "to",
+            &["To type", "Target type", "Object type"],
+            &["To reference", "To ref", "To", "Target reference", "Object"],
+            entity_index,
+            diagnostics,
+        ) else {
+            continue;
+        };
+
+        let explicit_id = lookup_cell_any(row, &["Relation ID", "Relation id", "ID"]);
+        let id = if explicit_id.trim().is_empty() {
+            content_id(
+                "rel",
+                &[
+                    relation_kind_label(kind),
+                    entity_type_label(from.entity_type),
+                    &from.id,
+                    entity_type_label(to.entity_type),
+                    &to.id,
+                ],
+            )
+        } else if is_stable_id(&explicit_id) {
+            explicit_id
+        } else {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                    format!(
+                        "Relations row {} has non-stable explicit relation id {:?}",
+                        index + 1,
+                        explicit_id
+                    ),
+                )
+                .with_target(format!("/report/relations/{index}/id"), &explicit_id),
+            );
+            continue;
+        };
+        if !seen_ids.insert(id.clone()) {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_AMBIGUOUS_REFERENCE,
+                    format!("Relations row {} repeats relation id {}", index + 1, id),
+                )
+                .with_target(format!("/report/relations/{index}/id"), &id),
+            );
+            continue;
+        }
+
+        let source_refs = lookup_cell_any(
+            row,
+            &[
+                "Source IDs",
+                "Source ids",
+                "Sources",
+                "Evidence sources",
+                "Source references",
+            ],
+        );
+        let source_ids = source_lookup.resolve_refs(&source_refs);
+        if !source_refs.trim().is_empty() && source_ids.is_empty() {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                    format!(
+                        "relation {} could not resolve source reference(s) {:?}",
+                        id, source_refs
+                    ),
+                )
+                .with_target(format!("/report/relations/{index}/source_ids"), &id),
+            );
+        }
+
+        relations.push(Relation {
+            id,
+            kind,
+            from,
+            to,
+            description: lookup_cell_any(row, &["Rationale", "Description", "Why"]),
+            source_ids,
+        });
+    }
+    relations
+}
+
+fn resolve_relation_endpoint_from_row(
+    row: &BTreeMap<String, String>,
+    row_index: usize,
+    endpoint_name: &str,
+    type_keys: &[&str],
+    reference_keys: &[&str],
+    entity_index: &ExportEntityIndex,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Option<RelationEndpoint> {
+    let type_text = lookup_cell_any(row, type_keys);
+    let reference = lookup_cell_any(row, reference_keys);
+    let Some(entity_type) = parse_entity_type_input(&type_text) else {
+        diagnostics.push(
+            DiagnosticCheck::warning(
+                CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                format!(
+                    "Relations row {} has unsupported or missing {endpoint_name} entity type {:?}",
+                    row_index + 1,
+                    type_text
+                ),
+            )
+            .with_target(
+                format!("/report/relations/{row_index}/{endpoint_name}/entity_type"),
+                "",
+            ),
+        );
+        return None;
+    };
+    if reference.trim().is_empty() {
+        diagnostics.push(
+            DiagnosticCheck::warning(
+                CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                format!(
+                    "Relations row {} is missing {endpoint_name} reference",
+                    row_index + 1
+                ),
+            )
+            .with_target(
+                format!("/report/relations/{row_index}/{endpoint_name}/id"),
+                "",
+            ),
+        );
+        return None;
+    }
+    match entity_index.resolve_typed(entity_type, &reference) {
+        ExportReferenceResolution::Resolved(entity) => Some(RelationEndpoint {
+            entity_type,
+            id: entity.id,
+        }),
+        ExportReferenceResolution::Missing => {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                    format!(
+                        "Relations row {} could not resolve {endpoint_name} endpoint {}:{:?}",
+                        row_index + 1,
+                        entity_type_label(entity_type),
+                        reference
+                    ),
+                )
+                .with_target(
+                    format!("/report/relations/{row_index}/{endpoint_name}/id"),
+                    "",
+                ),
+            );
+            None
+        }
+        ExportReferenceResolution::Ambiguous(candidates) => {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_AMBIGUOUS_REFERENCE,
+                    format!(
+                        "Relations row {} {endpoint_name} endpoint {:?} is ambiguous for {}: {}",
+                        row_index + 1,
+                        reference,
+                        entity_type_label(entity_type),
+                        candidates.join(", ")
+                    ),
+                )
+                .with_target(
+                    format!("/report/relations/{row_index}/{endpoint_name}/id"),
+                    "",
+                ),
+            );
+            None
+        }
+    }
+}
+
+fn build_visual_views(
+    parsed: &ParsedMarkdownReport,
+    relations: &[Relation],
+    entity_index: &ExportEntityIndex,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Vec<VisualView> {
+    let relation_lookup = relations
+        .iter()
+        .map(|relation| (relation.id.as_str(), relation))
+        .collect::<BTreeMap<_, _>>();
+    let mut views = Vec::new();
+    let mut seen_ids = BTreeSet::new();
+
+    for (index, row) in parsed.visual_view_rows.iter().enumerate() {
+        let title = first_non_empty([
+            lookup_cell_any(row, &["Title", "View title", "Name"]).as_str(),
+            "Relation-backed visual view",
+        ]);
+        let kind =
+            parse_visual_view_kind_input(&lookup_cell_any(row, &["View kind", "Kind", "Type"]));
+        let relation_refs = split_ref_list(&lookup_cell_any(
+            row,
+            &["Relation IDs", "Relation ids", "Relations", "Relation ID"],
+        ));
+        if relation_refs.is_empty() {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                    format!("Visual Views row {} has no relation IDs", index + 1),
+                )
+                .with_target(format!("/report/visual_views/{index}/edges"), ""),
+            );
+            continue;
+        }
+
+        let mut selected_relations = Vec::new();
+        for relation_ref in relation_refs {
+            if let Some(relation) = relation_lookup.get(relation_ref.as_str()) {
+                selected_relations.push(*relation);
+            } else {
+                diagnostics.push(
+                    DiagnosticCheck::warning(
+                        CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                        format!(
+                            "Visual Views row {} references missing relation id {}",
+                            index + 1,
+                            relation_ref
+                        ),
+                    )
+                    .with_target(format!("/report/visual_views/{index}/edges"), ""),
+                );
+            }
+        }
+        if selected_relations.is_empty() {
+            continue;
+        }
+
+        let explicit_id = lookup_cell_any(row, &["View ID", "View id", "ID"]);
+        let relation_id_text = selected_relations
+            .iter()
+            .map(|relation| relation.id.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let id = if explicit_id.trim().is_empty() {
+            content_id(
+                "view",
+                &[
+                    &title,
+                    visual_view_kind_export_label(kind),
+                    &relation_id_text,
+                ],
+            )
+        } else if is_stable_id(&explicit_id) {
+            explicit_id
+        } else {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+                    format!(
+                        "Visual Views row {} has non-stable explicit view id {:?}; generated a stable id",
+                        index + 1,
+                        explicit_id
+                    ),
+                )
+                .with_target(format!("/report/visual_views/{index}/id"), &explicit_id),
+            );
+            content_id(
+                "view",
+                &[
+                    &title,
+                    visual_view_kind_export_label(kind),
+                    &relation_id_text,
+                ],
+            )
+        };
+        if !seen_ids.insert(id.clone()) {
+            diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_AMBIGUOUS_REFERENCE,
+                    format!("Visual Views row {} repeats view id {}", index + 1, id),
+                )
+                .with_target(format!("/report/visual_views/{index}/id"), &id),
+            );
+            continue;
+        }
+
+        let mut nodes_by_entity_id = BTreeMap::new();
+        let mut edges = Vec::new();
+        for relation in selected_relations {
+            let from_node_id =
+                insert_visual_node(&mut nodes_by_entity_id, &relation.from, entity_index);
+            let to_node_id =
+                insert_visual_node(&mut nodes_by_entity_id, &relation.to, entity_index);
+            edges.push(VisualViewEdge {
+                from: from_node_id,
+                to: to_node_id,
+                kind: relation_kind_label(relation.kind).to_string(),
+                relation_id: relation.id.clone(),
+                label: relation.description.clone(),
+            });
+        }
+
+        apply_visual_node_emphasis(
+            row,
+            index,
+            &mut nodes_by_entity_id,
+            entity_index,
+            diagnostics,
+        );
+
+        let purpose = first_non_empty([
+            lookup_cell_any(row, &["Purpose", "Justification", "Rationale"]).as_str(),
+            lookup_cell_any(row, &["Alt text", "Reading guidance"]).as_str(),
+        ]);
+        let justification = visual_view_justification(&purpose, &parsed.visual_summary);
+
+        views.push(VisualView {
+            id,
+            kind,
+            title,
+            justification,
+            nodes: nodes_by_entity_id.into_values().collect(),
+            edges,
+        });
+    }
+    views
+}
+
+fn insert_visual_node(
+    nodes_by_entity_id: &mut BTreeMap<String, VisualViewNode>,
+    endpoint: &RelationEndpoint,
+    entity_index: &ExportEntityIndex,
+) -> String {
+    let node_id = visual_node_id(endpoint.entity_type, &endpoint.id);
+    nodes_by_entity_id
+        .entry(endpoint.id.clone())
+        .or_insert_with(|| {
+            let label = entity_index
+                .record(&endpoint.id)
+                .map(|entity| entity.label.clone())
+                .unwrap_or_else(|| endpoint.id.clone());
+            VisualViewNode {
+                id: node_id.clone(),
+                label,
+                entity_type: endpoint.entity_type,
+                ref_id: endpoint.id.clone(),
+                description: String::new(),
+            }
+        });
+    node_id
+}
+
+fn apply_visual_node_emphasis(
+    row: &BTreeMap<String, String>,
+    row_index: usize,
+    nodes_by_entity_id: &mut BTreeMap<String, VisualViewNode>,
+    entity_index: &ExportEntityIndex,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) {
+    let emphasis_refs = split_ref_list(&lookup_cell_any(
+        row,
+        &[
+            "Node emphasis",
+            "Emphasis",
+            "Emphasized nodes",
+            "Node emphasis IDs",
+            "Node emphasis ids",
+        ],
+    ));
+    for reference in emphasis_refs {
+        match entity_index.resolve_any(&reference) {
+            ExportReferenceResolution::Resolved(entity) => {
+                let endpoint = RelationEndpoint {
+                    entity_type: entity.entity_type,
+                    id: entity.id,
+                };
+                let node_id = insert_visual_node(nodes_by_entity_id, &endpoint, entity_index);
+                if let Some(node) = nodes_by_entity_id.get_mut(&endpoint.id) {
+                    node.description =
+                        "Emphasized by the Markdown visual view declaration.".to_string();
+                    node.id = node_id;
+                }
+            }
+            ExportReferenceResolution::Missing => diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                    format!(
+                        "Visual Views row {} could not resolve node emphasis reference {:?}",
+                        row_index + 1,
+                        reference
+                    ),
+                )
+                .with_target(format!("/report/visual_views/{row_index}/nodes"), ""),
+            ),
+            ExportReferenceResolution::Ambiguous(candidates) => diagnostics.push(
+                DiagnosticCheck::warning(
+                    CHECK_EXPORT_AMBIGUOUS_REFERENCE,
+                    format!(
+                        "Visual Views row {} node emphasis reference {:?} is ambiguous: {}",
+                        row_index + 1,
+                        reference,
+                        candidates.join(", ")
+                    ),
+                )
+                .with_target(format!("/report/visual_views/{row_index}/nodes"), ""),
+            ),
+        }
+    }
+}
+
+fn visual_node_id(entity_type: EntityType, entity_id: &str) -> String {
+    content_id("vnode", &[entity_type_label(entity_type), entity_id])
+}
+
+fn visual_view_justification(purpose: &str, visual_summary: &str) -> String {
+    match (purpose.trim().is_empty(), visual_summary.trim().is_empty()) {
+        (false, false) => format!("{purpose} Visual guidance: {visual_summary}"),
+        (false, true) => purpose.trim().to_string(),
+        (true, false) => visual_summary.trim().to_string(),
+        (true, true) => "Relation-backed visual view declared in Markdown.".to_string(),
+    }
+}
+
+fn warn_if_unpreserved_visual_sections(
+    parsed: &ParsedMarkdownReport,
+    visual_views: &[VisualView],
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) {
+    if !visual_views.is_empty() {
+        return;
+    }
+    if parsed_has_section(parsed, CanonicalSection::VisualMap) {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_UNSUPPORTED_SECTION,
+            "Markdown visual map was not converted; Mermaid arrows require matching rows in a structured Relations table plus a Visual Views table",
+        ));
+    }
+    if parsed_has_section(parsed, CanonicalSection::VisualSummary)
+        && !parsed.visual_summary.trim().is_empty()
+    {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_UNSUPPORTED_SECTION,
+            "Markdown Visual Summary was not attached to an explicit Visual Views table",
+        ));
+    }
+}
+
 fn evidence_source_diagnostics(
     evidence: &[EvidenceEntry],
     source_ids: &BTreeSet<String>,
@@ -4276,6 +5011,208 @@ impl SourceLookup {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExportEntityRef {
+    entity_type: EntityType,
+    id: String,
+    label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ExportReferenceResolution {
+    Resolved(ExportEntityRef),
+    Missing,
+    Ambiguous(Vec<String>),
+}
+
+#[derive(Debug, Default)]
+struct ExportEntityIndex {
+    by_exact_id: BTreeMap<String, ExportEntityRef>,
+    aliases_by_type: BTreeMap<EntityType, BTreeMap<String, BTreeSet<String>>>,
+    aliases_all: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl ExportEntityIndex {
+    fn new(
+        core_ideas: &[KnowledgeItem],
+        methods: &[KnowledgeItem],
+        representations: &[KnowledgeItem],
+        sources: &[ReportSource],
+        claims: &[Claim],
+        curriculum_path: &[CurriculumStep],
+        frontier_debates: &[FrontierDebateItem],
+    ) -> Self {
+        let mut index = Self::default();
+        for item in core_ideas {
+            index.insert(
+                EntityType::Concept,
+                &item.id,
+                &item.label,
+                [&item.id, &item.label],
+            );
+            for alias in &item.aliases {
+                index.insert_alias(EntityType::Concept, &item.id, alias);
+            }
+        }
+        for item in methods {
+            index.insert(
+                EntityType::Method,
+                &item.id,
+                &item.label,
+                [&item.id, &item.label],
+            );
+            for alias in &item.aliases {
+                index.insert_alias(EntityType::Method, &item.id, alias);
+            }
+        }
+        for item in representations {
+            index.insert(
+                EntityType::Representation,
+                &item.id,
+                &item.label,
+                [&item.id, &item.label],
+            );
+            for alias in &item.aliases {
+                index.insert_alias(EntityType::Representation, &item.id, alias);
+            }
+        }
+        for source in sources {
+            index.insert(
+                EntityType::Source,
+                &source.id,
+                &first_non_empty([source.title.as_str(), source.citation.as_str(), &source.id]),
+                [
+                    source.id.as_str(),
+                    source.title.as_str(),
+                    source.citation.as_str(),
+                    source.identifier.as_str(),
+                    source.url.as_str(),
+                ],
+            );
+        }
+        for claim in claims {
+            index.insert(
+                EntityType::Claim,
+                &claim.id,
+                &claim.statement,
+                [&claim.id, &claim.statement],
+            );
+        }
+        for step in curriculum_path {
+            index.insert(
+                EntityType::CurriculumStep,
+                &step.id,
+                &step.title,
+                [&step.id, &step.title],
+            );
+        }
+        for item in frontier_debates {
+            index.insert(
+                EntityType::FrontierDebate,
+                &item.id,
+                &item.title,
+                [&item.id, &item.title],
+            );
+        }
+        index
+    }
+
+    fn insert<const N: usize>(
+        &mut self,
+        entity_type: EntityType,
+        id: &str,
+        label: &str,
+        aliases: [&str; N],
+    ) {
+        if id.trim().is_empty() {
+            return;
+        }
+        let entity = ExportEntityRef {
+            entity_type,
+            id: id.to_string(),
+            label: first_non_empty([label, id]),
+        };
+        self.by_exact_id.insert(id.to_string(), entity);
+        for alias in aliases {
+            self.insert_alias(entity_type, id, alias);
+        }
+    }
+
+    fn insert_alias(&mut self, entity_type: EntityType, id: &str, alias: &str) {
+        let normalized = normalize_id_text(alias);
+        if normalized.is_empty() {
+            return;
+        }
+        self.aliases_by_type
+            .entry(entity_type)
+            .or_default()
+            .entry(normalized.clone())
+            .or_default()
+            .insert(id.to_string());
+        self.aliases_all
+            .entry(normalized)
+            .or_default()
+            .insert(id.to_string());
+    }
+
+    fn resolve_typed(&self, entity_type: EntityType, reference: &str) -> ExportReferenceResolution {
+        let reference = reference.trim();
+        if reference.is_empty() {
+            return ExportReferenceResolution::Missing;
+        }
+        if let Some(entity) = self.by_exact_id.get(reference) {
+            if entity.entity_type == entity_type {
+                return ExportReferenceResolution::Resolved(entity.clone());
+            }
+            return ExportReferenceResolution::Missing;
+        }
+        let normalized = normalize_id_text(reference);
+        let Some(candidates) = self
+            .aliases_by_type
+            .get(&entity_type)
+            .and_then(|aliases| aliases.get(&normalized))
+        else {
+            return ExportReferenceResolution::Missing;
+        };
+        self.resolve_candidate_set(candidates)
+    }
+
+    fn resolve_any(&self, reference: &str) -> ExportReferenceResolution {
+        let reference = reference.trim();
+        if reference.is_empty() {
+            return ExportReferenceResolution::Missing;
+        }
+        if let Some(entity) = self.by_exact_id.get(reference) {
+            return ExportReferenceResolution::Resolved(entity.clone());
+        }
+        let normalized = normalize_id_text(reference);
+        let Some(candidates) = self.aliases_all.get(&normalized) else {
+            return ExportReferenceResolution::Missing;
+        };
+        self.resolve_candidate_set(candidates)
+    }
+
+    fn resolve_candidate_set(&self, candidates: &BTreeSet<String>) -> ExportReferenceResolution {
+        if candidates.len() == 1 {
+            let id = candidates
+                .iter()
+                .next()
+                .expect("candidate set is not empty");
+            self.by_exact_id
+                .get(id)
+                .cloned()
+                .map(ExportReferenceResolution::Resolved)
+                .unwrap_or(ExportReferenceResolution::Missing)
+        } else {
+            ExportReferenceResolution::Ambiguous(candidates.iter().cloned().collect())
+        }
+    }
+
+    fn record(&self, id: &str) -> Option<&ExportEntityRef> {
+        self.by_exact_id.get(id)
+    }
+}
+
 fn split_ref_list(raw: &str) -> Vec<String> {
     raw.split([',', ';', '\n'])
         .map(clean_inline_markdown)
@@ -4291,6 +5228,86 @@ fn split_listish(raw: &str) -> Vec<String> {
         .map(|item| item.trim().trim_start_matches("- ").to_string())
         .filter(|item| !item.is_empty() && !is_placeholder_text(item))
         .collect()
+}
+
+fn parse_entity_type_input(raw: &str) -> Option<EntityType> {
+    match normalize_access_status_label(raw).as_str() {
+        "concept" | "core_idea" | "core_ideas" | "idea" | "threshold_concept" => {
+            Some(EntityType::Concept)
+        }
+        "claim" | "claims" => Some(EntityType::Claim),
+        "source" | "sources" | "src" | "reading" => Some(EntityType::Source),
+        "curriculum_step" | "curriculum" | "step" | "module" => Some(EntityType::CurriculumStep),
+        "frontier_debate" | "frontier" | "debate" | "open_problem" => {
+            Some(EntityType::FrontierDebate)
+        }
+        "method" | "methods" | "warrant" | "warrants" => Some(EntityType::Method),
+        "representation" | "representations" | "rep" => Some(EntityType::Representation),
+        _ => None,
+    }
+}
+
+fn parse_relation_kind_input(raw: &str) -> Option<RelationKind> {
+    match normalize_access_status_label(raw).as_str() {
+        "depends_on" | "depends" | "requires" | "prerequisite" | "prerequisite_for" => {
+            Some(RelationKind::DependsOn)
+        }
+        "supports" | "support" | "supported_by" => Some(RelationKind::Supports),
+        "qualifies" | "qualify" | "limits" | "conditions" => Some(RelationKind::Qualifies),
+        "contradicts" | "contradict" | "conflicts" => Some(RelationKind::Contradicts),
+        "precedes" | "precedes_in_curriculum" | "before" | "prior_to" => {
+            Some(RelationKind::Precedes)
+        }
+        "introduces" | "introduce" => Some(RelationKind::Introduces),
+        "uses_method" | "uses" | "uses_method_or_warrant" => Some(RelationKind::UsesMethod),
+        "represented_by" | "represented" | "has_representation" => {
+            Some(RelationKind::RepresentedBy)
+        }
+        "grounds" | "grounded_by" => Some(RelationKind::Grounds),
+        "motivates" | "motivation" => Some(RelationKind::Motivates),
+        "part_of" | "contains" | "component_of" => Some(RelationKind::PartOf),
+        "maps_to" | "maps" | "corresponds_to" => Some(RelationKind::MapsTo),
+        _ => None,
+    }
+}
+
+fn relation_kind_label(kind: RelationKind) -> &'static str {
+    match kind {
+        RelationKind::DependsOn => "depends_on",
+        RelationKind::Supports => "supports",
+        RelationKind::Qualifies => "qualifies",
+        RelationKind::Contradicts => "contradicts",
+        RelationKind::Precedes => "precedes",
+        RelationKind::Introduces => "introduces",
+        RelationKind::UsesMethod => "uses_method",
+        RelationKind::RepresentedBy => "represented_by",
+        RelationKind::Grounds => "grounds",
+        RelationKind::Motivates => "motivates",
+        RelationKind::PartOf => "part_of",
+        RelationKind::MapsTo => "maps_to",
+    }
+}
+
+fn parse_visual_view_kind_input(raw: &str) -> VisualViewKind {
+    match normalize_access_status_label(raw).as_str() {
+        "knowledge_spine" | "spine" => VisualViewKind::KnowledgeSpine,
+        "concept_source" | "source_map" | "concept_source_map" => VisualViewKind::ConceptSource,
+        "dependency_path" | "curriculum_path" | "prerequisite_path" => {
+            VisualViewKind::DependencyPath
+        }
+        "frontier_debate" | "frontier_debate_map" | "debate_map" => VisualViewKind::FrontierDebate,
+        _ => VisualViewKind::Custom,
+    }
+}
+
+fn visual_view_kind_export_label(kind: VisualViewKind) -> &'static str {
+    match kind {
+        VisualViewKind::KnowledgeSpine => "knowledge_spine",
+        VisualViewKind::ConceptSource => "concept_source",
+        VisualViewKind::DependencyPath => "dependency_path",
+        VisualViewKind::FrontierDebate => "frontier_debate",
+        VisualViewKind::Custom => "custom",
+    }
 }
 
 fn parse_source_role(raw: &str) -> SourceRole {
