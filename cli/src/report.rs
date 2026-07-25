@@ -6221,7 +6221,13 @@ pub fn render_html_report(document: &ReportDocument) -> Result<String> {
 
     let report = &document.report;
     let views = renderable_visual_views(report);
-    let visual_json = safe_script_json(&views)?;
+    let visual_json = if views.is_empty() {
+        None
+    } else {
+        Some(safe_script_json(&views)?)
+    };
+    let source_labels = source_label_lookup(report);
+    let entity_labels = entity_label_lookup(report);
     let title = format!("Structure of Knowledge: {}", report.field);
     let mut html = String::new();
 
@@ -6247,44 +6253,74 @@ pub fn render_html_report(document: &ReportDocument) -> Result<String> {
     push_nav(&mut html, !views.is_empty());
     html.push_str("</header>\n<main id=\"main-report\">\n");
 
+    push_reading_guide_section(&mut html, document, !views.is_empty());
+    if !views.is_empty() {
+        push_visual_section(&mut html, &views);
+    }
+    push_curriculum_section(
+        &mut html,
+        &report.curriculum_path,
+        &entity_labels,
+        &source_labels,
+    );
+    push_reading_ladder_section(&mut html, report, &source_labels);
+    push_claims_section(&mut html, &report.claims, &source_labels);
+    push_frontier_section(&mut html, report, &entity_labels, &source_labels);
+
     push_scope_section(&mut html, &report.scope);
     push_domain_profile_section(&mut html, &report.domain_profile);
-    push_knowledge_section(&mut html, "core-ideas", "Core Ideas", &report.core_ideas);
-    push_knowledge_section(&mut html, "methods", "Methods", &report.methods);
+    push_knowledge_section(
+        &mut html,
+        "core-ideas",
+        "Core Ideas",
+        &report.core_ideas,
+        &source_labels,
+    );
+    push_knowledge_section(
+        &mut html,
+        "methods",
+        "Methods",
+        &report.methods,
+        &source_labels,
+    );
     push_knowledge_section(
         &mut html,
         "representations",
         "Representations",
         &report.representations,
+        &source_labels,
     );
     push_evidence_standards_section(&mut html, &report.evidence_standards);
     push_sources_and_evidence_section(&mut html, report);
-    push_claims_section(&mut html, &report.claims);
-    push_curriculum_section(&mut html, &report.curriculum_path);
-    push_frontier_section(&mut html, &report.frontier_debates);
-    if !views.is_empty() {
-        push_visual_section(&mut html, &views);
-    }
+    push_relations_section(&mut html, &report.relations, &entity_labels, &source_labels);
 
     html.push_str("</main>\n</div>\n");
-    html.push_str("<script type=\"application/json\" id=\"sok-visual-data\">");
-    html.push_str(&visual_json);
-    html.push_str("</script>\n<script>\n");
-    html.push_str(REPORT_JS);
-    html.push_str("\n</script>\n</body>\n</html>\n");
+    if let Some(visual_json) = visual_json {
+        html.push_str("<script type=\"application/json\" id=\"sok-visual-data\">");
+        html.push_str(&visual_json);
+        html.push_str("</script>\n<script>\n");
+        html.push_str(REPORT_JS);
+        html.push_str("\n</script>\n");
+    }
+    html.push_str("</body>\n</html>\n");
     Ok(html)
 }
 
 const REPORT_CSS: &str = r#":root {
-  color-scheme: light;
+  color-scheme: light dark;
   --bg: #f6f7f8;
   --paper: #ffffff;
+  --panel: #fbfcfd;
   --ink: #1b252f;
   --muted: #5d6b78;
   --line: #d8dee4;
   --accent: #2364aa;
   --accent-soft: #e8f1fb;
+  --success: #1f7a4d;
+  --warn: #8a5a00;
+  --danger: #a33a3a;
   --focus: #9b5de5;
+  --shadow: 0 1px 2px rgba(24, 34, 45, 0.08);
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -6324,7 +6360,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0;
 }
-h1, h2, h3 {
+h1, h2, h3, h4 {
   color: var(--ink);
   line-height: 1.2;
   letter-spacing: 0;
@@ -6341,10 +6377,14 @@ h3 {
   margin: 0 0 0.55rem;
   font-size: 1.08rem;
 }
+h4 {
+  margin: 0.8rem 0 0.4rem;
+  font-size: 0.95rem;
+}
 .summary {
   max-width: 860px;
   margin: 0.9rem 0 0;
-  color: #344250;
+  color: var(--muted);
   font-size: 1.08rem;
 }
 .section-nav {
@@ -6376,31 +6416,166 @@ h3 {
   margin: 0.35rem 0 0;
 }
 .muted { color: var(--muted); }
+.guide-list,
+.ladder-list,
+.curriculum-path {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.guide-list li {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.34fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.guide-list span { color: var(--muted); }
 .split-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
-.item-grid {
+.item-grid,
+.claim-grid,
+.source-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 .item-card,
-.visual-card {
+.visual-card,
+.claim-card,
+.path-card,
+.ladder-card,
+.source-card,
+.frontier-card,
+.relation-card {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
+  box-shadow: var(--shadow);
 }
 .item-card p,
-.visual-card p {
+.visual-card p,
+.claim-card p,
+.path-card p,
+.ladder-card p,
+.source-card p,
+.frontier-card p,
+.relation-card p {
   margin: 0.35rem 0 0;
+}
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.55rem 0 0.75rem;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 1.65rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 .meta {
   margin-top: 0.7rem;
   color: var(--muted);
   font-size: 0.92rem;
+}
+.curriculum-path {
+  position: relative;
+  gap: 16px;
+}
+.path-step {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.path-marker {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 800;
+}
+.reader-dl,
+.compact-dl {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.24fr) minmax(0, 1fr);
+  gap: 0.35rem 0.8rem;
+  margin: 0.65rem 0 0;
+}
+.reader-dl dt,
+.compact-dl dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+.reader-dl dd,
+.compact-dl dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.reference-block { margin-top: 0.75rem; }
+.reference-list,
+.evidence-list {
+  margin: 0.35rem 0 0 1.1rem;
+  padding: 0;
+}
+.reference-list li,
+.evidence-list li {
+  margin: 0.35rem 0;
+}
+.evidence-group {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.evidence-meta {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.text-fallback,
+.visual-fallback {
+  margin-top: 0.9rem;
+  padding: 0.85rem;
+  border-left: 4px solid var(--accent);
+  background: var(--panel);
+}
+.raw-identifiers {
+  margin-top: 0.85rem;
+  color: var(--muted);
+}
+.raw-identifiers summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 700;
+}
+.frontier-list,
+.relation-list {
+  display: grid;
+  gap: 14px;
 }
 .table-scroll {
   width: 100%;
@@ -6469,17 +6644,42 @@ tr:last-child td { border-bottom: 0; }
   stroke: #a15c00;
   stroke-width: 3;
 }
-.visual-fallback {
-  margin-top: 0.9rem;
-  padding: 0.85rem;
-  border-left: 4px solid var(--accent);
-  background: #f4f7fa;
-}
 .visual-fallback ul {
   margin: 0.4rem 0 0.8rem 1.1rem;
   padding: 0;
 }
 .visual-fallback li { margin: 0.2rem 0; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11161c;
+    --paper: #18212a;
+    --panel: #141c24;
+    --ink: #edf2f7;
+    --muted: #aeb9c5;
+    --line: #344250;
+    --accent: #8fc5ff;
+    --accent-soft: #17324f;
+    --success: #7bd6a3;
+    --warn: #f0c36a;
+    --danger: #ff9b9b;
+    --focus: #d2a8ff;
+    --shadow: none;
+  }
+  th,
+  .visual-svg {
+    background: var(--panel);
+  }
+  .visual-edge {
+    stroke: #9aa8b6;
+  }
+  .visual-node.is-active rect {
+    fill: #3b2e17;
+    stroke: var(--warn);
+  }
+  .visual-edge.is-active {
+    stroke: var(--warn);
+  }
+}
 @media (max-width: 720px) {
   .report-shell {
     width: min(100% - 20px, 1120px);
@@ -6487,7 +6687,15 @@ tr:last-child td { border-bottom: 0; }
   }
   .report-header { padding-top: 20px; }
   .split-list,
-  .item-grid {
+  .item-grid,
+  .claim-grid,
+  .source-grid {
+    grid-template-columns: 1fr;
+  }
+  .guide-list li,
+  .path-step,
+  .reader-dl,
+  .compact-dl {
     grid-template-columns: 1fr;
   }
   table { min-width: 640px; }
@@ -6516,6 +6724,12 @@ tr:last-child td { border-bottom: 0; }
   }
   .item-card,
   .visual-card,
+  .claim-card,
+  .path-card,
+  .ladder-card,
+  .source-card,
+  .frontier-card,
+  .relation-card,
   .table-scroll {
     border-color: #bbbbbb;
     break-inside: avoid;
@@ -6640,6 +6854,8 @@ const REPORT_JS: &str = r##"(function () {
       if (!from || !to) return;
       var line = el("line", {
         "class": "visual-edge",
+        "tabindex": "0",
+        "role": "img",
         "data-from": edge.from,
         "data-to": edge.to,
         "x1": from.x,
@@ -6647,9 +6863,12 @@ const REPORT_JS: &str = r##"(function () {
         "x2": to.x,
         "y2": to.y,
         "marker-end": "url(#" + markerId + ")",
-        "aria-label": (edge.label || edge.kind || "edge") + " " + edge.from + " to " + edge.to
+        "aria-label": (edge.label || edge.kind || "edge") + ": " + (edge.from_label || edge.from) + " to " + (edge.to_label || edge.to)
       });
       line.setAttribute("data-edge-index", String(index));
+      var edgeTitle = el("title", {});
+      edgeTitle.appendChild(textNode((edge.label || edge.kind || "edge") + ": " + (edge.from_label || edge.from) + " to " + (edge.to_label || edge.to)));
+      line.appendChild(edgeTitle);
       svg.appendChild(line);
     });
 
@@ -6734,9 +6953,17 @@ struct RenderVisualEdge {
     to: String,
     kind: String,
     label: String,
+    relation_id: String,
+    from_label: String,
+    to_label: String,
 }
 
 fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
+    let relation_lookup = report
+        .relations
+        .iter()
+        .map(|relation| (relation.id.as_str(), relation))
+        .collect::<BTreeMap<_, _>>();
     report
         .visual_views
         .iter()
@@ -6762,19 +6989,51 @@ fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
                     })
                 })
                 .collect::<Vec<_>>();
+            let node_labels = nodes
+                .iter()
+                .map(|node| (node.id.as_str(), node.label.as_str()))
+                .collect::<BTreeMap<_, _>>();
+            let node_refs = view
+                .nodes
+                .iter()
+                .filter(|node| !node.id.trim().is_empty() && !node.ref_id.trim().is_empty())
+                .map(|node| (node.id.as_str(), node))
+                .collect::<BTreeMap<_, _>>();
             let edges = view
                 .edges
                 .iter()
                 .filter_map(|edge| {
+                    let relation = relation_lookup.get(edge.relation_id.as_str())?;
+                    let from_node = node_refs.get(edge.from.as_str())?;
+                    let to_node = node_refs.get(edge.to.as_str())?;
                     if node_ids.contains(&edge.from)
                         && node_ids.contains(&edge.to)
                         && edge.from != edge.to
+                        && visual_relation_matches_nodes(relation, from_node, to_node)
                     {
                         Some(RenderVisualEdge {
                             from: edge.from.clone(),
                             to: edge.to.clone(),
-                            kind: edge.kind.clone(),
-                            label: edge.label.clone(),
+                            kind: first_non_empty([
+                                edge.kind.as_str(),
+                                relation_kind_label(relation.kind),
+                            ]),
+                            label: first_non_empty([
+                                edge.label.as_str(),
+                                relation.description.as_str(),
+                                relation_kind_label(relation.kind),
+                            ]),
+                            relation_id: edge.relation_id.clone(),
+                            from_label: node_labels
+                                .get(edge.from.as_str())
+                                .copied()
+                                .unwrap_or(edge.from.as_str())
+                                .to_string(),
+                            to_label: node_labels
+                                .get(edge.to.as_str())
+                                .copied()
+                                .unwrap_or(edge.to.as_str())
+                                .to_string(),
                         })
                     } else {
                         None
@@ -6798,6 +7057,21 @@ fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
         .collect()
 }
 
+fn visual_relation_matches_nodes(
+    relation: &Relation,
+    from_node: &VisualViewNode,
+    to_node: &VisualViewNode,
+) -> bool {
+    (visual_endpoint_matches_node(&relation.from, from_node)
+        && visual_endpoint_matches_node(&relation.to, to_node))
+        || (visual_endpoint_matches_node(&relation.from, to_node)
+            && visual_endpoint_matches_node(&relation.to, from_node))
+}
+
+fn visual_endpoint_matches_node(endpoint: &RelationEndpoint, node: &VisualViewNode) -> bool {
+    endpoint.entity_type == node.entity_type && endpoint.id == node.ref_id
+}
+
 fn visual_alt_text(
     title: &str,
     kind: &str,
@@ -6809,8 +7083,8 @@ fn visual_alt_text(
         .map(|edge| {
             format!(
                 "{} to {} ({})",
-                edge.from,
-                edge.to,
+                edge.from_label,
+                edge.to_label,
                 first_non_empty([edge.label.as_str(), edge.kind.as_str(), "related"])
             )
         })
@@ -6825,19 +7099,22 @@ fn visual_alt_text(
 
 fn push_nav(html: &mut String, has_visuals: bool) {
     let mut items = vec![
+        ("reading-guide", "Reading Guide"),
+        ("curriculum-path", "Curriculum Path"),
+        ("reading-ladder", "Reading Ladder"),
+        ("claims", "Claim Evidence"),
+        ("frontier-debates", "Frontier Guidance"),
         ("scope", "Scope"),
         ("domain-profile", "Domain Profile"),
         ("core-ideas", "Core Ideas"),
         ("methods", "Methods"),
         ("representations", "Representations"),
         ("evidence-standards", "Evidence Standards"),
-        ("sources-evidence", "Sources and Evidence"),
-        ("claims", "Claims"),
-        ("curriculum-path", "Curriculum Path"),
-        ("frontier-debates", "Frontier and Debate"),
+        ("sources-evidence", "Source Catalog"),
+        ("relations", "Relation Audit"),
     ];
     if has_visuals {
-        items.push(("visualizations", "Visual Views"));
+        items.insert(1, ("visualizations", "Knowledge Map"));
     }
     html.push_str("<nav class=\"section-nav\" aria-label=\"Report sections\">\n");
     for (id, label) in items {
@@ -6848,6 +7125,57 @@ fn push_nav(html: &mut String, has_visuals: bool) {
         html.push_str("</a>\n");
     }
     html.push_str("</nav>\n");
+}
+
+fn push_reading_guide_section(html: &mut String, document: &ReportDocument, has_visuals: bool) {
+    let report = &document.report;
+    push_section_open(html, "reading-guide", "Reading Guide");
+    push_paragraph(html, &report.scope.summary);
+    html.push_str("<ol class=\"guide-list\">\n");
+    if has_visuals {
+        push_guide_item(
+            html,
+            "Orient with the knowledge map",
+            "Use the relation-backed visual view first; every drawn edge comes from a validated public relation.",
+        );
+    }
+    push_guide_item(
+        html,
+        "Follow the curriculum path",
+        "Read the steps in sequence and check prerequisites before moving to each new layer.",
+    );
+    push_guide_item(
+        html,
+        "Use the reading ladder",
+        "Start from the layer guidance and read sources for the stated purpose, including the explicit do-not-infer caveats.",
+    );
+    push_guide_item(
+        html,
+        "Check claims against evidence",
+        "Read each claim with its supporting, qualifying, and contradictory evidence before treating it as settled.",
+    );
+    if !report.frontier_debates.is_empty() {
+        push_guide_item(
+            html,
+            "Handle frontier guidance last",
+            "Treat current or debate-facing material as time-bound and review the stated background and source support.",
+        );
+    }
+    html.push_str("</ol>\n");
+    html.push_str("<p class=\"meta\"><strong>Report review:</strong> ");
+    push_escaped(
+        html,
+        &format_temporal_inline(&document.metadata.temporal_review),
+    );
+    html.push_str("</p>\n</section>\n");
+}
+
+fn push_guide_item(html: &mut String, title: &str, body: &str) {
+    html.push_str("<li><strong>");
+    push_escaped(html, title);
+    html.push_str("</strong><span>");
+    push_escaped(html, body);
+    html.push_str("</span></li>\n");
 }
 
 fn push_scope_section(html: &mut String, scope: &Scope) {
@@ -6878,7 +7206,13 @@ fn push_domain_profile_section(html: &mut String, profile: &DomainProfile) {
     html.push_str("</section>\n");
 }
 
-fn push_knowledge_section(html: &mut String, id: &str, title: &str, items: &[KnowledgeItem]) {
+fn push_knowledge_section(
+    html: &mut String,
+    id: &str,
+    title: &str,
+    items: &[KnowledgeItem],
+    source_labels: &BTreeMap<String, String>,
+) {
     push_section_open(html, id, title);
     if items.is_empty() {
         push_empty_note(html);
@@ -6889,18 +7223,16 @@ fn push_knowledge_section(html: &mut String, id: &str, title: &str, items: &[Kno
             push_escaped(html, &item.label);
             html.push_str("</h3>\n");
             push_paragraph(html, &item.description);
-            if !item.aliases.is_empty() || !item.source_ids.is_empty() {
-                html.push_str("<p class=\"meta\">");
-                let mut parts = Vec::new();
-                if !item.aliases.is_empty() {
-                    parts.push(format!("Aliases: {}", item.aliases.join(", ")));
-                }
-                if !item.source_ids.is_empty() {
-                    parts.push(format!("Sources: {}", item.source_ids.join(", ")));
-                }
-                push_escaped(html, &parts.join(" | "));
-                html.push_str("</p>\n");
-            }
+            push_nested_string_list(html, "Aliases", &item.aliases);
+            push_source_reference_list(html, "Sources", &item.source_ids, source_labels);
+            push_raw_details(
+                html,
+                "Raw item identifiers",
+                &[
+                    ("Item ID", item.id.clone()),
+                    ("Source IDs", item.source_ids.join(", ")),
+                ],
+            );
             html.push_str("</article>\n");
         }
         html.push_str("</div>\n");
@@ -6941,200 +7273,335 @@ fn push_evidence_standards_section(html: &mut String, standards: &EvidenceStanda
 }
 
 fn push_sources_and_evidence_section(html: &mut String, report: &PublicReport) {
-    push_section_open(html, "sources-evidence", "Sources and Evidence");
-    let source_rows = report
-        .sources
-        .iter()
-        .map(|source| {
-            vec![
-                source.id.clone(),
-                first_non_empty([source.citation.as_str(), source.title.as_str()]),
-                source.source_type.clone(),
-                source.identifier.clone(),
-                source.url.clone(),
-                format_source_roles(&source.roles),
-                format_source_access(&source.access),
-                verification_status_label(source.verification_status).to_string(),
-                source.last_reviewed.clone(),
-                source.why_it_matters.clone(),
-                source.notes.clone(),
-            ]
-        })
-        .collect::<Vec<_>>();
-    push_table(
-        html,
-        &[
-            "Source ID",
-            "Citation",
-            "Type",
-            "Identifier",
-            "URL",
-            "Roles",
-            "Access",
-            "Verification",
-            "Last Reviewed",
-            "Why It Matters",
-            "Notes",
-        ],
-        &source_rows,
-    );
-
-    let source_lookup = report
-        .sources
-        .iter()
-        .map(|source| {
-            (
-                source.id.as_str(),
-                first_non_empty([source.citation.as_str(), source.title.as_str()]),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    let mut evidence_rows = Vec::new();
-    for claim in &report.claims {
-        for link in &claim.evidence_links {
-            evidence_rows.push(vec![
-                link.evidence_id.clone(),
-                claim.id.clone(),
-                claim.statement.clone(),
-                link.source_id.clone(),
-                source_lookup
-                    .get(link.source_id.as_str())
-                    .cloned()
-                    .unwrap_or_default(),
-                verification_status_label(link.verification_status).to_string(),
-                support_kind_label(link.support_kind).to_string(),
-                first_non_empty([link.locator.as_str(), link.support_note.as_str()]),
-                link.reviewed_at.clone(),
-            ]);
+    push_section_open(html, "sources-evidence", "Source Catalog");
+    if report.sources.is_empty() {
+        push_empty_note(html);
+    } else {
+        html.push_str("<div class=\"source-grid\">\n");
+        for source in &report.sources {
+            html.push_str("<article class=\"source-card\">\n<h3>");
+            push_escaped(html, &source_display_label(source));
+            html.push_str("</h3>\n<div class=\"badge-row\">");
+            push_badge(html, &source.source_type);
+            push_badge(html, verification_status_label(source.verification_status));
+            for role in &source.roles {
+                push_badge(html, source_role_label(*role));
+            }
+            html.push_str("</div>\n");
+            push_paragraph(html, &source.why_it_matters);
+            html.push_str("<dl class=\"compact-dl\">\n");
+            push_dl_item(html, "Roles", &format_source_roles(&source.roles));
+            push_dl_item(html, "Access", &format_source_access(&source.access));
+            push_dl_item(html, "Identifier", &source.identifier);
+            push_dl_item(html, "Date", &source.date);
+            push_dl_item(html, "Last reviewed", &source.last_reviewed);
+            push_dl_item(html, "Notes", &source.notes);
+            html.push_str("</dl>\n");
+            push_raw_details(
+                html,
+                "Raw source fields",
+                &[
+                    ("Source ID", source.id.clone()),
+                    ("Citation", source.citation.clone()),
+                    ("URL", source.url.clone()),
+                ],
+            );
+            html.push_str("</article>\n");
         }
+        html.push_str("</div>\n");
     }
-    html.push_str("<h3>Evidence Links</h3>\n");
-    push_table(
-        html,
-        &[
-            "Evidence ID",
-            "Claim ID",
-            "Claim",
-            "Source ID",
-            "Source",
-            "Status",
-            "Support",
-            "Locator or Note",
-            "Reviewed",
-        ],
-        &evidence_rows,
-    );
     html.push_str("</section>\n");
 }
 
-fn push_claims_section(html: &mut String, claims: &[Claim]) {
-    push_section_open(html, "claims", "Claims");
-    let rows = claims
-        .iter()
-        .map(|claim| {
-            vec![
-                claim.id.clone(),
-                claim.statement.clone(),
-                claim_type_label(claim.claim_type).to_string(),
-                evidence_requirement_label(claim.evidence_requirement).to_string(),
+fn push_claims_section(
+    html: &mut String,
+    claims: &[Claim],
+    source_labels: &BTreeMap<String, String>,
+) {
+    push_section_open(html, "claims", "Claim Evidence Guide");
+    if claims.is_empty() {
+        push_empty_note(html);
+    } else {
+        html.push_str("<div class=\"claim-grid\">\n");
+        for claim in claims {
+            html.push_str("<article class=\"claim-card\">\n<h3>");
+            push_escaped(html, &claim.statement);
+            html.push_str("</h3>\n<div class=\"badge-row\">");
+            push_badge(html, claim_type_label(claim.claim_type));
+            push_badge(html, evidence_requirement_label(claim.evidence_requirement));
+            push_badge(
+                html,
                 claim
                     .confidence
                     .map(claim_confidence_label)
-                    .unwrap_or("")
-                    .to_string(),
-                format_temporal(&claim.temporal),
-                format_claim_evidence_links(&claim.evidence_links),
-                claim.notes.clone(),
-            ]
-        })
-        .collect::<Vec<_>>();
-    push_table(
-        html,
-        &[
-            "ID",
-            "Statement",
-            "Type",
-            "Evidence Requirement",
-            "Confidence",
-            "Temporal",
-            "Evidence",
-            "Notes",
-        ],
-        &rows,
-    );
+                    .unwrap_or("unknown"),
+            );
+            push_badge(html, temporal_status_label(claim.temporal.temporal_status));
+            html.push_str("</div>\n");
+            html.push_str("<p class=\"meta\"><strong>Temporal status:</strong> ");
+            push_escaped(html, &format_temporal_inline(&claim.temporal));
+            html.push_str("</p>\n");
+            push_evidence_group(
+                html,
+                "Supporting Evidence",
+                &claim.evidence_links,
+                source_labels,
+                |kind| kind == SupportKind::Supports,
+            );
+            push_evidence_group(
+                html,
+                "Qualifying Evidence",
+                &claim.evidence_links,
+                source_labels,
+                |kind| kind == SupportKind::Qualifies,
+            );
+            push_evidence_group(
+                html,
+                "Contradictory Evidence",
+                &claim.evidence_links,
+                source_labels,
+                |kind| kind == SupportKind::Contradicts,
+            );
+            push_evidence_group(
+                html,
+                "Context Evidence",
+                &claim.evidence_links,
+                source_labels,
+                |kind| matches!(kind, SupportKind::Background | SupportKind::Example),
+            );
+            push_paragraph(html, &claim.notes);
+            push_claim_raw_details(html, claim);
+            html.push_str("</article>\n");
+        }
+        html.push_str("</div>\n");
+    }
     html.push_str("</section>\n");
 }
 
-fn push_curriculum_section(html: &mut String, steps: &[CurriculumStep]) {
+fn push_curriculum_section(
+    html: &mut String,
+    steps: &[CurriculumStep],
+    entity_labels: &BTreeMap<String, String>,
+    source_labels: &BTreeMap<String, String>,
+) {
     push_section_open(html, "curriculum-path", "Curriculum Path");
-    let rows = steps
-        .iter()
-        .map(|step| {
-            vec![
-                step.sequence.to_string(),
-                step.title.clone(),
-                step.learning_goal.clone(),
-                step.prerequisite_ids.join(", "),
-                step.practice_artifact.clone(),
-                step.progress_criteria.join("\n"),
-                step.source_ids.join(", "),
-            ]
-        })
-        .collect::<Vec<_>>();
-    push_table(
-        html,
-        &[
-            "Seq",
-            "Title",
-            "Learning Goal",
-            "Prerequisites",
-            "Practice Artifact",
-            "Progress Criteria",
-            "Sources",
-        ],
-        &rows,
-    );
+    if steps.is_empty() {
+        push_empty_note(html);
+    } else {
+        html.push_str("<ol class=\"curriculum-path\" aria-label=\"Visual curriculum path\">\n");
+        for step in steps {
+            html.push_str(
+                "<li class=\"path-step\">\n<div class=\"path-marker\" aria-hidden=\"true\">",
+            );
+            push_escaped(html, &step.sequence.to_string());
+            html.push_str("</div>\n<article class=\"path-card\">\n<h3>");
+            push_escaped(html, &step.title);
+            html.push_str("</h3>\n");
+            push_paragraph(html, &step.learning_goal);
+            if step.prerequisite_ids.is_empty() {
+                html.push_str(
+                    "<p class=\"meta\"><strong>Prerequisites:</strong> Entry point</p>\n",
+                );
+            } else {
+                html.push_str("<p class=\"meta\"><strong>Prerequisites:</strong> ");
+                push_escaped(html, &labels_for_ids(&step.prerequisite_ids, entity_labels));
+                html.push_str("</p>\n");
+            }
+            push_paragraph(html, &step.practice_artifact);
+            push_nested_string_list(html, "Progress Criteria", &step.progress_criteria);
+            push_source_reference_list(html, "Sources", &step.source_ids, source_labels);
+            push_raw_details(
+                html,
+                "Raw curriculum identifiers",
+                &[
+                    ("Step ID", step.id.clone()),
+                    ("Prerequisite IDs", step.prerequisite_ids.join(", ")),
+                    ("Source IDs", step.source_ids.join(", ")),
+                ],
+            );
+            html.push_str("</article>\n</li>\n");
+        }
+        html.push_str("</ol>\n");
+        html.push_str("<div class=\"text-fallback\" role=\"group\" aria-label=\"Text alternative for curriculum path\">\n<h3>Text Alternative</h3>\n<ol>\n");
+        for step in steps {
+            html.push_str("<li>");
+            push_escaped(html, &step.title);
+            if step.prerequisite_ids.is_empty() {
+                html.push_str(": entry point.");
+            } else {
+                html.push_str(": follows ");
+                push_escaped(html, &labels_for_ids(&step.prerequisite_ids, entity_labels));
+                html.push('.');
+            }
+            html.push_str("</li>\n");
+        }
+        html.push_str("</ol>\n</div>\n");
+    }
     html.push_str("</section>\n");
 }
 
-fn push_frontier_section(html: &mut String, items: &[FrontierDebateItem]) {
-    push_section_open(html, "frontier-debates", "Frontier and Debate");
-    let rows = items
-        .iter()
-        .map(|item| {
-            vec![
-                item.id.clone(),
-                frontier_debate_kind_label(item.kind).to_string(),
-                item.title.clone(),
-                item.summary.clone(),
-                item.why_it_matters.clone(),
-                item.required_background_ids.join(", "),
-                item.claim_ids.join(", "),
-                item.source_ids.join(", "),
-                format_temporal(&item.temporal),
-            ]
-        })
-        .collect::<Vec<_>>();
-    push_table(
-        html,
-        &[
-            "ID",
-            "Kind",
-            "Title",
-            "Summary",
-            "Why It Matters",
-            "Required Background",
-            "Claims",
-            "Sources",
-            "Temporal",
-        ],
-        &rows,
-    );
+fn push_frontier_section(
+    html: &mut String,
+    report: &PublicReport,
+    entity_labels: &BTreeMap<String, String>,
+    source_labels: &BTreeMap<String, String>,
+) {
+    push_section_open(html, "frontier-debates", "Frontier Guidance");
+    if report.frontier_debates.is_empty() {
+        push_empty_note(html);
+    } else {
+        html.push_str("<div class=\"frontier-list\">\n");
+        for item in &report.frontier_debates {
+            html.push_str("<article class=\"frontier-card\">\n<h3>");
+            push_escaped(html, &item.title);
+            html.push_str("</h3>\n<div class=\"badge-row\">");
+            push_badge(html, frontier_debate_kind_label(item.kind));
+            push_badge(html, temporal_status_label(item.temporal.temporal_status));
+            html.push_str("</div>\n");
+            push_paragraph(html, &item.summary);
+            push_paragraph(html, &item.why_it_matters);
+            push_entity_reference_list(
+                html,
+                "Required Background",
+                &item.required_background_ids,
+                entity_labels,
+            );
+            push_entity_reference_list(html, "Related Claims", &item.claim_ids, entity_labels);
+            push_source_reference_list(html, "Sources", &item.source_ids, source_labels);
+            html.push_str("<p class=\"meta\"><strong>Temporal status:</strong> ");
+            push_escaped(html, &format_temporal_inline(&item.temporal));
+            html.push_str("</p>\n");
+            push_raw_details(
+                html,
+                "Raw frontier identifiers",
+                &[
+                    ("Frontier ID", item.id.clone()),
+                    ("Background IDs", item.required_background_ids.join(", ")),
+                    ("Claim IDs", item.claim_ids.join(", ")),
+                    ("Source IDs", item.source_ids.join(", ")),
+                ],
+            );
+            html.push_str("</article>\n");
+        }
+        html.push_str("</div>\n");
+    }
+    html.push_str("</section>\n");
+}
+
+fn push_reading_ladder_section(
+    html: &mut String,
+    report: &PublicReport,
+    source_labels: &BTreeMap<String, String>,
+) {
+    push_section_open(html, "reading-ladder", "Reading Ladder");
+    if report.literature_ladder.is_empty() {
+        push_source_ladder(html, &report.sources);
+    } else {
+        html.push_str("<ol class=\"ladder-list\">\n");
+        for row in &report.literature_ladder {
+            html.push_str("<li class=\"ladder-step\">\n<article class=\"ladder-card\">\n<h3>");
+            push_escaped(html, &row.layer);
+            html.push_str("</h3>\n<dl class=\"reader-dl\">\n");
+            push_dl_item(html, "Start point", &row.start_here);
+            push_dl_item(html, "Read for", &row.read_for);
+            push_dl_item(html, "Do not infer", &row.do_not_infer);
+            push_dl_item(html, "Notes", &row.notes);
+            html.push_str("</dl>\n");
+            push_source_reference_list(html, "Sources", &row.source_ids, source_labels);
+            push_raw_details(
+                html,
+                "Raw ladder identifiers",
+                &[
+                    ("Ladder row ID", row.id.clone()),
+                    ("Source IDs", row.source_ids.join(", ")),
+                ],
+            );
+            html.push_str("</article>\n</li>\n");
+        }
+        html.push_str("</ol>\n");
+    }
+    html.push_str("</section>\n");
+}
+
+fn push_source_ladder(html: &mut String, sources: &[ReportSource]) {
+    if sources.is_empty() {
+        push_empty_note(html);
+        return;
+    }
+    html.push_str("<p class=\"prose\">No explicit literature ladder is present; use the source metadata below as the public source ladder.</p>\n");
+    html.push_str("<ol class=\"ladder-list\">\n");
+    for source in sources {
+        let start_point = source_display_label(source);
+        html.push_str("<li class=\"ladder-step\">\n<article class=\"ladder-card\">\n<h3>");
+        push_escaped(html, &start_point);
+        html.push_str("</h3>\n<div class=\"badge-row\">");
+        for role in &source.roles {
+            push_badge(html, source_role_label(*role));
+        }
+        push_badge(html, verification_status_label(source.verification_status));
+        html.push_str("</div>\n<dl class=\"reader-dl\">\n");
+        push_dl_item(html, "Start point", &start_point);
+        push_dl_item(html, "Read for", &source.why_it_matters);
+        push_dl_item(html, "Do not infer", &source.notes);
+        html.push_str("</dl>\n");
+        push_raw_details(
+            html,
+            "Raw source identifiers",
+            &[
+                ("Source ID", source.id.clone()),
+                ("Identifier", source.identifier.clone()),
+                ("URL", source.url.clone()),
+            ],
+        );
+        html.push_str("</article>\n</li>\n");
+    }
+    html.push_str("</ol>\n");
+}
+
+fn push_relations_section(
+    html: &mut String,
+    relations: &[Relation],
+    entity_labels: &BTreeMap<String, String>,
+    source_labels: &BTreeMap<String, String>,
+) {
+    push_section_open(html, "relations", "Relation Audit");
+    if relations.is_empty() {
+        push_empty_note(html);
+    } else {
+        html.push_str("<div class=\"relation-list\">\n");
+        for relation in relations {
+            let from = label_for_id(&relation.from.id, entity_labels);
+            let to = label_for_id(&relation.to.id, entity_labels);
+            html.push_str("<article class=\"relation-card\">\n<h3>");
+            push_escaped(html, &from);
+            html.push_str(" -> ");
+            push_escaped(html, &to);
+            html.push_str("</h3>\n<div class=\"badge-row\">");
+            push_badge(html, relation_kind_label(relation.kind));
+            push_badge(html, entity_type_label(relation.from.entity_type));
+            push_badge(html, entity_type_label(relation.to.entity_type));
+            html.push_str("</div>\n");
+            push_paragraph(html, &relation.description);
+            push_source_reference_list(html, "Sources", &relation.source_ids, source_labels);
+            push_raw_details(
+                html,
+                "Raw relation identifiers",
+                &[
+                    ("Relation ID", relation.id.clone()),
+                    ("From", relation.from.id.clone()),
+                    ("To", relation.to.id.clone()),
+                    ("Source IDs", relation.source_ids.join(", ")),
+                ],
+            );
+            html.push_str("</article>\n");
+        }
+        html.push_str("</div>\n");
+    }
     html.push_str("</section>\n");
 }
 
 fn push_visual_section(html: &mut String, views: &[RenderVisualView]) {
-    push_section_open(html, "visualizations", "Visual Views");
+    push_section_open(html, "visualizations", "Knowledge Map");
     for view in views {
         html.push_str("<article class=\"visual-card\" aria-labelledby=\"visual-title-");
         push_escaped_attr(html, &view.id);
@@ -7175,14 +7642,30 @@ fn push_visual_section(html: &mut String, views: &[RenderVisualView]) {
                 html,
                 &format!(
                     "{} -> {} ({})",
-                    edge.from,
-                    edge.to,
+                    edge.from_label,
+                    edge.to_label,
                     first_non_empty([edge.label.as_str(), edge.kind.as_str(), "related"])
                 ),
             );
             html.push_str("</li>\n");
         }
-        html.push_str("</ul>\n</div>\n</article>\n");
+        html.push_str("</ul>\n");
+        push_raw_details(
+            html,
+            "Raw visual identifiers",
+            &[
+                ("Visual view ID", view.id.clone()),
+                (
+                    "Relation IDs",
+                    view.edges
+                        .iter()
+                        .map(|edge| edge.relation_id.clone())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                ),
+            ],
+        );
+        html.push_str("</div>\n</article>\n");
     }
     html.push_str("</section>\n");
 }
@@ -7219,6 +7702,21 @@ fn push_string_list(html: &mut String, title: &str, items: &[String]) {
     html.push_str("</ul>\n</div>\n");
 }
 
+fn push_nested_string_list(html: &mut String, title: &str, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    html.push_str("<div class=\"reference-block\">\n<h4>");
+    push_escaped(html, title);
+    html.push_str("</h4>\n<ul class=\"reference-list\">\n");
+    for item in items {
+        html.push_str("<li>");
+        push_escaped(html, item);
+        html.push_str("</li>\n");
+    }
+    html.push_str("</ul>\n</div>\n");
+}
+
 fn push_empty_note(html: &mut String) {
     html.push_str("<p class=\"muted\">No entries.</p>\n");
 }
@@ -7247,6 +7745,243 @@ fn push_table(html: &mut String, headers: &[&str], rows: &[Vec<String>]) {
         html.push_str("</tr>\n");
     }
     html.push_str("</tbody>\n</table>\n</div>\n");
+}
+
+fn push_badge(html: &mut String, label: &str) {
+    if label.trim().is_empty() {
+        return;
+    }
+    html.push_str("<span class=\"badge\">");
+    push_escaped(html, label);
+    html.push_str("</span>");
+}
+
+fn push_dl_item(html: &mut String, term: &str, value: &str) {
+    if value.trim().is_empty() {
+        return;
+    }
+    html.push_str("<dt>");
+    push_escaped(html, term);
+    html.push_str("</dt><dd>");
+    push_escaped(html, value);
+    html.push_str("</dd>\n");
+}
+
+fn push_source_reference_list(
+    html: &mut String,
+    title: &str,
+    source_ids: &[String],
+    source_labels: &BTreeMap<String, String>,
+) {
+    if source_ids.is_empty() {
+        return;
+    }
+    html.push_str("<div class=\"reference-block\">\n<h4>");
+    push_escaped(html, title);
+    html.push_str("</h4>\n<ul class=\"reference-list\">\n");
+    for source_id in source_ids {
+        html.push_str("<li>");
+        push_escaped(html, &label_for_id(source_id, source_labels));
+        html.push_str("</li>\n");
+    }
+    html.push_str("</ul>\n</div>\n");
+}
+
+fn push_entity_reference_list(
+    html: &mut String,
+    title: &str,
+    ids: &[String],
+    entity_labels: &BTreeMap<String, String>,
+) {
+    if ids.is_empty() {
+        return;
+    }
+    html.push_str("<div class=\"reference-block\">\n<h4>");
+    push_escaped(html, title);
+    html.push_str("</h4>\n<ul class=\"reference-list\">\n");
+    for id in ids {
+        html.push_str("<li>");
+        push_escaped(html, &label_for_id(id, entity_labels));
+        html.push_str("</li>\n");
+    }
+    html.push_str("</ul>\n</div>\n");
+}
+
+fn push_evidence_group<F>(
+    html: &mut String,
+    title: &str,
+    links: &[EvidenceLink],
+    source_labels: &BTreeMap<String, String>,
+    include: F,
+) where
+    F: Fn(SupportKind) -> bool,
+{
+    html.push_str("<section class=\"evidence-group\" aria-label=\"");
+    push_escaped_attr(html, title);
+    html.push_str("\">\n<h4>");
+    push_escaped(html, title);
+    html.push_str("</h4>\n");
+    let matching = links
+        .iter()
+        .filter(|link| include(link.support_kind))
+        .collect::<Vec<_>>();
+    if matching.is_empty() {
+        html.push_str("<p class=\"muted\">None recorded.</p>\n</section>\n");
+        return;
+    }
+    html.push_str("<ul class=\"evidence-list\">\n");
+    for link in matching {
+        let source_label = label_for_id(&link.source_id, source_labels);
+        html.push_str("<li>\n<strong>");
+        push_escaped(html, &source_label);
+        html.push_str("</strong>\n<span class=\"evidence-meta\">");
+        push_escaped(
+            html,
+            &format!(
+                "{}; {}",
+                verification_status_label(link.verification_status),
+                support_kind_label(link.support_kind)
+            ),
+        );
+        html.push_str("</span>\n");
+        if !link.locator.trim().is_empty() {
+            html.push_str("<p><strong>Locator:</strong> ");
+            push_escaped(html, &link.locator);
+            html.push_str("</p>\n");
+        }
+        if !link.support_note.trim().is_empty() {
+            html.push_str("<p>");
+            push_escaped(html, &link.support_note);
+            html.push_str("</p>\n");
+        }
+        if !link.reviewed_at.trim().is_empty() {
+            html.push_str("<p class=\"meta\">Reviewed ");
+            push_escaped(html, &link.reviewed_at);
+            html.push_str("</p>\n");
+        }
+        html.push_str("</li>\n");
+    }
+    html.push_str("</ul>\n</section>\n");
+}
+
+fn push_claim_raw_details(html: &mut String, claim: &Claim) {
+    let evidence_ids = claim
+        .evidence_links
+        .iter()
+        .map(|link| first_non_empty([link.evidence_id.as_str(), link.source_id.as_str()]))
+        .filter(|id| !id.is_empty())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source_ids = claim
+        .evidence_links
+        .iter()
+        .map(|link| link.source_id.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join(", ");
+    push_raw_details(
+        html,
+        "Raw claim identifiers",
+        &[
+            ("Claim ID", claim.id.clone()),
+            ("Evidence IDs", evidence_ids),
+            ("Source IDs", source_ids),
+            (
+                "Evidence links",
+                format_claim_evidence_links(&claim.evidence_links),
+            ),
+            ("Temporal fields", format_temporal(&claim.temporal)),
+        ],
+    );
+}
+
+fn push_raw_details(html: &mut String, summary: &str, rows: &[(&str, String)]) {
+    if rows.iter().all(|(_, value)| value.trim().is_empty()) {
+        return;
+    }
+    html.push_str("<details class=\"raw-identifiers\">\n<summary>");
+    push_escaped(html, summary);
+    html.push_str("</summary>\n<dl class=\"compact-dl\">\n");
+    for (term, value) in rows {
+        push_dl_item(html, term, value);
+    }
+    html.push_str("</dl>\n</details>\n");
+}
+
+fn source_label_lookup(report: &PublicReport) -> BTreeMap<String, String> {
+    report
+        .sources
+        .iter()
+        .map(|source| (source.id.clone(), source_display_label(source)))
+        .collect()
+}
+
+fn entity_label_lookup(report: &PublicReport) -> BTreeMap<String, String> {
+    let mut labels = BTreeMap::new();
+    for source in &report.sources {
+        labels.insert(source.id.clone(), source_display_label(source));
+    }
+    for item in &report.core_ideas {
+        labels.insert(
+            item.id.clone(),
+            first_non_empty([item.label.as_str(), item.id.as_str()]),
+        );
+    }
+    for item in &report.methods {
+        labels.insert(
+            item.id.clone(),
+            first_non_empty([item.label.as_str(), item.id.as_str()]),
+        );
+    }
+    for item in &report.representations {
+        labels.insert(
+            item.id.clone(),
+            first_non_empty([item.label.as_str(), item.id.as_str()]),
+        );
+    }
+    for claim in &report.claims {
+        labels.insert(
+            claim.id.clone(),
+            first_non_empty([claim.statement.as_str(), claim.id.as_str()]),
+        );
+    }
+    for step in &report.curriculum_path {
+        labels.insert(
+            step.id.clone(),
+            first_non_empty([step.title.as_str(), step.id.as_str()]),
+        );
+    }
+    for item in &report.frontier_debates {
+        labels.insert(
+            item.id.clone(),
+            first_non_empty([item.title.as_str(), item.id.as_str()]),
+        );
+    }
+    labels
+}
+
+fn source_display_label(source: &ReportSource) -> String {
+    first_non_empty([
+        source.title.as_str(),
+        source.citation.as_str(),
+        source.identifier.as_str(),
+        source.id.as_str(),
+    ])
+}
+
+fn labels_for_ids(ids: &[String], labels: &BTreeMap<String, String>) -> String {
+    ids.iter()
+        .map(|id| label_for_id(id, labels))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn label_for_id(id: &str, labels: &BTreeMap<String, String>) -> String {
+    labels
+        .get(id)
+        .cloned()
+        .unwrap_or_else(|| id.trim().to_string())
 }
 
 fn format_source_roles(roles: &[SourceRole]) -> String {
@@ -7301,6 +8036,24 @@ fn format_temporal(marker: &TemporalMarker) -> String {
         parts.push(marker.rationale.clone());
     }
     parts.join("\n")
+}
+
+fn format_temporal_inline(marker: &TemporalMarker) -> String {
+    let mut parts = Vec::new();
+    parts.push(format!(
+        "status: {}",
+        temporal_status_label(marker.temporal_status)
+    ));
+    if !marker.as_of.trim().is_empty() {
+        parts.push(format!("as of {}", marker.as_of));
+    }
+    if !marker.review_after.trim().is_empty() {
+        parts.push(format!("review after {}", marker.review_after));
+    }
+    if !marker.rationale.trim().is_empty() {
+        parts.push(marker.rationale.clone());
+    }
+    parts.join("; ")
 }
 
 fn format_claim_evidence_links(links: &[EvidenceLink]) -> String {

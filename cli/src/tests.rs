@@ -1993,24 +1993,45 @@ fn render_html_renders_valid_fixture_as_self_contained_one_view() {
         "<script type=\"application/json\" id=\"sok-visual-data\">",
     );
     assert_contains(&html, "Structure of Knowledge Report");
+    assert_contains(&html, "Reading Guide");
+    assert_contains(&html, "Knowledge Map");
+    assert_contains(&html, "Reading Ladder");
     assert_contains(&html, "Domain Profile");
     assert_contains(&html, "Core Ideas");
     assert_contains(&html, "Methods");
     assert_contains(&html, "Representations");
     assert_contains(&html, "Evidence Standards");
-    assert_contains(&html, "Sources and Evidence");
-    assert_contains(&html, "Claims");
+    assert_contains(&html, "Source Catalog");
+    assert_contains(&html, "Claim Evidence Guide");
     assert_contains(&html, "Curriculum Path");
-    assert_contains(&html, "Frontier and Debate");
+    assert_contains(&html, "Frontier Guidance");
+    assert_contains(&html, "Relation Audit");
     assert_contains(&html, "id=\"visualizations\"");
     assert_contains(&html, "Topology dependency path");
     assert_contains(&html, "\"kind\":\"dependency_path\"");
+    assert_contains(
+        &html,
+        "\"relation_id\":\"rel-step-algebraic-after-point-set\"",
+    );
+    assert_not_contains(&html, "\"kind\":\"extension\"");
+    assert_contains(&html, "class=\"claim-card\"");
+    assert_contains(&html, "<summary>Raw claim identifiers</summary>");
     assert_contains(&html, "class=\"visual-fallback\"");
+    assert_contains(&html, "Point-set grammar -&gt; Homotopy and homology");
+    assert_contains(&html, "class=\"text-fallback\"");
+    assert_contains(&html, "Text alternative for curriculum path");
     assert_contains(&html, "role=\"region\"");
     assert_contains(&html, "<noscript>");
+    assert_contains(&html, "@media (prefers-color-scheme: dark)");
     assert_contains(&html, "@media (max-width: 720px)");
     assert_contains(&html, "@media print");
     assert_contains(&html, ".table-scroll");
+    assert_before(&html, "id=\"reading-guide\"", "id=\"visualizations\"");
+    assert_before(&html, "id=\"visualizations\"", "id=\"curriculum-path\"");
+    assert_before(&html, "id=\"curriculum-path\"", "id=\"reading-ladder\"");
+    assert_before(&html, "id=\"reading-ladder\"", "id=\"claims\"");
+    assert_before(&html, "id=\"claims\"", "id=\"frontier-debates\"");
+    assert_before(&html, "id=\"frontier-debates\"", "id=\"scope\"");
     assert_not_contains(&html, "<script src");
     assert_not_contains(&html, "<link");
     assert_not_contains(&html.to_ascii_lowercase(), "mermaid");
@@ -2027,13 +2048,15 @@ fn render_html_keeps_report_readable_without_visual_shell_when_views_are_absent(
         .remove("visual_views");
     let html = render_report_value_to_html(dir.path(), "zero-view-report.json", &value);
 
-    assert_contains(&html, "Sources and Evidence");
-    assert_contains(&html, "Claims");
+    assert_contains(&html, "Reading Guide");
+    assert_contains(&html, "Source Catalog");
+    assert_contains(&html, "Claim Evidence Guide");
     assert_contains(&html, "Curriculum Path");
-    assert_contains(&html, "Frontier and Debate");
+    assert_contains(&html, "Frontier Guidance");
     assert_not_contains(&html, "id=\"visualizations\"");
     assert_not_contains(&html, "class=\"visual-card\"");
     assert_not_contains(&html, "data-visual-mount=");
+    assert_not_contains(&html, "id=\"sok-visual-data\"");
 }
 
 #[test]
@@ -2041,6 +2064,22 @@ fn render_html_instantiates_multiple_declared_supported_views() {
     let dir = tempfile::tempdir().unwrap();
     let mut value = load_repo_json("reports/examples/sok-report.json");
     let existing_view = value["report"]["visual_views"][0].clone();
+    value["report"]["relations"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id": "rel-munkres-supports-invariance",
+            "kind": "supports",
+            "from": {
+                "entity_type": "source",
+                "id": "src-munkres-topology"
+            },
+            "to": {
+                "entity_type": "concept",
+                "id": "concept-invariance"
+            },
+            "description": "The source supports the introductory invariant concept."
+        }));
     value["report"]["visual_views"] = json!([
         existing_view,
         {
@@ -2066,7 +2105,8 @@ fn render_html_instantiates_multiple_declared_supported_views() {
                 {
                     "from": "vnode-munkres-source",
                     "to": "vnode-invariance",
-                    "kind": "supports"
+                    "kind": "supports",
+                    "relation_id": "rel-munkres-supports-invariance"
                 }
             ]
         },
@@ -2121,6 +2161,118 @@ fn render_html_instantiates_multiple_declared_supported_views() {
     assert_contains(&html, "Text alternative for Concept source map");
     assert_contains(&html, "Nodes");
     assert_contains(&html, "Edges");
+}
+
+#[test]
+fn render_html_renders_literature_ladder_as_reader_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = load_repo_json("reports/examples/sok-report.json");
+    value["report"]["literature_ladder"] = json!([
+        {
+            "id": "ladder-foundation-munkres",
+            "layer": "Foundation",
+            "start_here": "Start with point-set definitions before quotient examples.",
+            "read_for": "Read for spaces, continuous maps, compactness, and quotient topology.",
+            "do_not_infer": "Do not infer that visual deformation metaphors replace formal definitions.",
+            "source_ids": ["src-munkres-topology"],
+            "notes": "Use this before algebraic topology."
+        }
+    ]);
+
+    let html = render_report_value_to_html(dir.path(), "ladder-report.json", &value);
+    assert_contains(&html, "Start point");
+    assert_contains(&html, "Read for");
+    assert_contains(&html, "Do not infer");
+    assert_contains(
+        &html,
+        "Start with point-set definitions before quotient examples.",
+    );
+    assert_contains(&html, "Topology");
+    assert_contains(&html, "<summary>Raw ladder identifiers</summary>");
+    assert_before(
+        &html,
+        "Start with point-set definitions",
+        "<summary>Raw ladder identifiers</summary>",
+    );
+}
+
+#[test]
+fn render_html_claim_cards_group_support_qualifiers_and_contradictions() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = load_repo_json("reports/examples/sok-report.json");
+    value["report"]["claims"][0]["evidence_links"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "source_id": "src-hatcher-algebraic-topology",
+            "verification_status": "reviewed",
+            "support_kind": "qualifies",
+            "locator": "opening chapters",
+            "support_note": "Narrows the statement to invariants built by specific constructions.",
+            "reviewed_at": "2026-07-16"
+        }));
+    value["report"]["claims"][0]["evidence_links"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "source_id": "src-otter-persistent-homology",
+            "verification_status": "reviewed",
+            "support_kind": "contradicts",
+            "locator": "roadmap caveats",
+            "support_note": "Warns against treating one invariant as a complete classifier.",
+            "reviewed_at": "2026-07-16"
+        }));
+
+    let html = render_report_value_to_html(dir.path(), "claim-card-report.json", &value);
+    assert_contains(&html, "class=\"claim-card\"");
+    assert_contains(&html, "Supporting Evidence");
+    assert_contains(&html, "Qualifying Evidence");
+    assert_contains(&html, "Contradictory Evidence");
+    assert_contains(
+        &html,
+        "Narrows the statement to invariants built by specific constructions.",
+    );
+    assert_contains(
+        &html,
+        "Warns against treating one invariant as a complete classifier.",
+    );
+    assert_contains(&html, "Algebraic Topology");
+    assert_contains(
+        &html,
+        "A roadmap for the computation of persistent homology",
+    );
+    assert_contains(&html, "<summary>Raw claim identifiers</summary>");
+}
+
+#[test]
+fn render_html_omits_visual_shell_when_edges_are_not_relation_backed() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = load_repo_json("reports/examples/sok-report.json");
+    for edge in value["report"]["visual_views"][0]["edges"]
+        .as_array_mut()
+        .unwrap()
+    {
+        edge.as_object_mut().unwrap().remove("relation_id");
+    }
+
+    let html = render_report_value_to_html(dir.path(), "relationless-view-report.json", &value);
+    assert_not_contains(&html, "id=\"visualizations\"");
+    assert_not_contains(&html, "class=\"visual-card\"");
+    assert_not_contains(&html, "data-visual-mount=");
+    assert_not_contains(&html, "id=\"sok-visual-data\"");
+}
+
+#[test]
+fn render_html_omits_visual_edge_when_relation_does_not_match_node_refs() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = load_repo_json("reports/examples/sok-report.json");
+    value["report"]["visual_views"][0]["edges"][0]["relation_id"] =
+        json!("rel-frontier-supported-by-otter");
+
+    let html = render_report_value_to_html(dir.path(), "mismatched-view-report.json", &value);
+    assert_not_contains(&html, "id=\"visualizations\"");
+    assert_not_contains(&html, "data-visual-mount=");
+    assert_not_contains(&html, "id=\"sok-visual-data\"");
 }
 
 #[test]
@@ -3672,5 +3824,18 @@ fn assert_not_contains(haystack: &str, needle: &str) {
     assert!(
         !haystack.contains(needle),
         "expected {haystack:?} not to contain {needle:?}"
+    );
+}
+
+fn assert_before(haystack: &str, first: &str, second: &str) {
+    let first_index = haystack
+        .find(first)
+        .unwrap_or_else(|| panic!("expected {haystack:?} to contain {first:?}"));
+    let second_index = haystack
+        .find(second)
+        .unwrap_or_else(|| panic!("expected {haystack:?} to contain {second:?}"));
+    assert!(
+        first_index < second_index,
+        "expected {first:?} to appear before {second:?}"
     );
 }
