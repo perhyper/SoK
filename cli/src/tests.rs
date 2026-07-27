@@ -93,7 +93,7 @@ fn validate_mode_lists_sorted_modes() {
 }
 
 #[test]
-fn report_scaffold_keeps_domain_specific_contracts() {
+fn report_scaffold_uses_domain_hints_for_discovery_not_final_sections() {
     let formal = build_report_scaffold(
         "algebraic topology",
         "doctoral mathematician",
@@ -102,13 +102,20 @@ fn report_scaffold_keeps_domain_specific_contracts() {
     );
     assert_contains(
         &formal,
-        "| Domain classification | formal / well-structured |",
+        "| Provisional lens | formal or theory-led candidate |",
     );
-    assert_contains(&formal, "Use prerequisite and proof graphs");
-    assert_contains(&formal, "## 4. Concept and Prerequisite Map");
-    assert_contains(&formal, "Counterexamples");
-    assert_contains(&formal, "| Recent survey / frontier | Conditional |");
-    assert_contains(&formal, "Formal-field audit");
+    assert_contains(&formal, "| Object grammar |");
+    assert_contains(&formal, "Do not draft the final table of contents yet");
+    assert_contains(&formal, "## Organizing Form Comparison");
+    assert_contains(&formal, "## Report Architecture Decision");
+    assert_contains(&formal, "| Architecture rationale |  |");
+    assert_contains(&formal, "Rejected alternatives and why");
+    assert_not_contains(&formal, "| Generative question |  |");
+    assert_not_contains(&formal, "| Dependency or prerequisite graph |");
+    assert_not_contains(&formal, "## 4. Concept and Prerequisite Map");
+    assert_not_contains(&formal, "## Literature Ladder");
+    assert_not_contains(&formal, "## Curriculum Roadmap");
+    assert_not_contains(&formal, "```mermaid");
     assert_not_contains(&formal, "TODO");
 
     let ill = build_report_scaffold(
@@ -119,12 +126,11 @@ fn report_scaffold_keeps_domain_specific_contracts() {
     );
     assert_contains(
         &ill,
-        "| Domain classification | ill-structured / interpretive |",
+        "| Provisional lens | interpretive or contested candidate |",
     );
-    assert_contains(&ill, "cases, schools, interpretive lenses");
-    assert_contains(&ill, "## 4. Debate and Case Network");
-    assert_contains(&ill, "Do not let one school become the field");
-    assert_contains(&ill, "Ill-structured-field audit");
+    assert_contains(&ill, "| Cases and contexts |");
+    assert_contains(&ill, "debate network, case constellation, genealogy");
+    assert_not_contains(&ill, "## 4. Debate and Case Network");
 
     let infrastructure = build_report_scaffold(
         "particle physics",
@@ -134,25 +140,20 @@ fn report_scaffold_keeps_domain_specific_contracts() {
     );
     assert_contains(
         &infrastructure,
-        "| Domain classification | infrastructure-bound / instrument-bound |",
+        "| Provisional lens | empirical or infrastructure-bound candidate |",
     );
-    assert_contains(&infrastructure, "Instrument, Data, and Standards Map");
+    assert_contains(&infrastructure, "| Phenomenon-to-data chain |");
     assert_contains(
         &infrastructure,
-        "Cannot be waived for infrastructure-bound claims",
+        "Where does the object of study become an observation",
     );
-    assert_contains(&infrastructure, "Infrastructure-bound-field audit");
 
     let mixed = build_report_scaffold("causal inference", "research lead", "build a path", 6);
+    assert_contains(&mixed, "| Provisional lens | open or mixed candidate |");
+    assert_contains(&mixed, "| Practices and warrants |");
     assert_contains(
         &mixed,
-        "| Domain classification | mixed / classification to verify |",
-    );
-    assert_contains(&mixed, "hybrid profile unresolved");
-    assert_contains(&mixed, "Waive for stable core-skill paths with rationale");
-    assert_contains(
-        &mixed,
-        "Revise the profile after source review; do not let the initial keyword guess settle the structure.",
+        "Which candidate organizing form survives comparison against the sources",
     );
 }
 
@@ -190,7 +191,7 @@ fn scaffold_inference_and_handoff_work() {
     assert_contains(&handoff, "Do not include sections named `Research Frame`");
     assert_contains(
         &handoff,
-        "Select only visual views justified by the report's structured relations",
+        "select only relation-backed visuals that clarify the chosen architecture",
     );
     assert_not_contains(&handoff, "Mermaid");
     assert_contains(&handoff, "````markdown");
@@ -318,35 +319,33 @@ fn source_template_is_header_only_and_csv_json_manifests_load() {
 
 #[test]
 fn report_models_deserialize_schema_fixtures() {
-    let final_report: report::ReportDocument =
-        report::read_json_file(repo_path("reports/examples/sok-report.json")).unwrap();
+    let final_report = current_human_report_document();
     assert_eq!(
         final_report.metadata.report_type,
         report::ReportType::HumanReport
     );
-    assert_eq!(
-        final_report.report.sources[0].access.status,
-        report::AccessStatus::PaidBook
-    );
-    assert_eq!(
-        final_report.report.claims[0].evidence_links[0].verification_status,
-        report::VerificationStatus::Reviewed
-    );
+    assert_eq!(final_report.metadata.schema_version, "sok-report/v2");
+    let reviewed_link = final_report
+        .report
+        .claims
+        .iter()
+        .flat_map(|claim| claim.evidence_links.iter())
+        .find(|link| {
+            link.verification_status == report::VerificationStatus::Reviewed
+                && link.support_kind == report::SupportKind::Supports
+        })
+        .expect("current report should preserve reviewed supporting evidence");
 
-    let encoded_link =
-        serde_json::to_string(&final_report.report.claims[0].evidence_links[0]).unwrap();
+    let encoded_link = serde_json::to_string(reviewed_link).unwrap();
     assert_contains(&encoded_link, "\"source_id\"");
     assert_contains(&encoded_link, "\"support_kind\"");
     assert_not_contains(&encoded_link, "sourceId");
 
-    let scaffold: report::ReportDocument =
-        report::read_json_file(repo_path("reports/examples/sok-scaffold-report.json")).unwrap();
+    let scaffold = current_scaffold_report_document();
+    assert_eq!(scaffold.metadata.schema_version, "sok-report/v2");
     assert_eq!(scaffold.metadata.report_type, report::ReportType::Scaffold);
     assert!(scaffold.internal_context.is_some());
-    assert_eq!(
-        scaffold.diagnostics.unwrap().checks[0].severity,
-        report::DiagnosticSeverity::Warning
-    );
+    assert!(scaffold.diagnostics.is_some());
 }
 
 #[test]
@@ -593,8 +592,8 @@ fn export_json_from_generated_scaffold_keeps_internal_context_private() {
         12,
     )
     .replace(
-        "| Profile hypothesis | ",
-        "| Profile hypothesis | SENTINEL_INTERNAL_ASSUMPTION: ",
+        "| Why only provisional | ",
+        "| Why only provisional | SENTINEL_INTERNAL_ASSUMPTION: ",
     );
     fs::write(&scaffold_path, scaffold).unwrap();
     fs::write(
@@ -639,7 +638,7 @@ Open Topology Notes,notes,https://example.test/topology,https://example.test/top
 
     let exported: report::ReportDocument = report::read_json_file(&output_path).unwrap();
     assert_eq!(exported.metadata.report_type, report::ReportType::Scaffold);
-    assert_eq!(exported.metadata.schema_version, "sok-report/v1");
+    assert_eq!(exported.metadata.schema_version, "sok-report/v2");
     assert_eq!(exported.report.field, "topology");
     assert!(!exported.report.sources.is_empty());
     assert!(exported.diagnostics.is_some());
@@ -655,7 +654,7 @@ Open Topology Notes,notes,https://example.test/topology,https://example.test/top
     assert!(internal
         .handoff_notes
         .iter()
-        .any(|note| note.contains("starter source rows")));
+        .any(|note| note.contains("field name selected a provisional")));
 
     let public_payload = serde_json::to_string(&exported.report).unwrap();
     assert_not_contains(&public_payload, "SENTINEL_INTERNAL_LEARNER");
@@ -698,6 +697,15 @@ Open Review,review_article,doi:10.0000/open,https://example.test/open,2025-01-01
 | Goal | SENTINEL_FINAL_GOAL |
 | Scope assumption | SENTINEL_FINAL_ASSUMPTION |
 
+## Report Architecture
+
+| Item | Decision |
+|---|---|
+| Executive thesis | Topology becomes legible through invariants, transformations, and counterexamples. |
+| Chosen organizing form | A transformation-and-invariant path. |
+| Architecture rationale | This path follows the field's load-bearing relations rather than a generic topic list. |
+| Rejected alternatives and why | A subfield survey was rejected because it hides the transformation-and-invariant relation. |
+
 ## Domain Decomposition
 
 Topology is organized around invariants, maps, and constructions that preserve structure under continuous deformation.
@@ -706,14 +714,14 @@ Topology is organized around invariants, maps, and constructions that preserve s
 
 The report focuses on point-set foundations before algebraic examples.
 
-## Deep Structure
+## Field Element Inventory
 
-| Element | SoK extraction |
-|---|---|
-| Core objects | Spaces, continuous maps, quotient spaces, and invariants. |
-| Syntactic structure | Proof by construction, counterexample, and functorial comparison. |
-| Representations | Commutative diagrams, chain complexes, and visual maps of spaces. |
-| Failure modes | Treating visual metaphors as definitions; assuming invariants are complete classifiers. |
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Object and transformation | Core objects | Spaces, continuous maps, quotient spaces, and invariants. | core | Maps act on spaces; invariants compare what maps preserve. | Open Review | high |
+| Method and warrant | Methods and warrants | Proof by construction, counterexample, and functorial comparison. | core | Warrants test whether a proposed invariant or equivalence is valid. | Open Review | high |
+| Representation | Representations | Commutative diagrams, chain complexes, and visual maps of spaces. | surrounding | Representations expose dependencies without replacing proof. | Open Review | high |
+| Failure mode | Visual intuition as proof | Treating visual metaphors as definitions or assuming invariants are complete classifiers. | context | Counterexamples qualify intuitive claims. | Open Review | high |
 
 ## Source Role Probe
 
@@ -877,7 +885,16 @@ Interface Study,article,doi:10.0000/interface,https://example.test/interface,202
 
     fs::write(
         &report_path,
-        r#"# Structure of Knowledge: Solid-State Batteries
+r#"# Structure of Knowledge: Solid-State Batteries
+
+## Report Architecture
+
+| Item | Decision |
+|---|---|
+| Executive thesis | Solid-state battery claims become legible when transport, interfaces, mechanics, and cell conditions are read as a coupled system. |
+| Chosen organizing form | A coupled-system dependency path. |
+| Architecture rationale | This architecture follows the dependencies behind measurement claims instead of sorting the field by material class. |
+| Rejected alternatives and why | A material-class taxonomy was rejected because it separates coupled transport, interface, and cell conditions. |
 
 ## Domain Decomposition
 
@@ -887,13 +904,13 @@ Solid-state batteries are an emerging, interdisciplinary field whose practical s
 
 Read the field as a coupled system rather than as an electrolyte-conductivity ranking.
 
-## Deep Structure
+## Field Element Inventory
 
-| Element | In this field | Sources |
-|---|---|---|
-| Core objects | Solid electrolytes, interfaces, electrodes, defects, and cell fixtures. | Open Review |
-| Methods and warrants | Impedance claims require geometry, density, electrodes, temperature, fitting, and replication details. | Interface Study |
-| Representations | Arrhenius plots, Nyquist plots, cross-sections, pressure-capacity maps, and process-flow diagrams. | Interface Study |
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Coupled material and cell objects | Core objects | Solid electrolytes, interfaces, electrodes, defects, and cell fixtures. | core | Material properties acquire meaning only within interfaces and cell conditions. | Open Review | high |
+| Method and warrant | Methods and warrants | Impedance claims require geometry, density, electrodes, temperature, fitting, and replication details. | core | Measurement warrants qualify comparisons among core objects. | Interface Study | high |
+| Representation | Representations | Arrhenius plots, Nyquist plots, cross-sections, pressure-capacity maps, and process-flow diagrams. | surrounding | Representations expose coupled transport and interface behavior. | Interface Study | high |
 
 ## Literature Ladder
 
@@ -1008,6 +1025,103 @@ Read every result as material chemistry to measured transport to interface evolu
 }
 
 #[test]
+fn field_element_class_drives_typed_export_without_optional_modules() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("field-elements.md");
+    let sources_path = dir.path().join("sources.csv");
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+Instrument Review,review_article,doi:10.0000/instrument,https://example.test/instrument,2025-01-01,open_access,Official URL,$0,CC BY,foundation,Explains measurement and calibration.,Reference,\n",
+    )
+    .unwrap();
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: Measurement Science
+
+## Report Architecture
+
+| Item | Decision |
+|---|---|
+| Executive thesis | Measurement science becomes legible by following the transformations that turn a remote signal into a warranted estimate. |
+| Chosen organizing form | A phenomenon-to-instrument-to-estimate chain. |
+| Architecture rationale | This sequence exposes how instruments and calibration shape the reported observable. |
+| Rejected alternatives and why | A taxonomy of instrument types was rejected because it would hide the transformations and warrants shared across devices. |
+
+## When a Signal Becomes Data
+
+The field is organized by the transformations that turn a remote signal into a warranted estimate.
+
+## Field Element Inventory
+
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Object or phenomenon | Remote signal | A physical quantity available only through an instrument response. | core | represented by an observable | S1 | high |
+| Representation or model | Observable quantities | Calibrated values with units and uncertainty. | core | represents the signal and uses calibration | S1 | high |
+| Method or operation | Calibration transfer | A comparison that estimates nuisance transformations. | core | qualifies observable quantities | S1 | high |
+| Instrument chain | Receiver chain | An antenna, amplifier, digitizer, and calibration path acting as one measurement system. | surrounding | transforms the remote signal into recorded samples | S1 | medium |
+
+## Relations
+
+| Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale | Source IDs |
+|---|---|---|---|---|---|---|---|
+| R1 | represented_by | concept | Remote signal | representation | Observable quantities | Instruments expose signals through observables. | S1 |
+| R2 | uses_method | representation | Observable quantities | method | Calibration transfer | Reported values depend on calibration. | S1 |
+| R3 | maps_to | field_element | Remote signal | field_element | Receiver chain | The phenomenon becomes data only through the instrument chain. | S1 |
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert_eq!(exported.report.field_elements.len(), 4);
+    let receiver_chain = exported
+        .report
+        .field_elements
+        .iter()
+        .find(|element| element.label == "Receiver chain")
+        .unwrap();
+    assert_eq!(receiver_chain.element_class, "Instrument chain");
+    assert_eq!(receiver_chain.role, "surrounding");
+    assert_eq!(
+        receiver_chain.confidence,
+        Some(report::ClaimConfidence::Medium)
+    );
+    assert_contains(&receiver_chain.actual_form, "antenna");
+    assert_contains(
+        &receiver_chain.load_bearing_relations,
+        "transforms the remote signal",
+    );
+    assert_eq!(exported.report.core_ideas.len(), 2);
+    assert_eq!(exported.report.representations.len(), 1);
+    assert_eq!(exported.report.methods.len(), 1);
+    assert_eq!(exported.report.relations.len(), 3);
+    let field_relation = exported
+        .report
+        .relations
+        .iter()
+        .find(|relation| relation.id == report::content_id("rel", &["R3"]))
+        .unwrap();
+    assert_eq!(
+        field_relation.from.entity_type,
+        report::EntityType::FieldElement
+    );
+    assert_eq!(
+        field_relation.to.entity_type,
+        report::EntityType::FieldElement
+    );
+    assert!(exported.report.curriculum_path.is_empty());
+    assert!(exported.diagnostics.is_none(), "{:?}", exported.diagnostics);
+    let validation = report::validate_report_value(&serde_json::to_value(&exported).unwrap());
+    assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
+}
+
+#[test]
 fn export_json_reports_unresolved_structured_markdown_references() {
     let dir = tempfile::tempdir().unwrap();
     let report_path = dir.path().join("broken-relations.md");
@@ -1020,20 +1134,29 @@ Open Review,review_article,doi:10.0000/open,https://example.test/open,2025-01-01
     .unwrap();
     fs::write(
         &report_path,
-        r#"# Structure of Knowledge: Solid-State Batteries
+r#"# Structure of Knowledge: Solid-State Batteries
+
+## Report Architecture
+
+| Item | Decision |
+|---|---|
+| Executive thesis | Solid-state battery evidence depends on coupled transport and cell-design relations. |
+| Chosen organizing form | A coupled-system path. |
+| Architecture rationale | The relation under test is a dependency, so the report follows that dependency explicitly. |
+| Rejected alternatives and why | A component inventory was rejected because it would not expose the dependency under test. |
 
 ## Domain Decomposition
 
 Solid-state batteries couple transport and cell design.
 
-## Deep Structure
+## Field Element Inventory
 
-| Element | In this field |
-|---|---|
-| Core objects | Solid electrolytes and interfaces. |
-| Open Review | A concept label that intentionally collides with a source title. |
-| Methods and warrants | Measurement warrants. |
-| Representations | Nyquist plots. |
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Coupled objects | Core objects | Solid electrolytes and interfaces. | core | Interfaces couple transport and cell design. | Open Review | high |
+| Boundary concept | Open Review | A concept label that intentionally collides with a source title. | context | Tests typed-reference ambiguity. | Open Review | high |
+| Method and warrant | Methods and warrants | Measurement warrants. | core | Warrants qualify measurements. | Open Review | high |
+| Representation | Representations | Nyquist plots. | surrounding | Plots represent impedance behavior. | Open Review | high |
 
 ## Curriculum Roadmap
 
@@ -1234,6 +1357,9 @@ fn sok_report_schema_declares_json_first_contract() {
         "visual_view_node",
         "visual_view_edge",
         "structure_waiver",
+        "report_presentation",
+        "report_section",
+        "field_element",
     ] {
         assert!(defs.contains_key(name), "schema should define {name}");
     }
@@ -1262,6 +1388,20 @@ fn sok_report_schema_declares_json_first_contract() {
         defs["public_report"]["properties"]
             .as_object()
             .unwrap()
+            .contains_key("presentation"),
+        "schema should describe optional ordered presentation sections"
+    );
+    assert!(
+        defs["public_report"]["properties"]
+            .as_object()
+            .unwrap()
+            .contains_key("field_elements"),
+        "schema should preserve optional field-native elements for v1 compatibility"
+    );
+    assert!(
+        defs["public_report"]["properties"]
+            .as_object()
+            .unwrap()
             .contains_key("literature_ladder"),
         "schema should describe optional literature ladder rows"
     );
@@ -1280,6 +1420,33 @@ fn sok_report_schema_declares_json_first_contract() {
         "schema should describe optional structure waivers"
     );
     assert!(
+        !json_array_contains(report_required, "presentation"),
+        "ordered presentation should remain optional for legacy JSON"
+    );
+    assert!(
+        !json_array_contains(report_required, "field_elements"),
+        "field_elements should remain schema-optional for legacy JSON"
+    );
+    let presentation_required = &defs["report_presentation"]["required"];
+    for name in ["thesis", "organizing_form", "rationale", "sections"] {
+        assert!(
+            json_array_contains(presentation_required, name),
+            "a declared presentation should require {name}"
+        );
+    }
+    assert_eq!(
+        defs["report_presentation"]["properties"]["sections"]["minItems"],
+        json!(1)
+    );
+    assert!(defs["report_presentation"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("alternatives_considered"));
+    assert!(
+        !json_array_contains(presentation_required, "alternatives_considered"),
+        "the alternatives trace is v2-required but remains optional for legacy v1 presentations"
+    );
+    assert!(
         !json_array_contains(report_required, "literature_ladder"),
         "literature ladder rows should be declared but not globally required"
     );
@@ -1295,11 +1462,35 @@ fn sok_report_schema_declares_json_first_contract() {
         &defs["structure_waiver"]["properties"]["scope"]["enum"],
         "curriculum_prerequisites"
     ));
+    assert!(json_array_contains(
+        &defs["relation_endpoint"]["properties"]["entity_type"]["enum"],
+        "field_element"
+    ));
+    assert!(json_array_contains(
+        &defs["visual_view_node"]["required"],
+        "ref_id"
+    ));
+    assert!(json_array_contains(
+        &defs["visual_view_edge"]["required"],
+        "relation_id"
+    ));
+    assert_eq!(
+        defs["visual_view"]["properties"]["nodes"]["minItems"],
+        json!(2)
+    );
+    assert_eq!(
+        defs["visual_view"]["properties"]["edges"]["minItems"],
+        json!(1)
+    );
+    assert!(!json_array_contains(
+        &defs["visual_view"]["properties"]["kind"]["enum"],
+        "custom"
+    ));
 }
 
 #[test]
 fn sok_report_fixtures_match_smoke_contract() {
-    let final_report = load_repo_json("reports/examples/sok-report.json");
+    let final_report = current_human_report_value();
     validate_sok_report_smoke(&final_report).unwrap();
     assert_eq!(
         final_report["metadata"]["report_type"],
@@ -1307,7 +1498,7 @@ fn sok_report_fixtures_match_smoke_contract() {
     );
     assert!(final_report.get("internal_context").is_none());
 
-    let scaffold_report = load_repo_json("reports/examples/sok-scaffold-report.json");
+    let scaffold_report = current_scaffold_report_value();
     validate_sok_report_smoke(&scaffold_report).unwrap();
     assert_eq!(
         scaffold_report["metadata"]["report_type"],
@@ -1324,18 +1515,37 @@ fn sok_report_fixtures_match_smoke_contract() {
 
 #[test]
 fn sok_report_optional_structure_fields_round_trip_and_validate() {
-    let mut structured = load_repo_json("reports/examples/sok-report.json");
-    structured["report"]["literature_ladder"] = json!([
-        {
-            "id": "ladder-foundation-munkres",
-            "layer": "foundation",
-            "start_here": "Begin with point-set definitions before algebraic topology.",
-            "read_for": "Read for spaces, continuous maps, compactness, and quotient examples.",
-            "do_not_infer": "Do not infer that visual deformation metaphors replace formal definitions.",
-            "source_ids": ["src-munkres-topology"],
-            "notes": "Compact fixture row for public contract coverage."
-        }
-    ]);
+    let structured = current_human_report_value();
+    let boundary_source_id =
+        report_item_id(&structured, "sources", "title", "Quantum Sensing Explained");
+    let measurement_model_id =
+        report_item_id(&structured, "curriculum_path", "title", "Measurement model");
+    let encoding_step_index = report_item_index(
+        &structured,
+        "curriculum_path",
+        "title",
+        "Quantum encoding and control",
+    );
+    let measurand_id = report_item_id(&structured, "field_elements", "label", "Physical quantity");
+    let encoding_id = report_item_id(
+        &structured,
+        "field_elements",
+        "label",
+        "Encoding interaction",
+    );
+    let measurement_relation_index =
+        report_relation_index_between(&structured, &measurand_id, &encoding_id);
+    let measurement_relation_id = structured["report"]["relations"][measurement_relation_index]
+        ["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let measurement_view_index = report_item_index(
+        &structured,
+        "visual_views",
+        "title",
+        "From fragile probe to trustworthy measurement",
+    );
 
     validate_sok_report_smoke(&structured).unwrap();
     let validation = report::validate_report_value(&structured);
@@ -1343,25 +1553,30 @@ fn sok_report_optional_structure_fields_round_trip_and_validate() {
     assert_eq!(validation.warning_count(), 0);
 
     let document: report::ReportDocument = serde_json::from_value(structured.clone()).unwrap();
-    assert_eq!(document.report.literature_ladder.len(), 1);
-    assert_eq!(
-        document.report.literature_ladder[0].source_ids,
-        vec!["src-munkres-topology".to_string()]
+    let boundary_row = document
+        .report
+        .literature_ladder
+        .iter()
+        .find(|row| row.layer == "Boundary")
+        .expect("fresh report should preserve its boundary literature row");
+    assert!(
+        boundary_row.source_ids.contains(&boundary_source_id),
+        "boundary row should resolve the named NIST source"
     );
     assert_eq!(
-        structured["report"]["relations"][0]["from"]["id"],
-        json!("concept-quotient")
+        structured["report"]["curriculum_path"][encoding_step_index]["prerequisite_ids"],
+        json!([measurement_model_id])
     );
-    assert_eq!(
-        structured["report"]["curriculum_path"][1]["prerequisite_ids"][0],
-        json!("step-point-set")
-    );
-    assert_eq!(
-        structured["report"]["visual_views"][0]["edges"][0]["relation_id"],
-        json!("rel-step-algebraic-after-point-set")
+    assert!(
+        structured["report"]["visual_views"][measurement_view_index]["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| edge["relation_id"].as_str() == Some(&measurement_relation_id)),
+        "measurement view should preserve the relation that begins the chain"
     );
 
-    let mut waived = load_repo_json("reports/examples/sok-report.json");
+    let mut waived = current_human_report_value();
     waived["report"]
         .as_object_mut()
         .unwrap()
@@ -1386,7 +1601,7 @@ fn sok_report_optional_structure_fields_round_trip_and_validate() {
 fn sok_report_smoke_contract_rejects_bad_shapes() {
     assert!(serde_json::from_str::<Value>(r#"{"metadata":"#).is_err());
 
-    let final_report = load_repo_json("reports/examples/sok-report.json");
+    let final_report = current_human_report_value();
 
     let mut missing_metadata = final_report.clone();
     missing_metadata.as_object_mut().unwrap().remove("metadata");
@@ -1417,7 +1632,21 @@ fn sok_report_smoke_contract_rejects_bad_shapes() {
     );
 
     let mut bad_relation_id = final_report.clone();
-    bad_relation_id["report"]["relations"][0]["to"]["id"] = json!("claim with spaces");
+    let measurand_id = report_item_id(
+        &bad_relation_id,
+        "field_elements",
+        "label",
+        "Physical quantity",
+    );
+    let encoding_id = report_item_id(
+        &bad_relation_id,
+        "field_elements",
+        "label",
+        "Encoding interaction",
+    );
+    let relation_index =
+        report_relation_index_between(&bad_relation_id, &measurand_id, &encoding_id);
+    bad_relation_id["report"]["relations"][relation_index]["to"]["id"] = json!("claim with spaces");
     assert_contains(
         &validate_sok_report_smoke(&bad_relation_id)
             .unwrap_err()
@@ -1426,8 +1655,19 @@ fn sok_report_smoke_contract_rejects_bad_shapes() {
     );
 
     let mut bad_source_ref = final_report.clone();
-    bad_source_ref["report"]["claims"][0]["evidence_links"][0]["source_id"] =
-        json!("src-missing-source");
+    let claim_index = report_item_index_containing(
+        &bad_source_ref,
+        "claims",
+        "statement",
+        "end-to-end measurement chain",
+    );
+    let evidence_index = array_item_index(
+        &bad_source_ref["report"]["claims"][claim_index]["evidence_links"],
+        "support_kind",
+        "supports",
+    );
+    bad_source_ref["report"]["claims"][claim_index]["evidence_links"][evidence_index]
+        ["source_id"] = json!("src-missing-source");
     assert_contains(
         &validate_sok_report_smoke(&bad_source_ref)
             .unwrap_err()
@@ -1438,18 +1678,19 @@ fn sok_report_smoke_contract_rejects_bad_shapes() {
 
 #[test]
 fn validate_report_fixture_passes_without_diagnostics() {
-    let final_report = load_repo_json("reports/examples/sok-report.json");
+    let final_report = current_human_report_value();
     let validation = report::validate_report_value(&final_report);
     assert_eq!(validation.error_count(), 0);
     assert_eq!(validation.warning_count(), 0);
     assert!(validation.diagnostics.checks.is_empty());
 
+    let dir = tempfile::tempdir().unwrap();
+    let input_path = dir.path().join("current-v2-report.json");
+    report::write_json_file(&input_path, &final_report).unwrap();
     let exit_code = run_cli(vec![
         "validate-report".to_string(),
         "--input".to_string(),
-        repo_path("reports/examples/sok-report.json")
-            .display()
-            .to_string(),
+        input_path.display().to_string(),
         "--strict".to_string(),
     ])
     .unwrap();
@@ -1458,7 +1699,7 @@ fn validate_report_fixture_passes_without_diagnostics() {
 
 #[test]
 fn validate_report_schema_and_public_boundary_errors_are_stable() {
-    let final_report = load_repo_json("reports/examples/sok-report.json");
+    let final_report = current_human_report_value();
 
     let mut missing = final_report.clone();
     missing["report"].as_object_mut().unwrap().remove("field");
@@ -1483,14 +1724,22 @@ fn validate_report_schema_and_public_boundary_errors_are_stable() {
 
 #[test]
 fn validate_report_evidence_requirements_use_structured_fields() {
-    let mut report_value = load_repo_json("reports/examples/sok-report.json");
-    report_value["report"]["claims"][2]["evidence_links"] = json!([
+    let mut report_value = current_human_report_value();
+    let ligo_claim_index =
+        report_item_index_containing(&report_value, "claims", "statement", "LIGO");
+    let ligo_source_id = report_item_id(
+        &report_value,
+        "sources",
+        "title",
+        "Broadband Quantum Enhancement of the LIGO Detectors",
+    );
+    report_value["report"]["claims"][ligo_claim_index]["evidence_links"] = json!([
         {
-            "source_id": "src-otter-persistent-homology",
+            "source_id": ligo_source_id,
             "verification_status": "cataloged",
             "support_kind": "supports",
-            "locator": "roadmap overview",
-            "support_note": "Cataloged links cannot support frontier claims."
+            "locator": "detector configuration",
+            "support_note": "Cataloged links cannot satisfy a reviewed-source requirement."
         }
     ]);
     let validation = report::validate_report_value(&report_value);
@@ -1500,9 +1749,22 @@ fn validate_report_evidence_requirements_use_structured_fields() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut unsupported = load_repo_json("reports/examples/sok-report.json");
-    unsupported["report"]["claims"][0]["evidence_links"][0]["locator"] = json!("");
-    unsupported["report"]["claims"][0]["evidence_links"][0]["support_note"] = json!("");
+    let mut unsupported = current_human_report_value();
+    let chain_claim_index = report_item_index_containing(
+        &unsupported,
+        "claims",
+        "statement",
+        "end-to-end measurement chain",
+    );
+    let supporting_link_index = array_item_index(
+        &unsupported["report"]["claims"][chain_claim_index]["evidence_links"],
+        "support_kind",
+        "supports",
+    );
+    unsupported["report"]["claims"][chain_claim_index]["evidence_links"][supporting_link_index]
+        ["locator"] = json!("");
+    unsupported["report"]["claims"][chain_claim_index]["evidence_links"][supporting_link_index]
+        ["support_note"] = json!("");
     let validation = report::validate_report_value(&unsupported);
     assert_validation_check(
         &validation,
@@ -1513,9 +1775,15 @@ fn validate_report_evidence_requirements_use_structured_fields() {
 
 #[test]
 fn validate_report_source_role_coverage_uses_explicit_requirements_and_waivers() {
-    let mut required_gap = load_repo_json("reports/examples/sok-report.json");
-    required_gap["report"]["evidence_standards"]["source_role_requirements"][0]
-        ["minimum_sources"] = json!(3);
+    let mut required_gap = current_human_report_value();
+    required_gap["report"]["evidence_standards"]["source_role_requirements"] = json!([
+        {
+            "role": "foundation",
+            "requirement": "required",
+            "minimum_sources": 2,
+            "rationale": "Two independent foundation sources are required for this validation probe."
+        }
+    ]);
     let validation = report::validate_report_value(&required_gap);
     assert_validation_check(
         &validation,
@@ -1523,11 +1791,15 @@ fn validate_report_source_role_coverage_uses_explicit_requirements_and_waivers()
         report::DiagnosticSeverity::Error,
     );
 
-    let mut missing_waiver = load_repo_json("reports/examples/sok-report.json");
-    missing_waiver["report"]["evidence_standards"]["source_role_requirements"][2]
-        .as_object_mut()
-        .unwrap()
-        .remove("waiver");
+    let mut missing_waiver = current_human_report_value();
+    missing_waiver["report"]["evidence_standards"]["source_role_requirements"] = json!([
+        {
+            "role": "debate",
+            "requirement": "waived",
+            "minimum_sources": 0,
+            "rationale": "No debate source is needed for the stable measurement-chain fixture."
+        }
+    ]);
     let validation = report::validate_report_value(&missing_waiver);
     assert_validation_check(
         &validation,
@@ -1538,8 +1810,10 @@ fn validate_report_source_role_coverage_uses_explicit_requirements_and_waivers()
 
 #[test]
 fn validate_report_currentness_is_structured_and_prose_is_warning_only() {
-    let mut missing_temporal = load_repo_json("reports/examples/sok-report.json");
-    missing_temporal["report"]["claims"][2]["temporal"]
+    let mut missing_temporal = current_human_report_value();
+    let current_claim_index =
+        report_item_index_containing(&missing_temporal, "claims", "statement", "Field usefulness");
+    missing_temporal["report"]["claims"][current_claim_index]["temporal"]
         .as_object_mut()
         .unwrap()
         .remove("review_after");
@@ -1550,8 +1824,14 @@ fn validate_report_currentness_is_structured_and_prose_is_warning_only() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut future_source = load_repo_json("reports/examples/sok-report.json");
-    future_source["report"]["sources"][2]["date"] = json!("2028");
+    let mut future_source = current_human_report_value();
+    let roadmap_source_index = report_item_index(
+        &future_source,
+        "sources",
+        "title",
+        "DOE Quantum Information Science Applications Roadmap",
+    );
+    future_source["report"]["sources"][roadmap_source_index]["date"] = json!("2028");
     let validation = report::validate_report_value(&future_source);
     assert_validation_check(
         &validation,
@@ -1559,22 +1839,33 @@ fn validate_report_currentness_is_structured_and_prose_is_warning_only() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut prose = load_repo_json("reports/examples/sok-report.json");
-    prose["report"]["claims"][0]["statement"] =
-        json!("The latest topology curriculum still begins with invariance.");
-    prose["report"]["claims"][0]["temporal"]["as_of"] = json!("");
-    prose["report"]["claims"][0]["temporal"]["temporal_status"] = json!("unknown");
+    let mut prose = current_human_report_value();
+    let chain_claim_index = report_item_index_containing(
+        &prose,
+        "claims",
+        "statement",
+        "end-to-end measurement chain",
+    );
+    prose["report"]["claims"][chain_claim_index]["statement"] =
+        json!("The latest quantum-sensing account still begins with the measurement chain.");
+    prose["report"]["claims"][chain_claim_index]["temporal"]["as_of"] = json!("2026-07-27");
+    prose["report"]["claims"][chain_claim_index]["temporal"]["temporal_status"] = json!("unknown");
     let validation = report::validate_report_value(&prose);
     assert_validation_check(
         &validation,
         report::CHECK_VALIDATE_CURRENTNESS_PROSE,
         report::DiagnosticSeverity::Warning,
     );
+    assert_eq!(
+        validation.error_count(),
+        0,
+        "unstructured currentness prose should warn without introducing a validation error"
+    );
 }
 
 #[test]
 fn validate_report_relation_and_curriculum_consistency_are_errors() {
-    let mut bad_kind = load_repo_json("reports/examples/sok-report.json");
+    let mut bad_kind = current_human_report_value();
     bad_kind["report"]["relations"][0]["kind"] = json!("unknown_relation");
     let validation = report::validate_report_value(&bad_kind);
     assert_validation_check(
@@ -1583,7 +1874,7 @@ fn validate_report_relation_and_curriculum_consistency_are_errors() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut bad_endpoint = load_repo_json("reports/examples/sok-report.json");
+    let mut bad_endpoint = current_human_report_value();
     bad_endpoint["report"]["relations"][0]["to"]["id"] = json!("concept-missing");
     let validation = report::validate_report_value(&bad_endpoint);
     assert_validation_check(
@@ -1592,7 +1883,7 @@ fn validate_report_relation_and_curriculum_consistency_are_errors() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut bad_step = load_repo_json("reports/examples/sok-report.json");
+    let mut bad_step = current_human_report_value();
     bad_step["report"]["curriculum_path"][1]["prerequisite_ids"] = json!(["step-missing"]);
     let validation = report::validate_report_value(&bad_step);
     assert_validation_check(
@@ -1604,7 +1895,7 @@ fn validate_report_relation_and_curriculum_consistency_are_errors() {
 
 #[test]
 fn validate_report_source_access_metadata_is_strict_for_restricted_sources() {
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     value["report"]["sources"][1]["access"] = json!({
         "status": "paywalled",
         "route": "unknown",
@@ -1625,9 +1916,15 @@ fn validate_report_source_access_metadata_is_strict_for_restricted_sources() {
 fn validate_report_strict_mode_fails_on_warnings_but_default_does_not() {
     let dir = tempfile::tempdir().unwrap();
     let report_path = dir.path().join("warning-only-report.json");
-    let mut value = load_repo_json("reports/examples/sok-report.json");
-    value["report"]["evidence_standards"]["source_role_requirements"][1]["minimum_sources"] =
-        json!(2);
+    let mut value = current_human_report_value();
+    value["report"]["evidence_standards"]["source_role_requirements"] = json!([
+        {
+            "role": "critique",
+            "requirement": "conditional",
+            "minimum_sources": 1,
+            "rationale": "A critique source is conditionally useful for this validation probe."
+        }
+    ]);
     report::write_json_file(&report_path, &value).unwrap();
 
     let validation = report::validate_report_file(&report_path).unwrap();
@@ -1660,7 +1957,7 @@ fn validate_report_strict_mode_fails_on_warnings_but_default_does_not() {
 fn validate_report_surfaces_embedded_export_diagnostics_in_strict_mode() {
     let dir = tempfile::tempdir().unwrap();
     let report_path = dir.path().join("embedded-warning-report.json");
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     value["diagnostics"] = json!({
         "summary": "export diagnostics",
         "checks": [
@@ -1729,7 +2026,7 @@ fn validate_report_surfaces_embedded_export_diagnostics_in_strict_mode() {
 
 #[test]
 fn validate_report_requires_structure_for_substantial_final_reports() {
-    let mut missing_relations = load_repo_json("reports/examples/sok-report.json");
+    let mut missing_relations = current_human_report_value();
     missing_relations["report"]["relations"] = json!([]);
     let validation = report::validate_report_value(&missing_relations);
     assert_validation_check(
@@ -1738,7 +2035,7 @@ fn validate_report_requires_structure_for_substantial_final_reports() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut missing_prerequisites = load_repo_json("reports/examples/sok-report.json");
+    let mut missing_prerequisites = current_human_report_value();
     for step in missing_prerequisites["report"]["curriculum_path"]
         .as_array_mut()
         .unwrap()
@@ -1766,7 +2063,7 @@ fn validate_report_requires_structure_for_substantial_final_reports() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut missing_visual = load_repo_json("reports/examples/sok-report.json");
+    let mut missing_visual = current_human_report_value();
     missing_visual["report"]
         .as_object_mut()
         .unwrap()
@@ -1808,17 +2105,11 @@ fn validate_report_requires_structure_for_substantial_final_reports() {
 
 #[test]
 fn validate_report_checks_new_structure_endpoints() {
-    let mut bad_ladder_source = load_repo_json("reports/examples/sok-report.json");
-    bad_ladder_source["report"]["literature_ladder"] = json!([
-        {
-            "id": "ladder-bad-source",
-            "layer": "foundation",
-            "start_here": "Start with a missing source.",
-            "read_for": "Endpoint validation.",
-            "do_not_infer": "Do not infer missing sources.",
-            "source_ids": ["src-missing-source"]
-        }
-    ]);
+    let mut bad_ladder_source = current_human_report_value();
+    let boundary_row_index =
+        report_item_index(&bad_ladder_source, "literature_ladder", "layer", "Boundary");
+    bad_ladder_source["report"]["literature_ladder"][boundary_row_index]["source_ids"] =
+        json!(["src-missing-source"]);
     let validation = report::validate_report_value(&bad_ladder_source);
     assert_validation_check(
         &validation,
@@ -1826,9 +2117,20 @@ fn validate_report_checks_new_structure_endpoints() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut bad_claim_source = load_repo_json("reports/examples/sok-report.json");
-    bad_claim_source["report"]["claims"][0]["evidence_links"][0]["source_id"] =
-        json!("src-missing-source");
+    let mut bad_claim_source = current_human_report_value();
+    let chain_claim_index = report_item_index_containing(
+        &bad_claim_source,
+        "claims",
+        "statement",
+        "end-to-end measurement chain",
+    );
+    let supporting_link_index = array_item_index(
+        &bad_claim_source["report"]["claims"][chain_claim_index]["evidence_links"],
+        "support_kind",
+        "supports",
+    );
+    bad_claim_source["report"]["claims"][chain_claim_index]["evidence_links"]
+        [supporting_link_index]["source_id"] = json!("src-missing-source");
     let validation = report::validate_report_value(&bad_claim_source);
     assert_validation_check(
         &validation,
@@ -1836,8 +2138,32 @@ fn validate_report_checks_new_structure_endpoints() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut bad_frontier_claim = load_repo_json("reports/examples/sok-report.json");
-    bad_frontier_claim["report"]["frontier_debates"][0]["claim_ids"] = json!(["claim-missing"]);
+    let mut bad_frontier_claim = current_human_report_value();
+    let foundation_source_id =
+        report_item_id(&bad_frontier_claim, "sources", "title", "Quantum Sensing");
+    let measurand_id = report_item_id(
+        &bad_frontier_claim,
+        "field_elements",
+        "label",
+        "Physical quantity",
+    );
+    bad_frontier_claim["report"]["frontier_debates"] = json!([
+        {
+            "id": "frontier-validation-probe",
+            "kind": "frontier",
+            "title": "Validation probe",
+            "summary": "A bounded fixture item for checking public endpoint resolution.",
+            "why_it_matters": "A frontier item must resolve every structured claim reference.",
+            "required_background_ids": [measurand_id],
+            "claim_ids": ["claim-missing"],
+            "source_ids": [foundation_source_id],
+            "temporal": {
+                "as_of": "2026-07-27",
+                "review_after": "2027-01-26",
+                "temporal_status": "current"
+            }
+        }
+    ]);
     let validation = report::validate_report_value(&bad_frontier_claim);
     assert_validation_check(
         &validation,
@@ -1845,8 +2171,20 @@ fn validate_report_checks_new_structure_endpoints() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut bad_visual_ref = load_repo_json("reports/examples/sok-report.json");
-    bad_visual_ref["report"]["visual_views"][0]["nodes"][0]["ref_id"] = json!("step-missing");
+    let mut bad_visual_ref = current_human_report_value();
+    let view_index = report_item_index(
+        &bad_visual_ref,
+        "visual_views",
+        "title",
+        "From fragile probe to trustworthy measurement",
+    );
+    let node_index = array_item_index(
+        &bad_visual_ref["report"]["visual_views"][view_index]["nodes"],
+        "label",
+        "Physical quantity",
+    );
+    bad_visual_ref["report"]["visual_views"][view_index]["nodes"][node_index]["ref_id"] =
+        json!("step-missing");
     let validation = report::validate_report_value(&bad_visual_ref);
     assert_validation_check(
         &validation,
@@ -1854,8 +2192,38 @@ fn validate_report_checks_new_structure_endpoints() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut bad_visual_node = load_repo_json("reports/examples/sok-report.json");
-    bad_visual_node["report"]["visual_views"][0]["edges"][0]["from"] = json!("vnode-missing");
+    let mut bad_visual_node = current_human_report_value();
+    let measurand_id = report_item_id(
+        &bad_visual_node,
+        "field_elements",
+        "label",
+        "Physical quantity",
+    );
+    let encoding_id = report_item_id(
+        &bad_visual_node,
+        "field_elements",
+        "label",
+        "Encoding interaction",
+    );
+    let relation_index =
+        report_relation_index_between(&bad_visual_node, &measurand_id, &encoding_id);
+    let relation_id = bad_visual_node["report"]["relations"][relation_index]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let view_index = report_item_index(
+        &bad_visual_node,
+        "visual_views",
+        "title",
+        "From fragile probe to trustworthy measurement",
+    );
+    let edge_index = array_item_index(
+        &bad_visual_node["report"]["visual_views"][view_index]["edges"],
+        "relation_id",
+        &relation_id,
+    );
+    bad_visual_node["report"]["visual_views"][view_index]["edges"][edge_index]["from"] =
+        json!("vnode-missing");
     let validation = report::validate_report_value(&bad_visual_node);
     assert_validation_check(
         &validation,
@@ -1863,8 +2231,37 @@ fn validate_report_checks_new_structure_endpoints() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut bad_visual_relation = load_repo_json("reports/examples/sok-report.json");
-    bad_visual_relation["report"]["visual_views"][0]["edges"][0]["relation_id"] =
+    let mut bad_visual_relation = current_human_report_value();
+    let measurand_id = report_item_id(
+        &bad_visual_relation,
+        "field_elements",
+        "label",
+        "Physical quantity",
+    );
+    let encoding_id = report_item_id(
+        &bad_visual_relation,
+        "field_elements",
+        "label",
+        "Encoding interaction",
+    );
+    let relation_index =
+        report_relation_index_between(&bad_visual_relation, &measurand_id, &encoding_id);
+    let relation_id = bad_visual_relation["report"]["relations"][relation_index]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let view_index = report_item_index(
+        &bad_visual_relation,
+        "visual_views",
+        "title",
+        "From fragile probe to trustworthy measurement",
+    );
+    let edge_index = array_item_index(
+        &bad_visual_relation["report"]["visual_views"][view_index]["edges"],
+        "relation_id",
+        &relation_id,
+    );
+    bad_visual_relation["report"]["visual_views"][view_index]["edges"][edge_index]["relation_id"] =
         json!("rel-missing");
     let validation = report::validate_report_value(&bad_visual_relation);
     assert_validation_check(
@@ -1872,19 +2269,128 @@ fn validate_report_checks_new_structure_endpoints() {
         report::CHECK_VALIDATE_VISUAL_REFERENCE,
         report::DiagnosticSeverity::Error,
     );
+
+    let mut missing_elements = current_human_report_value();
+    missing_elements["report"]["core_ideas"] = json!([]);
+    missing_elements["report"]["methods"] = json!([]);
+    missing_elements["report"]["representations"] = json!([]);
+    missing_elements["report"]
+        .as_object_mut()
+        .unwrap()
+        .remove("field_elements");
+    let validation = report::validate_report_value(&missing_elements);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_STRUCTURE_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
+fn validate_visual_views_require_stable_unambiguous_renderable_declarations() {
+    let fixture = current_human_report_value();
+    let validation = report::validate_report_value(&fixture);
+    assert_no_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_VISUAL_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut unstable_view_id = fixture.clone();
+    unstable_view_id["report"]["visual_views"][0]["id"] = json!("BAD VIEW ID");
+    assert_validation_message(
+        &report::validate_report_value(&unstable_view_id),
+        "visual view id is not stable",
+    );
+
+    let mut duplicate_view_id = fixture.clone();
+    let duplicate_view = duplicate_view_id["report"]["visual_views"][0].clone();
+    duplicate_view_id["report"]["visual_views"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate_view);
+    assert_validation_message(
+        &report::validate_report_value(&duplicate_view_id),
+        "duplicate visual view id",
+    );
+
+    let mut unsupported_kind = fixture.clone();
+    unsupported_kind["report"]["visual_views"][0]["kind"] = json!("custom");
+    assert_validation_message(
+        &report::validate_report_value(&unsupported_kind),
+        "unsupported kind custom",
+    );
+
+    let mut blank_justification = fixture.clone();
+    blank_justification["report"]["visual_views"][0]["justification"] = json!(" \n ");
+    assert_validation_message(
+        &report::validate_report_value(&blank_justification),
+        "requires a non-empty justification",
+    );
+
+    let mut too_few_nodes = fixture.clone();
+    too_few_nodes["report"]["visual_views"][0]["nodes"]
+        .as_array_mut()
+        .unwrap()
+        .truncate(1);
+    too_few_nodes["report"]["visual_views"][0]["edges"] = json!([]);
+    let validation = report::validate_report_value(&too_few_nodes);
+    assert_validation_message(&validation, "requires at least two nodes");
+    assert_validation_message(
+        &validation,
+        "requires at least one valid relation-backed edge",
+    );
+
+    let mut unstable_node_id = fixture.clone();
+    unstable_node_id["report"]["visual_views"][0]["nodes"][0]["id"] = json!("BAD NODE ID");
+    assert_validation_message(
+        &report::validate_report_value(&unstable_node_id),
+        "node id is not stable",
+    );
+
+    let mut duplicate_node_id = fixture.clone();
+    let first_node_id = duplicate_node_id["report"]["visual_views"][0]["nodes"][0]["id"].clone();
+    duplicate_node_id["report"]["visual_views"][0]["nodes"][1]["id"] = first_node_id;
+    assert_validation_message(
+        &report::validate_report_value(&duplicate_node_id),
+        "duplicate node id",
+    );
+
+    let mut missing_node_ref = fixture.clone();
+    missing_node_ref["report"]["visual_views"][0]["nodes"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("ref_id");
+    assert_validation_message(
+        &report::validate_report_value(&missing_node_ref),
+        "requires an entity ref_id",
+    );
+
+    let mut self_edge = fixture;
+    let from = self_edge["report"]["visual_views"][0]["edges"][0]["from"].clone();
+    self_edge["report"]["visual_views"][0]["edges"][0]["to"] = from;
+    assert_validation_message(&report::validate_report_value(&self_edge), "is a self-edge");
 }
 
 #[test]
 fn validate_report_evidence_support_semantics_are_strict() {
-    let mut qualifies_only = load_repo_json("reports/examples/sok-report.json");
-    qualifies_only["report"]["claims"][0]["evidence_links"] = json!([
+    let mut qualifies_only = current_human_report_value();
+    let chain_claim_index = report_item_index_containing(
+        &qualifies_only,
+        "claims",
+        "statement",
+        "end-to-end measurement chain",
+    );
+    let foundation_source_id =
+        report_item_id(&qualifies_only, "sources", "title", "Quantum Sensing");
+    qualifies_only["report"]["claims"][chain_claim_index]["evidence_links"] = json!([
         {
-            "source_id": "src-munkres-topology",
+            "source_id": foundation_source_id,
             "verification_status": "reviewed",
             "support_kind": "qualifies",
-            "locator": "introductory chapters",
+            "locator": "measurement protocols and noise",
             "support_note": "This narrows but does not affirm the claim.",
-            "reviewed_at": "2026-07-16"
+            "reviewed_at": "2026-07-27"
         }
     ]);
     let validation = report::validate_report_value(&qualifies_only);
@@ -1899,17 +2405,29 @@ fn validate_report_evidence_support_semantics_are_strict() {
         report::DiagnosticSeverity::Warning,
     );
 
-    let mut contradicts = load_repo_json("reports/examples/sok-report.json");
-    contradicts["report"]["claims"][0]["evidence_links"]
+    let mut contradicts = current_human_report_value();
+    let chain_claim_index = report_item_index_containing(
+        &contradicts,
+        "claims",
+        "statement",
+        "end-to-end measurement chain",
+    );
+    let metrology_source_id = report_item_id(
+        &contradicts,
+        "sources",
+        "title",
+        "Advances in Quantum Metrology",
+    );
+    contradicts["report"]["claims"][chain_claim_index]["evidence_links"]
         .as_array_mut()
         .unwrap()
         .push(json!({
-            "source_id": "src-hatcher-algebraic-topology",
+            "source_id": metrology_source_id,
             "verification_status": "reviewed",
             "support_kind": "contradicts",
-            "locator": "opening chapters",
+            "locator": "precision bounds and resource accounting",
             "support_note": "This conflicts with an overbroad form of the claim.",
-            "reviewed_at": "2026-07-16"
+            "reviewed_at": "2026-07-27"
         }));
     let validation = report::validate_report_value(&contradicts);
     assert_validation_check(
@@ -1919,8 +2437,20 @@ fn validate_report_evidence_support_semantics_are_strict() {
     );
     assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
 
-    let mut missing_reviewed_at = load_repo_json("reports/examples/sok-report.json");
-    missing_reviewed_at["report"]["claims"][0]["evidence_links"][0]
+    let mut missing_reviewed_at = current_human_report_value();
+    let chain_claim_index = report_item_index_containing(
+        &missing_reviewed_at,
+        "claims",
+        "statement",
+        "end-to-end measurement chain",
+    );
+    let supporting_link_index = array_item_index(
+        &missing_reviewed_at["report"]["claims"][chain_claim_index]["evidence_links"],
+        "support_kind",
+        "supports",
+    );
+    missing_reviewed_at["report"]["claims"][chain_claim_index]["evidence_links"]
+        [supporting_link_index]
         .as_object_mut()
         .unwrap()
         .remove("reviewed_at");
@@ -1931,10 +2461,18 @@ fn validate_report_evidence_support_semantics_are_strict() {
         report::DiagnosticSeverity::Error,
     );
 
-    let mut cataloged_visible = load_repo_json("reports/examples/sok-report.json");
-    cataloged_visible["report"]["claims"][0]["evidence_links"] = json!([
+    let mut cataloged_visible = current_human_report_value();
+    let chain_claim_index = report_item_index_containing(
+        &cataloged_visible,
+        "claims",
+        "statement",
+        "end-to-end measurement chain",
+    );
+    let foundation_source_id =
+        report_item_id(&cataloged_visible, "sources", "title", "Quantum Sensing");
+    cataloged_visible["report"]["claims"][chain_claim_index]["evidence_links"] = json!([
         {
-            "source_id": "src-munkres-topology",
+            "source_id": foundation_source_id,
             "verification_status": "cataloged",
             "support_kind": "supports"
         }
@@ -1954,7 +2492,7 @@ fn validate_report_evidence_support_semantics_are_strict() {
 
 #[test]
 fn validate_report_output_order_is_deterministic() {
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     value["report"]["sources"][1]["access"]["route"] = json!("unknown");
     value["report"]["claims"][2]["evidence_links"] = json!([]);
     value["report"]["relations"][0]["to"]["id"] = json!("concept-missing");
@@ -1970,15 +2508,15 @@ fn validate_report_output_order_is_deterministic() {
 }
 
 #[test]
-fn render_html_renders_valid_fixture_as_self_contained_one_view() {
+fn render_html_renders_legacy_v1_report_as_self_contained_one_view() {
     let dir = tempfile::tempdir().unwrap();
+    let input_path = dir.path().join("legacy-v1-report.json");
     let output_path = dir.path().join("sok-report.html");
+    report::write_json_file(&input_path, &legacy_v1_report_value()).unwrap();
     let exit = run_cli(vec![
         "render-html".to_string(),
         "--input".to_string(),
-        repo_path("reports/examples/sok-report.json")
-            .display()
-            .to_string(),
+        input_path.display().to_string(),
         "--output".to_string(),
         output_path.display().to_string(),
     ])
@@ -1997,9 +2535,10 @@ fn render_html_renders_valid_fixture_as_self_contained_one_view() {
     assert_contains(&html, "Knowledge Map");
     assert_contains(&html, "Reading Ladder");
     assert_contains(&html, "Domain Profile");
-    assert_contains(&html, "Core Ideas");
-    assert_contains(&html, "Methods");
-    assert_contains(&html, "Representations");
+    assert_contains(&html, "Field Elements");
+    assert_not_contains(&html, "id=\"core-ideas\"");
+    assert_not_contains(&html, "id=\"methods\"");
+    assert_not_contains(&html, "id=\"representations\"");
     assert_contains(&html, "Evidence Standards");
     assert_contains(&html, "Source Catalog");
     assert_contains(&html, "Claim Evidence Guide");
@@ -2007,17 +2546,17 @@ fn render_html_renders_valid_fixture_as_self_contained_one_view() {
     assert_contains(&html, "Frontier Guidance");
     assert_contains(&html, "Relation Audit");
     assert_contains(&html, "id=\"visualizations\"");
-    assert_contains(&html, "Topology dependency path");
-    assert_contains(&html, "\"kind\":\"dependency_path\"");
+    assert_contains(&html, "From fragile probe to trustworthy measurement");
+    assert_contains(&html, "\"kind\":\"knowledge_spine\"");
+    assert_contains(&html, "\"relation_id\":\"rel-measurand-to-encoding\"");
     assert_contains(
         &html,
-        "\"relation_id\":\"rel-step-algebraic-after-point-set\"",
+        "\"relation_id\":\"rel-estimation-grounds-performance\"",
     );
-    assert_not_contains(&html, "\"kind\":\"extension\"");
     assert_contains(&html, "class=\"claim-card\"");
     assert_contains(&html, "<summary>Raw claim identifiers</summary>");
     assert_contains(&html, "class=\"visual-fallback\"");
-    assert_contains(&html, "Point-set grammar -&gt; Homotopy and homology");
+    assert_contains(&html, "Physical quantity to Encoding interaction");
     assert_contains(&html, "class=\"text-fallback\"");
     assert_contains(&html, "Text alternative for curriculum path");
     assert_contains(&html, "role=\"region\"");
@@ -2026,6 +2565,14 @@ fn render_html_renders_valid_fixture_as_self_contained_one_view() {
     assert_contains(&html, "@media (max-width: 720px)");
     assert_contains(&html, "@media print");
     assert_contains(&html, ".table-scroll");
+    assert_contains(
+        &html,
+        ".narrative-body {\n  max-width: 880px;\n  min-width: 0;\n  overflow-x: auto;",
+    );
+    assert_contains(
+        &html,
+        "details.structured-appendix > summary {\n    display: none;\n  }\n  details.structured-appendix:not([open]) > :not(summary) {\n    display: block !important;",
+    );
     assert_before(&html, "id=\"reading-guide\"", "id=\"visualizations\"");
     assert_before(&html, "id=\"visualizations\"", "id=\"curriculum-path\"");
     assert_before(&html, "id=\"curriculum-path\"", "id=\"reading-ladder\"");
@@ -2041,14 +2588,21 @@ fn render_html_renders_valid_fixture_as_self_contained_one_view() {
 #[test]
 fn render_html_keeps_report_readable_without_visual_shell_when_views_are_absent() {
     let dir = tempfile::tempdir().unwrap();
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     value["report"]
         .as_object_mut()
         .unwrap()
         .remove("visual_views");
+    for section in value["report"]["presentation"]["sections"]
+        .as_array_mut()
+        .unwrap()
+    {
+        section.as_object_mut().unwrap().remove("visual_view_ids");
+    }
     let html = render_report_value_to_html(dir.path(), "zero-view-report.json", &value);
 
-    assert_contains(&html, "Reading Guide");
+    assert_contains(&html, "Fragility Becomes Signal");
+    assert_contains(&html, "One Measurement Grammar, Many Platforms");
     assert_contains(&html, "Source Catalog");
     assert_contains(&html, "Claim Evidence Guide");
     assert_contains(&html, "Curriculum Path");
@@ -2062,90 +2616,148 @@ fn render_html_keeps_report_readable_without_visual_shell_when_views_are_absent(
 #[test]
 fn render_html_instantiates_multiple_declared_supported_views() {
     let dir = tempfile::tempdir().unwrap();
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     let existing_view = value["report"]["visual_views"][0].clone();
+    value["report"]["frontier_debates"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id": "frontier-field-validation-gap",
+            "kind": "uncertainty",
+            "title": "Field validation gap",
+            "summary": "Laboratory sensitivity does not by itself establish calibrated field utility.",
+            "why_it_matters": "Deployment evidence determines whether the measurement chain remains useful outside controlled conditions.",
+            "required_background_ids": [
+                "element-deployment-environment-eb7bb13b46"
+            ],
+            "claim_ids": [
+                "claim-field-usefulness-requires-performance-to-be-re-evaluated-b493f3b20d"
+            ],
+            "source_ids": [
+                "src-bringing-quantum-sensors-to-fruition-ostp-nstc-2022-6b3219ece3"
+            ],
+            "temporal": {
+                "as_of": "2026-07-27",
+                "review_after": "2027-01-26",
+                "temporal_status": "current",
+                "rationale": "Public translation guidance should be reviewed as deployment evidence changes."
+            }
+        }));
     value["report"]["relations"]
         .as_array_mut()
         .unwrap()
         .push(json!({
-            "id": "rel-munkres-supports-invariance",
+            "id": "rel-quantum-sensing-supports-encoding",
             "kind": "supports",
             "from": {
                 "entity_type": "source",
-                "id": "src-munkres-topology"
+                "id": "src-quantum-sensing-doi-10-1103-revmodphys-89-035002-568d4f0855"
             },
             "to": {
-                "entity_type": "concept",
-                "id": "concept-invariance"
+                "entity_type": "field_element",
+                "id": "element-encoding-interaction-f15ae8c981"
             },
-            "description": "The source supports the introductory invariant concept."
+            "description": "The experimental review supports the field's encoding-interaction model."
+        }));
+    value["report"]["relations"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id": "rel-deployment-claim-maps-to-gap",
+            "kind": "maps_to",
+            "from": {
+                "entity_type": "claim",
+                "id": "claim-field-usefulness-requires-performance-to-be-re-evaluated-b493f3b20d"
+            },
+            "to": {
+                "entity_type": "frontier_debate",
+                "id": "frontier-field-validation-gap"
+            },
+            "description": "The deployment claim identifies the unresolved field-validation gap."
+        }));
+    value["report"]["relations"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id": "rel-nstc-supports-field-gap",
+            "kind": "supports",
+            "from": {
+                "entity_type": "source",
+                "id": "src-bringing-quantum-sensors-to-fruition-ostp-nstc-2022-6b3219ece3"
+            },
+            "to": {
+                "entity_type": "frontier_debate",
+                "id": "frontier-field-validation-gap"
+            },
+            "description": "The public roadmap documents engineering, validation, and adoption barriers."
         }));
     value["report"]["visual_views"] = json!([
         existing_view,
         {
             "id": "view-concept-source-map",
             "kind": "concept_source",
-            "title": "Concept source map",
-            "justification": "A concept-source view is justified because foundational concepts are tied to reviewed source roles.",
+            "title": "Encoding source map",
+            "justification": "A concept-source view is justified because the encoding model is tied to a reviewed experimental source.",
             "nodes": [
                 {
-                    "id": "vnode-invariance",
-                    "label": "Invariance",
-                    "entity_type": "concept",
-                    "ref_id": "concept-invariance"
+                    "id": "vnode-encoding-interaction",
+                    "label": "Encoding interaction",
+                    "entity_type": "field_element",
+                    "ref_id": "element-encoding-interaction-f15ae8c981"
                 },
                 {
-                    "id": "vnode-munkres-source",
-                    "label": "Munkres topology",
+                    "id": "vnode-quantum-sensing-source",
+                    "label": "Quantum Sensing",
                     "entity_type": "source",
-                    "ref_id": "src-munkres-topology"
+                    "ref_id": "src-quantum-sensing-doi-10-1103-revmodphys-89-035002-568d4f0855"
                 }
             ],
             "edges": [
                 {
-                    "from": "vnode-munkres-source",
-                    "to": "vnode-invariance",
+                    "from": "vnode-quantum-sensing-source",
+                    "to": "vnode-encoding-interaction",
                     "kind": "supports",
-                    "relation_id": "rel-munkres-supports-invariance"
+                    "relation_id": "rel-quantum-sensing-supports-encoding"
                 }
             ]
         },
         {
             "id": "view-frontier-debate-map",
             "kind": "frontier_debate",
-            "title": "Applied frontier support",
-            "justification": "A frontier/debate view is justified because the applied branch depends on a dated reviewed source and claim.",
+            "title": "Field validation gap",
+            "justification": "A frontier/debate view is justified because field utility depends on a dated public source and deployment claim.",
             "nodes": [
                 {
-                    "id": "vnode-frontier-tda",
-                    "label": "Persistent homology computation",
+                    "id": "vnode-frontier-field-gap",
+                    "label": "Field validation gap",
                     "entity_type": "frontier_debate",
-                    "ref_id": "frontier-tda-computation"
+                    "ref_id": "frontier-field-validation-gap"
                 },
                 {
-                    "id": "vnode-claim-frontier",
-                    "label": "Applied frontier claim",
+                    "id": "vnode-claim-field-utility",
+                    "label": "Field utility claim",
                     "entity_type": "claim",
-                    "ref_id": "claim-persistent-homology-frontier"
+                    "ref_id": "claim-field-usefulness-requires-performance-to-be-re-evaluated-b493f3b20d"
                 },
                 {
-                    "id": "vnode-source-otter",
-                    "label": "Otter roadmap",
+                    "id": "vnode-source-nstc",
+                    "label": "Bringing Quantum Sensors to Fruition",
                     "entity_type": "source",
-                    "ref_id": "src-otter-persistent-homology"
+                    "ref_id": "src-bringing-quantum-sensors-to-fruition-ostp-nstc-2022-6b3219ece3"
                 }
             ],
             "edges": [
                 {
-                    "from": "vnode-source-otter",
-                    "to": "vnode-claim-frontier",
+                    "from": "vnode-source-nstc",
+                    "to": "vnode-frontier-field-gap",
                     "kind": "supports",
-                    "relation_id": "rel-frontier-supported-by-otter"
+                    "relation_id": "rel-nstc-supports-field-gap"
                 },
                 {
-                    "from": "vnode-claim-frontier",
-                    "to": "vnode-frontier-tda",
-                    "kind": "maps_to"
+                    "from": "vnode-claim-field-utility",
+                    "to": "vnode-frontier-field-gap",
+                    "kind": "maps_to",
+                    "relation_id": "rel-deployment-claim-maps-to-gap"
                 }
             ]
         }
@@ -2153,29 +2765,116 @@ fn render_html_instantiates_multiple_declared_supported_views() {
 
     let html = render_report_value_to_html(dir.path(), "multiple-views-report.json", &value);
     assert_eq!(html.matches("class=\"visual-card\"").count(), 3);
-    assert_contains(&html, "\"kind\":\"dependency_path\"");
+    assert_contains(&html, "\"kind\":\"knowledge_spine\"");
     assert_contains(&html, "\"kind\":\"concept_source\"");
     assert_contains(&html, "\"kind\":\"frontier_debate\"");
-    assert_contains(&html, "Concept source map");
-    assert_contains(&html, "Applied frontier support");
-    assert_contains(&html, "Text alternative for Concept source map");
+    assert_contains(&html, "Encoding source map");
+    assert_contains(&html, "Field validation gap");
+    assert_contains(&html, "Text alternative for Encoding source map");
     assert_contains(&html, "Nodes");
     assert_contains(&html, "Edges");
 }
 
 #[test]
+fn render_html_orders_directed_spines_from_relations_not_node_declaration_order() {
+    fn visual_layouts(html: &str) -> std::collections::BTreeMap<String, (String, u64, u64, u64)> {
+        let payload = html
+            .split_once("<script type=\"application/json\" id=\"sok-visual-data\">")
+            .unwrap()
+            .1
+            .split_once("</script>")
+            .unwrap()
+            .0;
+        let views: Value = serde_json::from_str(payload).unwrap();
+        views[0]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|node| {
+                (
+                    node["label"].as_str().unwrap().to_string(),
+                    (
+                        node["layout"]["lane"].as_str().unwrap().to_string(),
+                        node["layout"]["order"].as_u64().unwrap(),
+                        node["layout"]["x"].as_u64().unwrap(),
+                        node["layout"]["y"].as_u64().unwrap(),
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let ordered = current_human_report_value();
+    let ordered_html =
+        render_report_value_to_html(dir.path(), "directed-layout-ordered.json", &ordered);
+    let ordered_layouts = visual_layouts(&ordered_html);
+    assert_contains(
+        &ordered_html,
+        "\"label_lines\":[\"Reported\",\"performance vector\"]",
+    );
+    assert_contains(
+        &ordered_html,
+        "\"label_lines\":[\"Estimation and\",\"uncertainty\"]",
+    );
+    assert_contains(
+        &ordered_html,
+        "\"label_lines\":[\"Calibration and\",\"traceability\"]",
+    );
+    assert_contains(&ordered_html, "var tspan = el(\"tspan\"");
+
+    let mut reversed = ordered.clone();
+    reversed["report"]["visual_views"][0]["nodes"]
+        .as_array_mut()
+        .unwrap()
+        .reverse();
+    let reversed_html =
+        render_report_value_to_html(dir.path(), "directed-layout-reversed.json", &reversed);
+    let reversed_layouts = visual_layouts(&reversed_html);
+    assert_eq!(ordered_layouts, reversed_layouts);
+
+    let chain = [
+        "Physical quantity",
+        "Encoding interaction",
+        "Readout and transduction",
+        "Estimation and uncertainty",
+        "Reported performance vector",
+    ];
+    for (expected_order, label) in chain.iter().enumerate() {
+        let (lane, order, _, _) = &ordered_layouts[*label];
+        assert_eq!(lane, "primary");
+        assert_eq!(*order, expected_order as u64);
+    }
+    for pair in chain.windows(2) {
+        assert!(
+            ordered_layouts[pair[0]].2 < ordered_layouts[pair[1]].2,
+            "{} should render before {}",
+            pair[0],
+            pair[1]
+        );
+    }
+
+    let primary_y = ordered_layouts["Reported performance vector"].3;
+    for label in ["Calibration and traceability", "Deployment environment"] {
+        let (lane, _, _, y) = &ordered_layouts[label];
+        assert_eq!(lane, "secondary");
+        assert!(*y > primary_y);
+    }
+}
+
+#[test]
 fn render_html_renders_literature_ladder_as_reader_path() {
     let dir = tempfile::tempdir().unwrap();
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     value["report"]["literature_ladder"] = json!([
         {
-            "id": "ladder-foundation-munkres",
-            "layer": "Foundation",
-            "start_here": "Start with point-set definitions before quotient examples.",
-            "read_for": "Read for spaces, continuous maps, compactness, and quotient topology.",
-            "do_not_infer": "Do not infer that visual deformation metaphors replace formal definitions.",
-            "source_ids": ["src-munkres-topology"],
-            "notes": "Use this before algebraic topology."
+            "id": "ladder-measurement-chain-quantum-sensing",
+            "layer": "Experimental grammar",
+            "start_here": "Start with the full measurement chain before comparing probe platforms.",
+            "read_for": "Read for encoding, control, readout, estimation, and dominant noise.",
+            "do_not_infer": "Do not infer that laboratory sensitivity alone establishes field utility.",
+            "source_ids": ["src-quantum-sensing-doi-10-1103-revmodphys-89-035002-568d4f0855"],
+            "notes": "Use this before comparing nonclassical resources."
         }
     ]);
 
@@ -2185,13 +2884,13 @@ fn render_html_renders_literature_ladder_as_reader_path() {
     assert_contains(&html, "Do not infer");
     assert_contains(
         &html,
-        "Start with point-set definitions before quotient examples.",
+        "Start with the full measurement chain before comparing probe platforms.",
     );
-    assert_contains(&html, "Topology");
+    assert_contains(&html, "Quantum Sensing");
     assert_contains(&html, "<summary>Raw ladder identifiers</summary>");
     assert_before(
         &html,
-        "Start with point-set definitions",
+        "Start with the full measurement chain",
         "<summary>Raw ladder identifiers</summary>",
     );
 }
@@ -2199,28 +2898,28 @@ fn render_html_renders_literature_ladder_as_reader_path() {
 #[test]
 fn render_html_claim_cards_group_support_qualifiers_and_contradictions() {
     let dir = tempfile::tempdir().unwrap();
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     value["report"]["claims"][0]["evidence_links"]
         .as_array_mut()
         .unwrap()
         .push(json!({
-            "source_id": "src-hatcher-algebraic-topology",
+            "source_id": "src-jcgm-100-2008-guide-to-the-expression-of-8b71053703",
             "verification_status": "reviewed",
             "support_kind": "qualifies",
-            "locator": "opening chapters",
-            "support_note": "Narrows the statement to invariants built by specific constructions.",
-            "reviewed_at": "2026-07-16"
+            "locator": "Clauses 4-8",
+            "support_note": "Qualifies the chain interpretation with explicit uncertainty and reporting requirements.",
+            "reviewed_at": "2026-07-27"
         }));
     value["report"]["claims"][0]["evidence_links"]
         .as_array_mut()
         .unwrap()
         .push(json!({
-            "source_id": "src-otter-persistent-homology",
+            "source_id": "src-doe-quantum-information-science-applications-roadmap-doe-qis-5749cee471",
             "verification_status": "reviewed",
             "support_kind": "contradicts",
-            "locator": "roadmap caveats",
-            "support_note": "Warns against treating one invariant as a complete classifier.",
-            "reviewed_at": "2026-07-16"
+            "locator": "Quantum sensing applications and cross-cutting needs",
+            "support_note": "Challenges any reading that treats one laboratory measurement chain as sufficient for every deployment.",
+            "reviewed_at": "2026-07-27"
         }));
 
     let html = render_report_value_to_html(dir.path(), "claim-card-report.json", &value);
@@ -2230,24 +2929,27 @@ fn render_html_claim_cards_group_support_qualifiers_and_contradictions() {
     assert_contains(&html, "Contradictory Evidence");
     assert_contains(
         &html,
-        "Narrows the statement to invariants built by specific constructions.",
+        "Qualifies the chain interpretation with explicit uncertainty and reporting requirements.",
     );
     assert_contains(
         &html,
-        "Warns against treating one invariant as a complete classifier.",
+        "Challenges any reading that treats one laboratory measurement chain as sufficient for every deployment.",
     );
-    assert_contains(&html, "Algebraic Topology");
     assert_contains(
         &html,
-        "A roadmap for the computation of persistent homology",
+        "JCGM 100:2008 Guide to the Expression of Uncertainty in Measurement",
+    );
+    assert_contains(
+        &html,
+        "DOE Quantum Information Science Applications Roadmap",
     );
     assert_contains(&html, "<summary>Raw claim identifiers</summary>");
 }
 
 #[test]
-fn render_html_omits_visual_shell_when_edges_are_not_relation_backed() {
+fn render_html_rejects_visuals_when_edges_are_not_relation_backed() {
     let dir = tempfile::tempdir().unwrap();
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     for edge in value["report"]["visual_views"][0]["edges"]
         .as_array_mut()
         .unwrap()
@@ -2255,35 +2957,75 @@ fn render_html_omits_visual_shell_when_edges_are_not_relation_backed() {
         edge.as_object_mut().unwrap().remove("relation_id");
     }
 
-    let html = render_report_value_to_html(dir.path(), "relationless-view-report.json", &value);
-    assert_not_contains(&html, "id=\"visualizations\"");
-    assert_not_contains(&html, "class=\"visual-card\"");
-    assert_not_contains(&html, "data-visual-mount=");
-    assert_not_contains(&html, "id=\"sok-visual-data\"");
+    let validation = report::validate_report_value(&value);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_VISUAL_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+    assert!(validation
+        .diagnostics
+        .checks
+        .iter()
+        .any(|check| check.message.contains("requires a relation_id")));
+    assert_validation_message(
+        &validation,
+        "requires at least one valid relation-backed edge",
+    );
+
+    let input_path = dir.path().join("relationless-view-report.json");
+    let output_path = dir.path().join("relationless-view-report.html");
+    report::write_json_file(&input_path, &value).unwrap();
+    assert!(report::render_html_report_file(&input_path, &output_path).is_err());
+    assert!(!output_path.exists());
 }
 
 #[test]
-fn render_html_omits_visual_edge_when_relation_does_not_match_node_refs() {
+fn render_html_rejects_visuals_when_relation_does_not_match_node_refs() {
     let dir = tempfile::tempdir().unwrap();
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     value["report"]["visual_views"][0]["edges"][0]["relation_id"] =
-        json!("rel-frontier-supported-by-otter");
+        json!("rel-encoding-before-readout");
 
-    let html = render_report_value_to_html(dir.path(), "mismatched-view-report.json", &value);
-    assert_not_contains(&html, "id=\"visualizations\"");
-    assert_not_contains(&html, "data-visual-mount=");
-    assert_not_contains(&html, "id=\"sok-visual-data\"");
+    let validation = report::validate_report_value(&value);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_VISUAL_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+    assert!(validation.diagnostics.checks.iter().any(|check| check
+        .message
+        .contains("does not match the endpoint entity references")));
+
+    let input_path = dir.path().join("mismatched-view-report.json");
+    let output_path = dir.path().join("mismatched-view-report.html");
+    report::write_json_file(&input_path, &value).unwrap();
+    assert!(report::render_html_report_file(&input_path, &output_path).is_err());
+    assert!(!output_path.exists());
 }
 
 #[test]
 fn render_html_escapes_report_content_and_omits_internal_payloads() {
     let dir = tempfile::tempdir().unwrap();
-    let mut value = load_repo_json("reports/examples/sok-report.json");
+    let mut value = current_human_report_value();
     value["report"]["field"] = json!("Topology <img src=x onerror=alert(1)> \"quoted\"");
     value["report"]["scope"]["summary"] =
         json!("Summary </script><script>alert(1)</script> & <b>bold</b>");
     value["report"]["visual_views"][0]["nodes"][0]["label"] =
         json!("Node </script><script>alert(2)</script>");
+    value["report"]["presentation"] = json!({
+        "thesis": "Narrative Markdown must remain safe to render.",
+        "organizing_form": "Security test",
+        "rationale": "Exercise the safe Markdown renderer.",
+        "alternatives_considered": "A raw HTML rendering path was rejected because it would bypass sanitization.",
+        "sections": [
+            {
+                "id": "section-security-test",
+                "title": "Narrative safety",
+                "body_markdown": "Safe prose. <script>alert(3)</script>\n\n[unsafe](javascript:alert(4)) [safe](https://example.org/reference)\n\n![remote](https://assets.example.org/remote.png) ![relative](assets/local.png) ![svg](data:image/svg+xml;base64,PHN2Zz4=) ![embedded](data:image/png;base64,iVBORw0KGgo=)"
+            }
+        ]
+    });
     value["internal_context"] = json!({
         "raw_learner_profile": "SENTINEL_INTERNAL_RENDER",
         "original_goal": "SENTINEL_INTERNAL_GOAL"
@@ -2309,6 +3051,16 @@ fn render_html_escapes_report_content_and_omits_internal_payloads() {
     assert_not_contains(&html, "<img src=x");
     assert_not_contains(&html, "</script><script>alert(1)</script>");
     assert_not_contains(&html, "</script><script>alert(2)</script>");
+    assert_contains(&html, "&lt;script&gt;alert(3)&lt;/script&gt;");
+    assert_not_contains(&html, "<script>alert(3)</script>");
+    assert_contains(&html, "href=\"#blocked-unsafe-link\"");
+    assert_not_contains(&html, "href=\"javascript:");
+    assert_contains(&html, "href=\"https://example.org/reference\"");
+    assert_not_contains(&html, "https://assets.example.org/remote.png");
+    assert_not_contains(&html, "assets/local.png");
+    assert_not_contains(&html, "data:image/svg+xml");
+    assert_contains(&html, "src=\"#blocked-external-image\"");
+    assert_contains(&html, "src=\"data:image/png;base64,iVBORw0KGgo=\"");
     assert_not_contains(&html, "SENTINEL_INTERNAL_RENDER");
     assert_not_contains(&html, "SENTINEL_INTERNAL_GOAL");
     assert_not_contains(&html, "SENTINEL_DIAGNOSTIC_RENDER");
@@ -2317,11 +3069,41 @@ fn render_html_escapes_report_content_and_omits_internal_payloads() {
 }
 
 #[test]
+fn render_html_namespaces_markdown_footnotes_by_presentation_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut value = current_human_report_value();
+    value["report"]["presentation"] = json!({
+        "thesis": "Repeated footnote labels remain local to their narrative sections.",
+        "organizing_form": "Two-section test",
+        "rationale": "Exercise generated DOM identifiers.",
+        "alternatives_considered": "A single combined narrative was rejected because it would not exercise section-local identifiers.",
+        "sections": [
+            {
+                "id": "section-first",
+                "title": "First section",
+                "body_markdown": "First claim.[^note]\n\n[^note]: First section note."
+            },
+            {
+                "id": "section-second",
+                "title": "Second section",
+                "body_markdown": "Second claim.[^note]\n\n[^note]: Second section note."
+            }
+        ]
+    });
+
+    let html = render_report_value_to_html(dir.path(), "footnote-report.json", &value);
+    assert_contains(&html, "href=\"#section-first-note\"");
+    assert_contains(&html, "id=\"section-first-note\"");
+    assert_contains(&html, "href=\"#section-second-note\"");
+    assert_contains(&html, "id=\"section-second-note\"");
+}
+
+#[test]
 fn render_html_rejects_non_human_or_invalid_reports() {
     let dir = tempfile::tempdir().unwrap();
     let scaffold_path = dir.path().join("scaffold-report.json");
     let output_path = dir.path().join("scaffold.html");
-    let mut scaffold = load_repo_json("reports/examples/sok-report.json");
+    let mut scaffold = current_human_report_value();
     scaffold["metadata"]["report_type"] = json!("scaffold");
     report::write_json_file(&scaffold_path, &scaffold).unwrap();
     assert_contains(
@@ -2332,7 +3114,7 @@ fn render_html_rejects_non_human_or_invalid_reports() {
     );
 
     let invalid_path = dir.path().join("invalid-report.json");
-    let mut invalid = load_repo_json("reports/examples/sok-report.json");
+    let mut invalid = current_human_report_value();
     invalid["report"]["claims"][2]["evidence_links"] = json!([]);
     report::write_json_file(&invalid_path, &invalid).unwrap();
     assert_contains(
@@ -2735,9 +3517,9 @@ fn documented_final_report_lane_lints_exports_validates_and_renders_html() {
     let dir = tempfile::tempdir().unwrap();
     let output_json_path = dir.path().join("sok-report.json");
     let output_html_path = dir.path().join("sok-report.html");
-    let report_path = repo_path("reports/examples/json-first-human-report.md");
-    let sources_path = repo_path("reports/examples/json-first-sources.csv");
-    let evidence_path = repo_path("reports/examples/json-first-reviewed-evidence.jsonl");
+    let report_path = repo_path("cli/tests/fixtures/pipeline/report.md");
+    let sources_path = repo_path("cli/tests/fixtures/pipeline/sources.csv");
+    let evidence_path = repo_path("cli/tests/fixtures/pipeline/reviewed-evidence.jsonl");
 
     assert_eq!(
         run_cli(vec![
@@ -2780,7 +3562,79 @@ fn documented_final_report_lane_lints_exports_validates_and_renders_html() {
     );
     assert!(exported.internal_context.is_none());
     assert!(exported.diagnostics.is_none());
-    assert!(exported.report.visual_views.is_empty());
+    let presentation = exported.report.presentation.as_ref().unwrap();
+    assert_contains(&presentation.organizing_form, "measurement chain");
+    assert_contains(&presentation.alternatives_considered, "taxonomy");
+    assert!(
+        presentation.sections.len() >= 3,
+        "the final report should expose a field-specific narrative, not only structured surfaces"
+    );
+    assert!(presentation
+        .sections
+        .iter()
+        .any(|section| !section.visual_view_ids.is_empty()));
+    let section_titles = presentation
+        .sections
+        .iter()
+        .map(|section| section.title.clone())
+        .collect::<Vec<_>>();
+    assert!(
+        section_titles
+            .iter()
+            .all(|title| !title.trim().is_empty() && !title.starts_with("Section ")),
+        "public sections should keep field-authored titles"
+    );
+    assert!(!exported.report.visual_views.is_empty());
+    assert!(!exported.report.relations.is_empty());
+    assert!(!exported.report.literature_ladder.is_empty());
+    assert!(exported
+        .report
+        .curriculum_path
+        .iter()
+        .any(|step| !step.prerequisite_ids.is_empty()));
+    assert!(exported
+        .report
+        .field_elements
+        .iter()
+        .any(|element| element.role == "core"));
+    assert!(exported
+        .report
+        .field_elements
+        .iter()
+        .any(|element| element.role == "surrounding" || element.role == "context"));
+    let relation_ids = exported
+        .report
+        .relations
+        .iter()
+        .map(|relation| relation.id.as_str())
+        .collect::<BTreeSet<_>>();
+    assert!(exported.report.visual_views.iter().all(|view| {
+        !view.nodes.is_empty()
+            && !view.edges.is_empty()
+            && view
+                .edges
+                .iter()
+                .all(|edge| relation_ids.contains(edge.relation_id.as_str()))
+    }));
+    assert!(exported
+        .report
+        .claims
+        .iter()
+        .all(
+            |claim| claim.evidence_links.iter().any(|link| link.support_kind
+                == report::SupportKind::Supports
+                && matches!(
+                    link.verification_status,
+                    report::VerificationStatus::Reviewed | report::VerificationStatus::Verified
+                ))
+        ));
+    let mounted_view_id = presentation
+        .sections
+        .iter()
+        .flat_map(|section| section.visual_view_ids.iter())
+        .next()
+        .unwrap()
+        .clone();
 
     assert_eq!(
         run_cli(vec![
@@ -2806,114 +3660,399 @@ fn documented_final_report_lane_lints_exports_validates_and_renders_html() {
 
     let html = fs::read_to_string(&output_html_path).unwrap();
     assert_contains(&html, "Structure of Knowledge Report");
-    assert_contains(&html, "Topology");
+    assert_contains(&html, &exported.report.field);
+    assert_contains(&html, "Evidence and structured data");
+    assert_contains(&html, &format!("data-visual-mount=\"{mounted_view_id}\""));
+    let narrative_positions = presentation
+        .sections
+        .iter()
+        .map(|section| {
+            let anchor = format!("id=\"{}\"", section.id);
+            html.find(&anchor).unwrap_or_else(|| {
+                panic!(
+                    "rendered HTML should contain section {:?} at {}",
+                    section.title, section.id
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        narrative_positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "rendered HTML should preserve the authored public section order"
+    );
     assert_not_contains(&html, "internal_context");
-    assert_not_contains(&html, "diagnostics");
+    assert_not_contains(&html, "\"diagnostics\":");
+    assert_not_contains(&html, "&quot;diagnostics&quot;");
     assert_not_contains(&html, "Scaffold Quality Notes");
     assert_not_contains(&html.to_ascii_lowercase(), "mermaid");
 }
 
 #[test]
-fn solid_state_battery_evaluation_final_lane_preserves_reader_structure() {
+fn final_markdown_requires_an_explicit_architecture_decision() {
     let dir = tempfile::tempdir().unwrap();
-    let report_path =
-        repo_path("reports/evaluations/release-candidate-solid-state-batteries/report.md");
-    let sources_path =
-        repo_path("reports/evaluations/release-candidate-solid-state-batteries/sources.csv");
-    let evidence_path = repo_path(
-        "reports/evaluations/release-candidate-solid-state-batteries/reviewed-evidence.jsonl",
-    );
-    let tracked_json_path =
-        repo_path("reports/evaluations/release-candidate-solid-state-batteries/sok-report.json");
-    let output_json_path = dir.path().join("solid-state-batteries-sok-report.json");
-    let output_html_path = dir.path().join("solid-state-batteries-report.html");
+    let report_path = dir.path().join("missing-architecture.md");
+    let sources_path = repo_path("cli/tests/fixtures/pipeline/sources.csv");
+    let evidence_path = repo_path("cli/tests/fixtures/pipeline/reviewed-evidence.jsonl");
+    let markdown = fs::read_to_string(repo_path("cli/tests/fixtures/pipeline/report.md"))
+        .unwrap()
+        .replace("## Report Architecture", "## How This Report Was Composed");
+    fs::write(&report_path, markdown).unwrap();
 
-    let tracked: report::ReportDocument = report::read_json_file(&tracked_json_path).unwrap();
-    assert_solid_state_reader_structure(&tracked);
-    let tracked_validation =
-        report::validate_report_value(&serde_json::to_value(&tracked).unwrap());
+    let lint = report::lint_markdown_report(
+        &report_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert_validation_check(
+        &lint,
+        report::CHECK_EXPORT_REPORT_ARCHITECTURE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    let validation = report::validate_report_value(&serde_json::to_value(exported).unwrap());
+    assert_validation_check(
+        &validation,
+        report::CHECK_EXPORT_REPORT_ARCHITECTURE,
+        report::DiagnosticSeverity::Error,
+    );
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_SCHEMA_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let ungrounded_path = dir.path().join("missing-field-elements.md");
+    let markdown = fs::read_to_string(repo_path("cli/tests/fixtures/pipeline/report.md"))
+        .unwrap()
+        .replace(
+            "<!-- sok:surface field-elements -->",
+            "<!-- field-element surface intentionally removed -->",
+        );
+    fs::write(&ungrounded_path, markdown).unwrap();
+    let lint = report::lint_markdown_report(
+        &ungrounded_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert!(lint.diagnostics.checks.iter().any(|check| {
+        check.check_id == report::CHECK_EXPORT_REPORT_ARCHITECTURE
+            && check.message.contains("field-element inventory")
+    }));
+
+    let unusable_path = dir.path().join("unusable-field-elements.md");
+    let mut markdown =
+        fs::read_to_string(repo_path("cli/tests/fixtures/pipeline/report.md")).unwrap();
+    let field_element_marker = "<!-- sok:surface field-elements -->";
+    let inventory_start = markdown.find(field_element_marker).unwrap() + field_element_marker.len();
+    let inventory_end = inventory_start
+        + markdown[inventory_start..]
+            .find("\n## ")
+            .expect("the fixture should have a section after its field-element inventory");
+    markdown.replace_range(
+        inventory_start..inventory_end,
+        r#"
+
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Candidate class |  |  | core |  |  |  |
+| Candidate class | Candidate element | Source to verify | core |  |  |  |
+"#,
+    );
+    fs::write(&unusable_path, markdown).unwrap();
+    let lint = report::lint_markdown_report(
+        &unusable_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert!(lint.diagnostics.checks.iter().any(|check| {
+        check.check_id == report::CHECK_EXPORT_REPORT_ARCHITECTURE
+            && check
+                .message
+                .contains("complete field-element inventory row")
+    }));
+}
+
+#[test]
+fn unknown_surface_markers_are_blocking_instead_of_silently_losing_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("unknown-surface.md");
+    let sources_path = repo_path("cli/tests/fixtures/pipeline/sources.csv");
+    let evidence_path = repo_path("cli/tests/fixtures/pipeline/reviewed-evidence.jsonl");
+    let markdown = fs::read_to_string(repo_path("cli/tests/fixtures/pipeline/report.md"))
+        .unwrap()
+        .replacen(
+            "## Claims",
+            "## Evidence-Bearing Statements\n<!-- sok:surface claim -->",
+            1,
+        );
+    fs::write(&report_path, markdown).unwrap();
+
+    let lint = report::lint_markdown_report(
+        &report_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert_validation_check(
+        &lint,
+        report::CHECK_EXPORT_UNKNOWN_SURFACE_MARKER,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert!(exported.report.claims.is_empty());
+    let validation = report::validate_report_value(&serde_json::to_value(exported).unwrap());
+    assert_validation_check(
+        &validation,
+        report::CHECK_EXPORT_UNKNOWN_SURFACE_MARKER,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let typo_path = dir.path().join("unknown-directive.md");
+    let markdown = fs::read_to_string(repo_path("cli/tests/fixtures/pipeline/report.md"))
+        .unwrap()
+        .replace("sok:visual-view", "sok:visual-veiw");
+    fs::write(&typo_path, markdown).unwrap();
+    let lint = report::lint_markdown_report(
+        &typo_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert_validation_check(
+        &lint,
+        report::CHECK_EXPORT_UNKNOWN_DIRECTIVE,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
+fn visual_only_sections_survive_and_fenced_directives_remain_examples() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("directive-boundaries.md");
+    let sources_path = repo_path("cli/tests/fixtures/pipeline/sources.csv");
+    let evidence_path = repo_path("cli/tests/fixtures/pipeline/reviewed-evidence.jsonl");
+    let baseline = current_human_report_document();
+    let view_id = baseline
+        .report
+        .visual_views
+        .first()
+        .expect("the current final-report fixture should declare a visual")
+        .id
+        .clone();
+    let baseline_claims = baseline
+        .report
+        .claims
+        .iter()
+        .map(|claim| claim.statement.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut markdown =
+        fs::read_to_string(repo_path("cli/tests/fixtures/pipeline/report.md")).unwrap();
+    let original_visual_directive = format!("<!-- sok:visual-view {view_id} -->");
+    assert_contains(&markdown, &original_visual_directive);
+    markdown = markdown.replacen(&original_visual_directive, "", 1);
+    markdown = markdown.replacen(
+        "## Claims",
+        r#"## Claims
+
+~~~markdown
+| Statement | Claim type | Evidence requirement | Source IDs |
+|---|---|---|---|
+| This currently fake row is only syntax. | currentness | reviewed_source | Example Source |
+~~~"#,
+        1,
+    );
+
+    let field_element_marker = "<!-- sok:surface field-elements -->";
+    let marker_index = markdown
+        .find(field_element_marker)
+        .expect("the current fixture should declare its field-element surface");
+    let insertion_index = markdown[..marker_index]
+        .rfind("\n## ")
+        .map(|index| index + 1)
+        .expect("the field-element surface should have a public heading");
+    let directive_examples = format!(
+        r#"## Measurement Chain at a Glance
+<!-- sok:visual-view {view_id} -->
+
+## Directive Syntax Is Data
+
+````markdown
+## Backtick Example Is Not A Report Section
+<!-- sok:surface claims -->
+<!-- sok:visual-view missing-view -->
+```
+````
+
+~~~markdown
+## Tilde Example Is Not A Report Section
+<!-- sok:surface claims -->
+<!-- sok:visual-view another-missing-view -->
+~~~
+
+"#
+    );
+    markdown.insert_str(insertion_index, &directive_examples);
+    fs::write(&report_path, markdown).unwrap();
+
+    let lint = report::lint_markdown_report(
+        &report_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    assert!(!lint
+        .diagnostics
+        .checks
+        .iter()
+        .any(|check| check.check_id == report::CHECK_VALIDATE_CURRENTNESS_PROSE));
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        Some(&evidence_path),
+        report::ExportStage::Final,
+    )
+    .unwrap();
+    let presentation = exported.report.presentation.as_ref().unwrap();
+    let visual_section = presentation
+        .sections
+        .iter()
+        .find(|section| section.title == "Measurement Chain at a Glance")
+        .unwrap();
+    assert_eq!(visual_section.visual_view_ids, vec![view_id.clone()]);
+    let example_section = presentation
+        .sections
+        .iter()
+        .find(|section| section.title == "Directive Syntax Is Data")
+        .unwrap();
+    assert_contains(&example_section.body_markdown, "sok:surface claims");
+    assert_contains(
+        &example_section.body_markdown,
+        "sok:visual-view missing-view",
+    );
+    assert_contains(
+        &example_section.body_markdown,
+        "## Backtick Example Is Not A Report Section",
+    );
+    assert_contains(
+        &example_section.body_markdown,
+        "## Tilde Example Is Not A Report Section",
+    );
+    assert!(example_section.visual_view_ids.is_empty());
+    assert!(presentation.sections.iter().all(|section| section.title
+        != "Backtick Example Is Not A Report Section"
+        && section.title != "Tilde Example Is Not A Report Section"));
+    let exported_claims = exported
+        .report
+        .claims
+        .iter()
+        .map(|claim| claim.statement.as_str())
+        .collect::<BTreeSet<_>>();
     assert_eq!(
-        tracked_validation.error_count(),
-        0,
+        exported_claims, baseline_claims,
+        "fenced table examples must not add or replace report claims"
+    );
+
+    let validation = report::validate_report_value(&serde_json::to_value(&exported).unwrap());
+    assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
+    let html = report::render_html_report(&exported).unwrap();
+    assert_contains(&html, "Measurement Chain at a Glance");
+    assert_contains(&html, &format!("data-visual-mount=\"{view_id}\""));
+    assert_contains(&html, "sok:surface claims");
+}
+
+#[test]
+fn presentation_ids_and_visual_placement_are_strictly_validated() {
+    let mut invalid_id = current_human_report_value();
+    invalid_id["report"]["presentation"] = json!({
+        "thesis": "Topology is organized by transformations and invariants.",
+        "organizing_form": "Transformation path",
+        "rationale": "The path follows the field's load-bearing relations.",
+        "sections": [
+            {
+                "id": "BAD ID",
+                "title": "First section",
+                "visual_view_ids": ["view-topology-dependency-path"]
+            }
+        ]
+    });
+    let validation = report::validate_report_value(&invalid_id);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_SCHEMA_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut reserved_id = current_human_report_value();
+    reserved_id["report"]["presentation"] = json!({
+        "thesis": "Topology is organized by transformations and invariants.",
+        "organizing_form": "Transformation path",
+        "rationale": "The path follows the field's load-bearing relations.",
+        "sections": [
+            {
+                "id": "evidence-appendix",
+                "title": "Conflicting section"
+            }
+        ]
+    });
+    let validation = report::validate_report_value(&reserved_id);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_SCHEMA_REQUIRED,
+        report::DiagnosticSeverity::Error,
+    );
+    assert!(
+        validation
+            .diagnostics
+            .checks
+            .iter()
+            .any(|check| check.message.contains("reserved by the HTML renderer")),
         "{:?}",
-        tracked_validation.diagnostics
-    );
-    assert_eq!(
-        tracked_validation.warning_count(),
-        0,
-        "{:?}",
-        tracked_validation.diagnostics
+        validation.diagnostics
     );
 
-    assert_eq!(
-        run_cli(vec![
-            "lint".to_string(),
-            "--stage".to_string(),
-            "final".to_string(),
-            "--report".to_string(),
-            report_path.display().to_string(),
-            "--sources".to_string(),
-            sources_path.display().to_string(),
-            "--evidence".to_string(),
-            evidence_path.display().to_string(),
-            "--strict".to_string(),
-        ])
-        .unwrap(),
-        0
+    let mut duplicate_visual = invalid_id;
+    duplicate_visual["report"]["presentation"]["sections"] = json!([
+        {
+            "id": "section-first",
+            "title": "First section",
+            "visual_view_ids": ["view-topology-dependency-path"]
+        },
+        {
+            "id": "section-second",
+            "title": "Second section",
+            "visual_view_ids": ["view-topology-dependency-path"]
+        }
+    ]);
+    let validation = report::validate_report_value(&duplicate_visual);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_VISUAL_REFERENCE,
+        report::DiagnosticSeverity::Error,
     );
-    assert_eq!(
-        run_cli(vec![
-            "export-json".to_string(),
-            "--stage".to_string(),
-            "final".to_string(),
-            "--report".to_string(),
-            report_path.display().to_string(),
-            "--sources".to_string(),
-            sources_path.display().to_string(),
-            "--evidence".to_string(),
-            evidence_path.display().to_string(),
-            "--output".to_string(),
-            output_json_path.display().to_string(),
-        ])
-        .unwrap(),
-        0
-    );
-
-    let exported: report::ReportDocument = report::read_json_file(&output_json_path).unwrap();
-    assert_solid_state_reader_structure(&exported);
-    assert!(exported.diagnostics.is_none());
-
-    assert_eq!(
-        run_cli(vec![
-            "validate-report".to_string(),
-            "--input".to_string(),
-            output_json_path.display().to_string(),
-            "--strict".to_string(),
-        ])
-        .unwrap(),
-        0
-    );
-    assert_eq!(
-        run_cli(vec![
-            "render-html".to_string(),
-            "--input".to_string(),
-            output_json_path.display().to_string(),
-            "--output".to_string(),
-            output_html_path.display().to_string(),
-        ])
-        .unwrap(),
-        0
-    );
-
-    let html = fs::read_to_string(&output_html_path).unwrap();
-    assert_contains(&html, "Solid-State Batteries");
-    assert_contains(&html, "Solid-state battery knowledge spine");
-    assert_contains(&html, "Solid-state battery curriculum path");
-    assert_contains(&html, "Reading Ladder");
-    assert_contains(&html, "Claim Evidence Guide");
-    assert_not_contains(&html, "internal_context");
-    assert_not_contains(&html, "diagnostics");
-    assert_not_contains(&html.to_ascii_lowercase(), "mermaid");
 }
 
 #[test]
@@ -2947,7 +4086,7 @@ fn access_audit_and_download_policy_match_contract() {
         "source-1: missing identifier or url",
         "source-1: missing access status",
         "source-1: missing access route",
-        "source-1: missing curricular role",
+        "source-1: missing source role or relevance note",
     ] {
         assert!(
             missing.contains(&want.to_string()),
@@ -3309,6 +4448,15 @@ fn canonical_lint_final_markdown(claim_statement: &str) -> String {
     format!(
         r#"# Structure of Knowledge: Topology
 
+## Report Architecture
+
+| Item | Decision |
+|---|---|
+| Executive thesis | Topology becomes legible through the relation between transformations, invariants, and counterexamples. |
+| Chosen organizing form | A transformation-and-invariant path. |
+| Architecture rationale | This form follows the field's load-bearing relation instead of copying a generic topic hierarchy. |
+| Rejected alternatives and why | A subfield survey was rejected because it hides the transformation-and-invariant relation. |
+
 ## Domain Decomposition
 
 Topology studies properties of spaces preserved by continuous maps, using invariants to compare shape without relying on metric detail.
@@ -3317,14 +4465,14 @@ Topology studies properties of spaces preserved by continuous maps, using invari
 
 The report focuses on point-set foundations before algebraic examples.
 
-## Deep Structure
+## Field Element Inventory
 
-| Element | SoK extraction |
-|---|---|
-| Core objects | Spaces, continuous maps, quotient spaces, and invariants. |
-| Syntactic structure | Proof by construction, counterexample, and functorial comparison. |
-| Representations | Commutative diagrams, chain complexes, and visual maps of spaces. |
-| Failure modes | Treating visual metaphors as definitions; assuming invariants are complete classifiers. |
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Object and transformation | Core objects | Spaces, continuous maps, quotient spaces, and invariants. | core | Maps act on spaces; invariants compare what maps preserve. | Open Review | high |
+| Method and warrant | Methods and warrants | Proof by construction, counterexample, and functorial comparison. | core | Warrants test whether a proposed invariant or equivalence is valid. | Open Review | high |
+| Representation | Representations | Commutative diagrams, chain complexes, and visual maps of spaces. | surrounding | Representations expose dependencies without replacing proof. | Open Review | high |
+| Failure mode | Visual intuition as proof | Treating visual metaphors as definitions or assuming invariants are complete classifiers. | context | Counterexamples qualify intuitive claims. | Open Review | high |
 
 ## Source Role Probe
 
@@ -3347,58 +4495,127 @@ The report focuses on point-set foundations before algebraic examples.
     )
 }
 
-fn assert_solid_state_reader_structure(document: &report::ReportDocument) {
-    assert_eq!(
-        document.metadata.report_type,
-        report::ReportType::HumanReport
-    );
-    assert_eq!(document.report.field, "Solid-State Batteries");
-    assert!(
-        !document.report.relations.is_empty(),
-        "solid-state evaluation must preserve explicit relations"
-    );
-    assert!(
-        !document.report.visual_views.is_empty(),
-        "solid-state evaluation must preserve declared visual views"
-    );
-    assert!(
-        !document.report.literature_ladder.is_empty(),
-        "solid-state evaluation must preserve literature ladder rows"
-    );
-    assert!(
-        document
-            .report
-            .curriculum_path
-            .iter()
-            .any(|step| !step.prerequisite_ids.is_empty()),
-        "solid-state evaluation must preserve at least one curriculum prerequisite"
-    );
-
-    let relation_ids = document
-        .report
-        .relations
-        .iter()
-        .map(|relation| relation.id.as_str())
-        .collect::<BTreeSet<_>>();
-    assert!(document.report.visual_views.iter().any(|view| {
-        !view.edges.is_empty()
-            && view
-                .edges
-                .iter()
-                .all(|edge| relation_ids.contains(edge.relation_id.as_str()))
-    }));
-    assert!(document
-        .report
-        .literature_ladder
-        .iter()
-        .all(|row| !row.source_ids.is_empty()));
-}
-
 fn repo_path(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("crate should live below repo root")
         .join(relative)
+}
+
+fn current_human_report_document() -> report::ReportDocument {
+    report::export_markdown_report(
+        &repo_path("cli/tests/fixtures/pipeline/report.md"),
+        &repo_path("cli/tests/fixtures/pipeline/sources.csv"),
+        Some(&repo_path(
+            "cli/tests/fixtures/pipeline/reviewed-evidence.jsonl",
+        )),
+        report::ExportStage::Final,
+    )
+    .unwrap()
+}
+
+fn current_human_report_value() -> Value {
+    serde_json::to_value(current_human_report_document()).unwrap()
+}
+
+fn current_scaffold_report_document() -> report::ReportDocument {
+    let dir = tempfile::tempdir().unwrap();
+    let scaffold_path = dir.path().join("scaffold.md");
+    fs::write(
+        &scaffold_path,
+        build_report_scaffold(
+            "Quantum sensing and metrology",
+            "technical reader testing the current scaffold contract",
+            "exercise the current scaffold export lane",
+            8,
+        ),
+    )
+    .unwrap();
+    report::export_markdown_report(
+        &scaffold_path,
+        &repo_path("cli/tests/fixtures/pipeline/sources.csv"),
+        Some(&repo_path(
+            "cli/tests/fixtures/pipeline/reviewed-evidence.jsonl",
+        )),
+        report::ExportStage::Scaffold,
+    )
+    .unwrap()
+}
+
+fn current_scaffold_report_value() -> Value {
+    serde_json::to_value(current_scaffold_report_document()).unwrap()
+}
+
+fn legacy_v1_report_value() -> Value {
+    let mut value = current_human_report_value();
+    value["metadata"]["schema_version"] = json!("sok-report/v1");
+    value["report"]
+        .as_object_mut()
+        .unwrap()
+        .remove("presentation");
+    value
+}
+
+fn report_item_index(report_value: &Value, collection: &str, key: &str, expected: &str) -> usize {
+    report_value["report"][collection]
+        .as_array()
+        .unwrap_or_else(|| panic!("report.{collection} should be an array"))
+        .iter()
+        .position(|item| item[key].as_str() == Some(expected))
+        .unwrap_or_else(|| {
+            panic!("report.{collection} should contain an item with {key} equal to {expected:?}")
+        })
+}
+
+fn report_item_index_containing(
+    report_value: &Value,
+    collection: &str,
+    key: &str,
+    fragment: &str,
+) -> usize {
+    report_value["report"][collection]
+        .as_array()
+        .unwrap_or_else(|| panic!("report.{collection} should be an array"))
+        .iter()
+        .position(|item| {
+            item[key]
+                .as_str()
+                .is_some_and(|value| value.contains(fragment))
+        })
+        .unwrap_or_else(|| {
+            panic!("report.{collection} should contain an item whose {key} contains {fragment:?}")
+        })
+}
+
+fn report_item_id(report_value: &Value, collection: &str, key: &str, expected: &str) -> String {
+    let index = report_item_index(report_value, collection, key, expected);
+    report_value["report"][collection][index]["id"]
+        .as_str()
+        .unwrap_or_else(|| panic!("report.{collection}[{index}].id should be a string"))
+        .to_string()
+}
+
+fn array_item_index(array: &Value, key: &str, expected: &str) -> usize {
+    array
+        .as_array()
+        .expect("test fixture value should be an array")
+        .iter()
+        .position(|item| item[key].as_str() == Some(expected))
+        .unwrap_or_else(|| panic!("array should contain an item with {key} equal to {expected:?}"))
+}
+
+fn report_relation_index_between(report_value: &Value, from_id: &str, to_id: &str) -> usize {
+    report_value["report"]["relations"]
+        .as_array()
+        .expect("report.relations should be an array")
+        .iter()
+        .position(|relation| {
+            relation["from"]["id"].as_str() == Some(from_id)
+                && relation["to"]["id"].as_str() == Some(to_id)
+        })
+        .unwrap_or_else(|| {
+            panic!("report.relations should contain an edge from {from_id:?} to {to_id:?}")
+        })
 }
 
 fn load_repo_json(relative: &str) -> Value {
@@ -3482,6 +4699,9 @@ fn validate_sok_report_smoke(value: &Value) -> std::result::Result<(), String> {
     collect_item_ids(report, "core_ideas", "concept", &mut ids)?;
     collect_item_ids(report, "methods", "method", &mut ids)?;
     collect_item_ids(report, "representations", "representation", &mut ids)?;
+    if report.contains_key("field_elements") {
+        collect_item_ids(report, "field_elements", "field_element", &mut ids)?;
+    }
     collect_item_ids(report, "sources", "source", &mut ids)?;
     collect_item_ids(report, "claims", "claim", &mut ids)?;
     collect_item_ids(report, "curriculum_path", "curriculum_step", &mut ids)?;
@@ -3589,7 +4809,10 @@ fn validate_knowledge_source_refs(
     report: &serde_json::Map<String, Value>,
     ids: &HashMap<String, BTreeSet<String>>,
 ) -> std::result::Result<(), String> {
-    for section in ["core_ideas", "methods", "representations"] {
+    for section in ["core_ideas", "methods", "representations", "field_elements"] {
+        if !report.contains_key(section) {
+            continue;
+        }
         for item in array_child(report, section, "report")? {
             let item = item
                 .as_object()
@@ -3906,6 +5129,7 @@ fn valid_entity_type(entity_type: &str) -> bool {
             | "frontier_debate"
             | "method"
             | "representation"
+            | "field_element"
     )
 }
 
@@ -3921,6 +5145,22 @@ fn assert_validation_check(
             .iter()
             .any(|check| check.check_id == check_id && check.severity == severity),
         "expected validation diagnostics to include {severity:?} {check_id}; got {:?}",
+        validation.diagnostics.checks
+    );
+}
+
+fn assert_validation_message(validation: &report::ReportValidation, message_fragment: &str) {
+    assert!(
+        validation
+            .diagnostics
+            .checks
+            .iter()
+            .any(
+                |check| check.check_id == report::CHECK_VALIDATE_VISUAL_REFERENCE
+                    && check.severity == report::DiagnosticSeverity::Error
+                    && check.message.contains(message_fragment)
+            ),
+        "expected visual validation error containing {message_fragment:?}; got {:?}",
         validation.diagnostics.checks
     );
 }

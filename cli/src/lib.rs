@@ -199,7 +199,7 @@ Global options:
 Commands:
   init              Create an agent workspace.
   brief             Generate an agent handoff brief.
-  scaffold          Generate an agent-facing SoK report scaffold.
+  scaffold          Generate a field-discovery and report-architecture canvas.
   handoff-report    Generate a next-agent brief for completing a human-reader report from a scaffold.
   source-template   Create a header-only source manifest CSV template.
   audit-sources     Audit source access metadata.
@@ -258,7 +258,7 @@ fn print_scaffold_usage() {
         r#"Usage:
   sok scaffold --field <field> [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <scaffold.md>]
 
-Writes a provisional, domain-aware report scaffold to --output or prints it to standard output."#
+Writes a provisional source-review and report-architecture canvas to --output or prints it to standard output."#
     );
 }
 
@@ -286,7 +286,7 @@ fn print_audit_sources_usage() {
         r#"Usage:
   sok audit-sources --manifest <sources.csv|sources.tsv|sources.json> [--strict]
 
-Checks source identity, access, and curricular-role metadata. --strict returns an error when problems are found."#
+Checks source identity, access, and source-role metadata. --strict returns an error when problems are found."#
     );
 }
 
@@ -629,7 +629,7 @@ fn print_export_json_usage() {
 
 The --scaffold flag is a path alias for --report.
 The stage is always explicit; filenames and headings do not select the public/internal contract.
-Only canonical SoK headings and Markdown table shapes are interpreted."#
+Public H2 sections are preserved in order. Canonical headings or sok:surface markers identify machine-verifiable tables."#
     );
 }
 
@@ -1054,7 +1054,7 @@ fn mode_descriptions() -> BTreeMap<&'static str, &'static str> {
         ),
         (
             "research",
-            "Produce a SoK research report and curriculum map.",
+            "Produce a field-structured research report with only the evidence modules the goal requires.",
         ),
         (
             "textbook",
@@ -1183,17 +1183,17 @@ Do not render this internal context as a front-matter table in the final report.
 
 ## Human-Reader Report Contract
 
-1. Start with an executive thesis: what the field is, why it matters, and the few structural claims that organize the report.
-2. Explain the knowledge architecture: generative questions, core objects, representations, methods, evidence standards, threshold concepts, and failure modes.
-3. Select only visual views justified by the report's structured relations. Use the smallest set that clarifies hierarchy, dependency, evidence flow, or debate structure for the intended reader.
-4. Turn the literature ladder into an evidence base: explain why each source matters, how it should be used, and what access route exists.
-5. Include a research roadmap that moves from field entry to research fluency through concrete scholarly performances.
-6. Date all current frontier claims and distinguish durable foundations from active debates, standards, tools, datasets, or strategic reports.
-7. End with verification limits and next checks, not with scaffold-maintenance notes.
+1. Review sources before confirming the report's shape. Treat the scaffold's profile, lenses, and any architecture decision as hypotheses to preserve, revise, or reject against the evidence.
+2. Inventory the field-native elements that actually carry its knowledge: questions, objects, cases, representations, methods, warrants, institutions, instruments, data, disputes, or other forms found in the sources.
+3. Identify the few load-bearing relations among those elements and distinguish core ideas from supporting context.
+4. Compare plausible organizing forms against those findings and the reader's goal, then confirm or revise the scaffold's decision: for example a dependency graph, causal system, process, multiscale model, debate network, case constellation, genealogy, chronology, or a justified hybrid.
+5. Record the final `Report Architecture` decision with a thesis, organizing form, and rationale. Then write ordered, field-specific `##` sections; do not reuse the scaffold's working sections as the final table of contents.
+6. Keep machine-verifiable Claims, Relations, Literature Ladder, Curriculum Roadmap, and Visual Views surfaces only when they serve this run. A report does not need a public chapter for every structured surface.
+7. Date current claims, preserve evidence limits, and select only relation-backed visuals that clarify the chosen architecture.
 
 ## Quality Gate
 
-The final report should read like a deep research briefing, not a filled worksheet. It should preserve the scaffold's domain-fit intelligence while hiding the scaffolding machinery from the human reader.
+The final report should read like a field-specific deep research briefing, not a filled worksheet. Its narrative sequence must follow the discovered structure of the field. Structured evidence surfaces support validation; they do not dictate the public table of contents.
 
 ## Input Scaffold
 
@@ -1211,9 +1211,9 @@ pub fn build_report_scaffold(field: &str, learner: &str, goal: &str, weeks: i32)
     } else {
         "unspecified duration".to_string()
     };
-    let profile = profiles::infer_scaffold_profile(field);
+    let profile = profiles::infer_discovery_profile(field);
     format!(
-        r#"# Structure of Knowledge: {field}
+        r#"# SoK Working Scaffold: {field}
 
 ## Research Frame
 
@@ -1223,119 +1223,88 @@ pub fn build_report_scaffold(field: &str, learner: &str, goal: &str, weeks: i32)
 | Learner | {learner} |
 | Goal | {goal} |
 | Time budget | {duration} |
-| Domain classification | {classification} |
-| Profile hypothesis | {profile_hypothesis} |
-| Scaffold stance | {scaffold_stance} |
-| Scoped assumption | {scoped_assumption} |
-| Evidence posture | {evidence_posture} |
+| Provisional lens | {classification_hint} |
+| Why only provisional | {why_this_hint} |
 
-## 1. Domain Decomposition
+## Discovery Rule
 
-{decomposition}
+Do not draft the final table of contents yet. Review boundary, foundation, and method sources first; then replace or reject the provisional lenses below. The field name is only a search hint and must not determine the final report architecture.
 
-## 2. Orientation
+## Candidate Lenses to Test
 
-{orientation}
+| Lens | Inspect in sources | Revise or reject when | Status |
+|---|---|---|---|
+{lenses}
 
-## 3. The Field's Deep Structure
+## Questions for Field Discovery
 
-| Element | In this field | First-pass representation | Deeper synthesis | Why it matters |
-|---|---|---|---|---|
-{structure_rows}
+{questions}
 
-## 4. {map_title}
+## Field Element Inventory
 
-{map_caption}
+Create element classes from what the sources actually reveal. Questions, objects, cases, representations, methods, warrants, institutions, instruments, datasets, practices, and disputes are prompts, not required slots. Do not add a row merely to cover a generic category.
 
-```mermaid
-{concept_map}
-```
+| Element class | Observed element | Actual form in this field | Role: core / surrounding / context | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
 
-## 5. Source Role Probe
+## Source Role Probe
 
-Source roles are diagnostic, not quotas. Use this table to decide which evidence roles are necessary for this run, and mark irrelevant roles as waived with a rationale after initial source review.
+Source roles are diagnostic, not quotas. Decide each role after the first source pass and record a reason for every waiver.
 
-| Source role | Status | Candidate source pattern | What it tests | Waiver or revision rule |
-|---|---|---|---|---|
-{source_probe_rows}
+| Source role | Inspect | Decision rule | Decision and rationale |
+|---|---|---|---|
+{source_roles}
 
-## 6. Literature Ladder
+## Organizing Form Comparison
 
-| Layer | Source | Type | Identifier | Access route | Budget | Difficulty | Read for | Notes |
-|---|---|---|---|---|---:|---:|---|---|
-{literature_rows}
+Add at least two plausible forms suggested by the reviewed element inventory. Compare their explanatory gain and distortion risk; invent a field-specific or hybrid form when standard graph, process, case, debate, taxonomy, scale, or historical forms do not fit.
 
-## 7. Curriculum Roadmap
-
-| Phase | Module | Essential question | Readings | Practice artifact | Progress criteria |
+| Candidate form | Use when the load-bearing relation is | What it foregrounds | Main distortion risk | Evidence from this run | Decision |
 |---|---|---|---|---|---|
-{curriculum_rows}
 
-## 8. Practice and Assessment
+## Report Architecture Decision
 
-{practice}
+Complete this only after the element inventory and organizing-form comparison are source-grounded.
 
-## 9. Frontier, Debates, and Open Problems
+| Item | Decision |
+|---|---|
+| Executive thesis |  |
+| Primary reader question |  |
+| Chosen organizing form |  |
+| Architecture rationale |  |
+| Core elements to foreground |  |
+| Important surrounding elements |  |
+| Narrative sequence and section purposes |  |
+| Visual logic and view IDs |  |
+| Rejected alternatives and why |  |
+| Evidence or scope limits |  |
 
-| Problem or debate | Current state | Key sources | Required background | Why it is hard |
-|---|---|---|---|---|
-{frontier_rows}
+## Structured Export Workspace
 
-## 10. Visual Summary
+Claims, relations, reading ladders, curricula, and visual declarations are machine-verifiable support surfaces, not a mandatory public chapter sequence. Add only the surfaces this run needs, using the contracts in `structure-of-knowledge/references/output-contract.md`.
 
-{visual_caption}
+## Scaffold Quality Notes
 
-```mermaid
-{visual_map}
-```
-
-## 11. Sources and Further Reading
-
-Source priorities: {source_priorities}
-
-| Source | Date | Type | Identifier | Access route | Budget | Layer | Why it matters | Confidence |
-|---|---:|---|---|---|---:|---|---|---|
-| {field} orientation source to verify | date after lookup | handbook/syllabus/notes | official URL/ISBN/DOI | open, publisher, or library route | $0 or library preferred | orientation | Establishes the field boundary and learner-facing advance organizer | medium until verified |
-| {field} foundation or corpus source to verify | date after lookup | book/paper/standard/corpus/case | DOI/arXiv/ISBN/URL/catalog ID | official route with access status | budget unknown; library preferred | foundation | Anchors the durable concepts, methods, objects, cases, or corpora of the field | medium until verified |
-| {field} method or warrant source to verify | date after lookup | methods text/problem source/protocol/standard | DOI/arXiv/ISBN/URL | official route with access status | $0 or library preferred | method | Shows how claims, interpretations, proofs, measurements, or performances are judged | medium until verified |
-| {field} conditional source-role check | date after lookup or waived | recent survey/report/preprint/dataset/standard/primary corpus | official route or waiver rationale | $0, license terms, or library preferred | conditional | Verifies only the frontier, dataset, standard, infrastructure, corpus, or case roles needed for this goal | low until role is confirmed |
-
-## 12. Scaffold Quality Notes
-
-- This starter follows the harness gates: domain fit, source access metadata, pedagogical ladder, and not-a-topic-list.
-- Treat existing curricula as evidence of stabilized pedagogical consensus, not as the boundary of the field.
-- Replace starter source rows with researched citations before treating the report as authoritative.
-- {quality_focus}
+- The field name selected a provisional discovery lens only; source findings must control the final structure.
+- A completed run identifies core and surrounding elements, compares organizing forms, and records why the chosen report architecture fits.
+- Existing curricula are evidence of pedagogical consensus, not the boundary or automatic table of contents of the field.
 "#,
-        classification = profile.classification,
-        profile_hypothesis = profile.profile_hypothesis,
-        scaffold_stance = profile.scaffold_stance,
-        scoped_assumption = profile.scoped_assumption.as_str(),
-        evidence_posture = profile.evidence_posture,
-        decomposition = profile.decomposition.as_str(),
-        orientation = profile.orientation.as_str(),
-        structure_rows = profile.render_structure_rows(),
-        map_title = profile.map_title,
-        map_caption = profile.map_caption,
-        concept_map = profile.concept_map.as_str(),
-        source_probe_rows = profile.render_source_role_rows(),
-        literature_rows = profile.literature_rows.join("\n"),
-        curriculum_rows = profile.curriculum_rows.join("\n"),
-        practice = profile.practice,
-        frontier_rows = profile.frontier_rows.join("\n"),
-        visual_caption = profile.visual_caption,
-        visual_map = profile.visual_map.as_str(),
-        source_priorities = profile.source_priorities,
-        quality_focus = profile.quality_focus
+        classification_hint = profile.classification_hint,
+        why_this_hint = profile.why_this_hint,
+        lenses = profile.render_lenses(),
+        questions = profile.render_questions(),
+        source_roles = profile.render_source_roles()
     )
 }
 
 fn mode_deliverables(mode: &str) -> Vec<&'static str> {
     let mut common = vec![
-        "Domain decomposition and scoped assumptions",
-        "Substantive and syntactic structure map",
+        "Field boundary and scoped assumptions",
+        "Field-native element inventory with actual forms",
+        "Load-bearing relations and core-versus-surrounding distinction",
         "Source manifest with access metadata",
-        "Evidence matrix with curricular roles",
+        "Role-based evidence plan",
+        "Compared organizing forms and report-architecture decision",
         "Quality-gate self-audit",
     ];
     match mode {
@@ -1357,9 +1326,8 @@ fn mode_deliverables(mode: &str) -> Vec<&'static str> {
             "Assessment rubrics for scholarly performance",
         ]),
         _ => common.extend([
-            "Narrative SoK report",
-            "Literature ladder",
-            "Frontier/debate map",
+            "Field-specific narrative SoK report",
+            "Literature, frontier, or curriculum modules only when the goal requires them",
             "Relation-backed visual views when useful",
         ]),
     }
@@ -1387,7 +1355,7 @@ pub fn build_agent_brief(
     let mode_description = mode_descriptions()
         .get(mode)
         .copied()
-        .unwrap_or("Produce a SoK research report and curriculum map.");
+        .unwrap_or("Produce a field-structured SoK research report.");
     format!(
         r#"# SoK Agent Brief: {field}
 
@@ -1406,10 +1374,10 @@ Requested output format: {output_format}
 ## Operating Rules
 
 - Preserve domain precision while calibrating explanations, sequence, representations, and tasks to the intended audience.
-- Classify the domain before committing to a curriculum structure.
+- Keep the domain profile provisional until source review establishes the field's actual knowledge-bearing forms.
 - If the field is broad, decompose it into subfields and state the scoped path.
 - Separate substantive structure from syntactic structure.
-- Assign every source a curricular role and actionable access route.
+- Assign every source an epistemic or pedagogical role and actionable access route.
 - Treat paywalled, paid, subscription, and license-unclear sources as metadata-only unless the user supplies access or permission.
 - Use current sources for frontier claims, active standards, tools, datasets, and strategic reports.
 
@@ -1419,11 +1387,11 @@ Requested output format: {output_format}
 
 ## Suggested Execution Stages
 
-1. Frame: define field, learner, scope, assumptions, and domain type.
+1. Frame: define field, learner, scope, assumptions, and a provisional domain profile.
 2. Decompose: identify subfields, shared foundations, divergent methods, and path options.
-3. Source: build a source stack across orientation, foundation, methods, synthesis, frontier, and critique.
-4. Extract: identify generative questions, core objects, representations, methods, evidence standards, thresholds, and failure modes.
-5. Design: produce the curriculum or artifact architecture for the selected mode.
+3. Source: probe the boundary, foundation, warrant, and any goal-dependent evidence roles without imposing a fixed quota.
+4. Extract: identify the questions and field-native elements that carry knowledge, their actual forms, and their load-bearing relations.
+5. Design: compare plausible organizing forms, choose the reader-fit architecture, and add only the capability modules the goal requires.
 6. Verify: check currentness, access metadata, domain fit, and whether the result is more than a topic list.
 
 ## Handoff Files
@@ -1449,7 +1417,7 @@ pub fn build_tasks(mode: &str) -> String {
 ## Setup
 
 - [ ] Confirm field, learner, goal, and scope.
-- [ ] Classify domain type and choose visual model.
+- [ ] Record a provisional discovery lens without choosing the final report or visual form.
 - [ ] Decide whether broad-field decomposition is required.
 
 ## Sources
@@ -1468,7 +1436,7 @@ pub fn build_tasks(mode: &str) -> String {
 - [ ] Source access metadata is complete.
 - [ ] Current claims use current sources and dates.
 - [ ] Output explains relations and warrants, not just topics.
-- [ ] Curriculum or artifact path is useful for scholar-level work.
+- [ ] The requested artifact and any goal-dependent learning path are useful for scholar-level work.
 "#
     )
 }
@@ -1498,7 +1466,7 @@ Use this to turn an underspecified domain task into an executable agent brief.
 - What is the substantive structure?
 - What is the syntactic structure?
 - What are the threshold concepts and bottlenecks?
-- What visual form fits: prerequisite graph, network, debate map, timeline, instrument map, or mixed?
+- After extraction, which load-bearing relations would benefit from a visual, and which form would distort them least?
 
 ## Quality Gates
 - Does every source have access metadata?
@@ -1659,7 +1627,7 @@ pub fn audit_source(item: &Source, index: usize) -> Vec<String> {
         ));
     }
     if first_non_empty([&item.why_it_matters, &item.use_in_curriculum]).is_empty() {
-        problems.push(format!("{label}: missing curricular role"));
+        problems.push(format!("{label}: missing source role or relevance note"));
     }
     problems
 }

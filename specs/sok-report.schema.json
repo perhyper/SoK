@@ -12,6 +12,35 @@
     "internal_context": { "$ref": "#/$defs/internal_context" },
     "diagnostics": { "$ref": "#/$defs/diagnostics" }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "required": ["schema_version", "report_type"],
+            "properties": {
+              "schema_version": { "const": "sok-report/v2" },
+              "report_type": { "const": "human_report" }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "report": {
+            "required": ["presentation", "field_elements"],
+            "properties": {
+              "presentation": {
+                "required": ["alternatives_considered"]
+              },
+              "field_elements": { "minItems": 1 }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "non_empty_string": {
       "type": "string",
@@ -99,8 +128,17 @@
         "field": { "$ref": "#/$defs/non_empty_string" },
         "scope": { "$ref": "#/$defs/scope" },
         "domain_profile": { "$ref": "#/$defs/domain_profile" },
+        "presentation": {
+          "description": "Ordered, field-specific public narrative selected after source review. Structured evidence fields remain validation data and do not dictate this section order.",
+          "$ref": "#/$defs/report_presentation"
+        },
+        "field_elements": {
+          "description": "Field-native elements preserved from the reviewed inventory before compatibility projection into core_ideas, methods, and representations. Free-form classes keep cases, instruments, institutions, datasets, practices, disputes, and other domain-specific forms intact.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/field_element" }
+        },
         "literature_ladder": {
-          "description": "Canonical reading ladder exported from ## Literature Ladder rows. Strict validation checks that each row keeps a source-backed layer, start point, reading purpose, and do-not-infer caveat.",
+          "description": "Optional reading ladder exported from a literature-ladder surface or compatible canonical heading. Strict validation checks that each row keeps a source-backed layer, start point, reading purpose, and do-not-infer caveat.",
           "type": "array",
           "items": { "$ref": "#/$defs/literature_ladder_row" }
         },
@@ -131,7 +169,7 @@
           "items": { "$ref": "#/$defs/relation" }
         },
         "curriculum_path": {
-          "description": "Curriculum sequence exported from ## Curriculum Roadmap. Optional prerequisite_ids carry explicit prerequisite references resolved from Prerequisite IDs or Prerequisites columns.",
+          "description": "Optional curriculum sequence exported from a curriculum surface or compatible canonical heading. prerequisite_ids carry explicit references resolved from Prerequisite IDs or Prerequisites columns.",
           "type": "array",
           "items": { "$ref": "#/$defs/curriculum_step" }
         },
@@ -140,7 +178,7 @@
           "items": { "$ref": "#/$defs/frontier_debate_item" }
         },
         "visual_views": {
-          "description": "Declared visual views exported from ## Visual Views. Edges should reference validated relation IDs rather than inferred graph layout.",
+          "description": "Declared visual views exported from a visual-views surface or compatible canonical heading. Edges should reference validated relation IDs rather than inferred graph layout.",
           "type": "array",
           "items": { "$ref": "#/$defs/visual_view" }
         },
@@ -148,6 +186,40 @@
           "description": "Explicit rationale for intentionally omitting substantial-report relations, curriculum prerequisites, or visual views.",
           "type": "array",
           "items": { "$ref": "#/$defs/structure_waiver" }
+        }
+      }
+    },
+    "report_presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["thesis", "organizing_form", "rationale", "sections"],
+      "properties": {
+        "thesis": { "$ref": "#/$defs/non_empty_string" },
+        "organizing_form": { "$ref": "#/$defs/non_empty_string" },
+        "rationale": { "$ref": "#/$defs/non_empty_string" },
+        "alternatives_considered": {
+          "description": "At least one plausible organizing form that was compared and rejected, with the reason it would distort or under-serve this field and reader goal.",
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/report_section" }
+        }
+      }
+    },
+    "report_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "title": { "$ref": "#/$defs/non_empty_string" },
+        "purpose": { "type": "string" },
+        "body_markdown": { "type": "string" },
+        "visual_view_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
         }
       }
     },
@@ -217,6 +289,35 @@
           "items": { "$ref": "#/$defs/stable_id" }
         },
         "temporal": { "$ref": "#/$defs/temporal_marker" }
+      }
+    },
+    "field_element": {
+      "description": "One observed, source-reviewed element in the form used by this field. element_class and role are intentionally free-form so the contract does not impose a universal ontology.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "element_class",
+        "label",
+        "actual_form",
+        "role",
+        "load_bearing_relations"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "element_class": { "$ref": "#/$defs/non_empty_string" },
+        "label": { "$ref": "#/$defs/non_empty_string" },
+        "actual_form": { "$ref": "#/$defs/non_empty_string" },
+        "role": { "type": "string" },
+        "load_bearing_relations": { "type": "string" },
+        "source_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "unknown"]
+        }
       }
     },
     "literature_ladder_row": {
@@ -452,7 +553,7 @@
       }
     },
     "relation": {
-      "description": "Explicit semantic relation between public report entities. Relation endpoints must resolve to exported concepts, methods, representations, claims, sources, curriculum steps, or frontier/debate items.",
+      "description": "Explicit semantic relation between public report entities. field_element endpoints preserve field-native types; compatibility endpoint types remain available for concepts, methods, representations, claims, sources, curriculum steps, and frontier/debate items.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind", "from", "to"],
@@ -493,6 +594,7 @@
         "entity_type": {
           "type": "string",
           "enum": [
+            "field_element",
             "concept",
             "claim",
             "source",
@@ -525,7 +627,7 @@
         "title": { "$ref": "#/$defs/non_empty_string" },
         "learning_goal": { "$ref": "#/$defs/non_empty_string" },
         "prerequisite_ids": {
-          "description": "Explicit prerequisite references resolved from canonical Curriculum Roadmap prerequisite columns. IDs may point to curriculum steps or other public report entities.",
+          "description": "Explicit prerequisite references resolved from curriculum-surface Prerequisite IDs or Prerequisites columns. IDs may point to curriculum steps or other public report entities.",
           "type": "array",
           "items": { "$ref": "#/$defs/stable_id" }
         },
@@ -609,18 +711,19 @@
             "knowledge_spine",
             "concept_source",
             "dependency_path",
-            "frontier_debate",
-            "custom"
+            "frontier_debate"
           ]
         },
         "title": { "$ref": "#/$defs/non_empty_string" },
         "justification": { "$ref": "#/$defs/non_empty_string" },
         "nodes": {
           "type": "array",
+          "minItems": 2,
           "items": { "$ref": "#/$defs/visual_view_node" }
         },
         "edges": {
           "type": "array",
+          "minItems": 1,
           "items": { "$ref": "#/$defs/visual_view_edge" }
         }
       }
@@ -628,13 +731,14 @@
     "visual_view_node": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "label", "entity_type"],
+      "required": ["id", "label", "entity_type", "ref_id"],
       "properties": {
         "id": { "$ref": "#/$defs/stable_id" },
         "label": { "$ref": "#/$defs/non_empty_string" },
         "entity_type": {
           "type": "string",
           "enum": [
+            "field_element",
             "concept",
             "claim",
             "source",
@@ -651,7 +755,7 @@
     "visual_view_edge": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["from", "to", "kind"],
+      "required": ["from", "to", "kind", "relation_id"],
       "properties": {
         "from": { "$ref": "#/$defs/stable_id" },
         "to": { "$ref": "#/$defs/stable_id" },

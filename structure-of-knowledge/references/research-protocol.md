@@ -11,16 +11,16 @@
    - Look for seminal papers, foundational books, classic experiments, canonical cases, standards, and widely taught methods.
    - Confirm centrality through citations, syllabi recurrence, review papers, and expert retrospectives.
 
-3. Find the current frontier.
+3. Find the current frontier when the goal requires current state, research entry, active tools, standards, or debates.
    - Search for recent survey papers, annual reviews, "open problems", "grand challenges", "state of the art", benchmark reports, standards updates, and major conference keynotes or tutorials.
    - Use absolute dates for current claims.
 
-4. Compare perspectives.
+4. Compare perspectives when disagreements, cases, schools, or warrant differences organize the field.
    - Identify schools, debates, methodological splits, and critiques.
    - Include dissent where it changes the curriculum or interpretation of evidence.
 
-5. Convert sources into pedagogy.
-   - For each important source, decide whether it is best used as orientation, foundation, method, canonical case, synthesis, frontier, or critique.
+5. Convert sources into artifact roles.
+   - For each important source, decide whether it is best used as orientation, foundation, method, canonical case, synthesis, frontier, critique, or pedagogical sequence when the goal calls for one.
    - Record how the user can actually obtain the source: book, paper, preprint, lecture notes, standard, dataset, software, DOI, arXiv ID, ISBN, publisher page, library route, open URL, or expected purchase/subscription cost.
    - Treat syllabi and existing curricula as evidence of pedagogical consensus, not as the field boundary.
 
@@ -33,10 +33,9 @@ Usually required:
 - Orientation / boundary: identifies field scope, subfields, vocabulary, and adjacent-field boundaries.
 - Canonical foundation: anchors durable concepts, objects, examples, cases, methods, or standards.
 - Method / warrant: shows how the field validates claims, performances, interpretations, proofs, measurements, or designs.
-- Pedagogical sequence evidence: shows teachable order, prerequisites, recurring fundamental ideas, bottlenecks, and assessment patterns.
-
 Conditional:
 
+- Pedagogical sequence evidence: required when the goal includes learning, curriculum, onboarding, or staged practice.
 - Recent survey / frontier: required for research-entry, current-tool, active-debate, recent-standard, or open-problem claims. It may be waived for stable core-skill paths such as basic language competence, with rationale.
 - Dataset / standard / infrastructure: required when instruments, repositories, standards, software, benchmarks, or institutions mediate the field's knowledge.
 - Primary corpus / canonical case: required for philology, law, history, literature, design, interpretive domains, case-based professions, and fields where expert judgment is taught through exemplars.

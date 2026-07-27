@@ -26,7 +26,7 @@ For a narrow answer, use this file and load only the reference that matches the 
 1. Frame the request.
    - Identify the field, learner profile, target depth, time budget, language preference, and desired output format.
    - If the field is broad, first produce a domain decomposition: major subfields, shared foundations, divergent methods, and possible scoped paths. Ask the user to choose only when the path would materially change the report; otherwise state a scoped assumption.
-   - If the field or goal is ambiguous enough to change the curriculum, ask one concise clarifying question. Otherwise state assumptions and continue.
+   - If the field or goal is ambiguous enough to change the requested artifact or report architecture, ask one concise clarifying question. Otherwise state assumptions and continue.
    - Build a preliminary domain profile rather than treating classification as a final label. Estimate the relevant lenses: formal/well-structured, ill-structured, professional/practice-based, empirical, computational, instrument- or infrastructure-bound, emerging, interdisciplinary, or mixed.
    - Treat this profile as a source-review hypothesis. It should reveal which knowledge-production modes must be inspected, not restrict the field to an existing curriculum or a single legacy category.
 
@@ -34,15 +34,16 @@ For a narrow answer, use this file and load only the reference that matches the 
    - Use current web research or user-provided corpora by default because frontier issues, recent surveys, standards, and tools change.
    - Prefer primary sources, field handbooks, authoritative textbooks, major survey/review papers, seminal papers, official standards, respected syllabi, and venue or society materials.
    - For instrument- or infrastructure-bound fields, include official review bodies, facilities, datasets, collaborations, standards, strategic reports, and statistical conventions as part of the source stack.
-   - Build a source role probe rather than enforcing a fixed source quota. Required roles usually include orientation or boundary evidence, canonical foundations, method or warrant evidence, and pedagogical sequence evidence. Conditional roles include recent frontier sources, datasets or standards, primary corpora, canonical cases, and infrastructure sources when the domain or user goal requires them.
+   - Build a source role probe rather than enforcing a fixed source quota. Required roles usually include orientation or boundary evidence, canonical foundations, and method or warrant evidence. Conditional roles include pedagogical sequence, recent frontier sources, datasets or standards, primary corpora, canonical cases, and infrastructure sources when the domain or user goal requires them.
    - Mark irrelevant source roles as waived with a short rationale. For example, a core Latin-language curriculum may waive recent frontier surveys, while a research-fluency path in number theory should include frontier or problem-list sources.
    - Treat existing syllabi and curricula as evidence of stabilized pedagogical consensus, not as the boundary of the field.
    - Build a source stack across roles and layers: scholarly orientation, canonical foundations, core methods, representative applications or cases, frontier surveys, debates, open problems, standards, datasets, or corpora as appropriate.
-   - Track what role each source plays in the scaffold or learning sequence, not only its bibliographic details.
+   - Track what role each source plays in the scaffold, requested artifact, or learning sequence, not only its bibliographic details.
    - For every recommended source, record type, identifier, access route, free/paid/paywalled status, and budget estimate or `budget unknown; library preferred`.
 
 3. Extract the structure of knowledge.
    - Name the field's generative questions, core objects, representations, transformations, methods, standards of evidence, canonical examples, and failure modes.
+   - Record the actual form each element takes in this field. Do not assume that every field is primarily a concept hierarchy: cases, instruments, institutions, datasets, practices, scales, or controversies may be load-bearing.
    - Separate substantive structure (concepts, models, claims, objects) from syntactic structure (how the field warrants, disputes, and revises claims).
    - Treat foundations as structurally central, not necessarily easy. A foundation may be a method, notation, tool, dataset, institution, standard, or debate practice.
    - For formal domains, capture proof techniques, canonical constructions, counterexample practices, classification problems, and problem-list traditions.
@@ -50,25 +51,35 @@ For a narrow answer, use this file and load only the reference that matches the 
    - Distinguish prerequisites from recurring fundamental ideas. A prerequisite is needed before a topic; a fundamental idea returns throughout the spiral at higher sophistication.
    - Identify threshold concepts, common misconceptions, and places where newcomers to the field confuse vocabulary with understanding.
 
-4. Design the learning spiral.
-   - Organize the curriculum into repeated passes over core ideas: orientation, core grammar, research fluency, and frontier participation.
+4. Choose the report architecture.
+   - Do this only after the source review and field-element inventory. Compare at least two plausible organizing forms against the observed load-bearing relations and the reader's goal.
+   - Possible forms include dependency graph, causal system, process or pipeline, multiscale map, debate network, case constellation, taxonomy, chronology, genealogy, or a justified hybrid. These are comparison options, not templates.
+   - Identify the core ideas to foreground and the important surrounding elements needed to make them intelligible. Omit peripheral inventory that does not serve the thesis.
+   - Record an executive thesis, chosen organizing form, rationale, ordered section purposes, visual logic, rejected alternatives, and scope limits in `Report Architecture`.
+   - Give the public report field-specific headings and ordering. Never copy the scaffold's working sections as an automatic final table of contents.
+
+5. Design a learning spiral when the goal requires one.
+   - Organize the curriculum into goal-fit repeated passes over core ideas. Orientation, core grammar, research fluency, and frontier participation are examples, not mandatory stages.
    - Use advance organizers, concept maps, and worked scholarly performances to make the field's structure visible before asking for independent synthesis.
    - For each module, include purpose, essential questions, readings, practice tasks, artifacts to produce, dependencies, and criteria for progress.
    - For ill-structured domains, use cases, schools of thought, debates, and interpretive lenses rather than forcing a single hierarchy.
 
-5. Deliver the SoK package.
+6. Deliver the SoK package.
    - Keep internal scaffold artifacts and human-facing reports separate. Scaffolds may include learner profile, original goal, assumptions, placeholders, and quality notes; final reports must not expose that machinery.
-   - Treat `sok-report.json` as the structured source of truth for downstream tooling. Markdown scaffolds and canonical Markdown reports are bounded inputs; HTML is a rendered public view.
-   - Provide a narrative report and visualization only when the structured relations justify it. Graph views should be selected from `relations` and `visual_views`; Mermaid is optional and not required.
-   - For final reports that will be exported, use canonical Markdown surfaces: `## Literature Ladder`, `## Relations`, `## Curriculum Roadmap`, `## Visual Views`, and `## Claims`. Put curriculum dependencies in a `Prerequisite IDs` or `Prerequisites` column, and put graph intent in `Visual Views` rows that reference explicit relation IDs.
+   - Treat `sok-report.json` as the structured source of truth for downstream tooling. Preserve reviewed inventory rows in `report.field_elements`; `core_ideas`, `methods`, and `representations` are compatibility projections, not the field's ontology. Markdown scaffolds and field-specific reports with structured surfaces are bounded inputs; HTML is a rendered public view.
+   - Provide a narrative report. Add a visualization only when structured relations justify it; select graph views from `relations` and `visual_views`. Mermaid is optional and not required.
+   - Structured surfaces support export and validation; they do not define public section order. A surface may keep its canonical heading or use a field-specific heading followed by `<!-- sok:surface report-architecture -->`, `field-elements`, `claims`, `relations`, `literature-ladder`, `curriculum`, or `visual-views`.
+   - Treat unknown or empty `sok:` directives and duplicate or conflicting `sok:surface` markers as blocking errors. Directives are standalone control lines, never examples inside fenced code.
+   - Put curriculum dependencies in a `Prerequisite IDs` or `Prerequisites` column, and put graph intent in `Visual Views` rows that reference explicit relation IDs. Include only the surfaces that serve the requested artifact, with a structure waiver when strict validation requires one.
+   - Place a declared visual inside a narrative section with `<!-- sok:visual-view view-id -->`. Unplaced views remain in the collapsed evidence appendix.
    - Do not infer semantic relations from Mermaid arrows, node proximity, or section order. Relations come from structured relation rows, curriculum prerequisites, or another explicit author-owned surface.
 
-6. Quality check.
+7. Quality check.
    - Verify that claims about current literature, active debates, standards, or tools are sourced with dates.
    - Verify that recommended readings include access metadata and usable acquisition routes.
-   - Ensure the curriculum starts from the learner's actual entry point but still preserves the field's intellectual integrity.
-   - Confirm the output is not a flat topic list: it must explain relations, hierarchy or network structure, inquiry methods, and progression.
-   - For final-report publication, treat `sok validate-report --strict` as blocking. Strict validation fails on embedded export warnings or errors, missing relation/prerequisite/visual structure without a waiver, dangling endpoints, public/internal boundary leaks, weak evidence support semantics, and stale or undated currentness claims.
+   - When a curriculum is included, ensure it starts from the learner's actual entry point but still preserves the field's intellectual integrity.
+   - Confirm the output is not a flat topic list: it must explain the field's load-bearing relations, organizing form, and inquiry methods; include progression only when the artifact needs it.
+   - For final-report publication, treat `sok validate-report --strict` as blocking. Final Markdown must contain a non-empty field-element inventory, report thesis, chosen organizing form, architecture rationale, and at least one field-specific public section. Strict validation also fails on embedded export warnings or errors, missing relation/prerequisite/visual structure without a waiver, dangling endpoints, public/internal boundary leaks, weak evidence support semantics, and stale or undated currentness claims.
 
 ## Helper Script
 
@@ -83,7 +94,7 @@ SOK_CLI="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok"
 "$SOK_CLI" --version
 ```
 
-The output must end with `(rust)`. Do not fall back to a Go binary or look for Cargo sources inside the installed skill. From a repository checkout:
+The output must end with `(rust)`. The installed skill does not contain Cargo sources. From a repository checkout:
 
 ```bash
 make build
@@ -112,10 +123,10 @@ If the verified Rust CLI is unavailable, report that limitation instead of silen
 Useful subcommands:
 
 - `brief`: create an agent handoff brief.
-- `scaffold`: create a domain-aware SoK Markdown starter inferred from field type.
+- `scaffold`: create a source-review and report-architecture discovery canvas; its field-name lens is provisional.
 - `handoff-report`: wrap a scaffold in next-agent instructions for completing a polished human-reader report.
 - `source-template`: create a header-only source manifest; add real source rows before `ingest last`.
-- `audit-sources`: verify access metadata and curricular roles.
+- `audit-sources`: verify access metadata and source role or relevance fields.
 - `download-sources`: download only sources with default-allowed access statuses by default.
 - `ingest last`: normalize the current run's source manifest into cataloged evidence JSONL without treating it as reviewed claim support.
 - `lint`: check scaffold or final Markdown plus source/evidence files before JSON export.
@@ -129,4 +140,4 @@ The CLI is not a substitute for research. It provides a stable execution frame s
 Recommended bounded lanes:
 
 - Scaffold lane: create or receive scaffold Markdown, maintain `sources.csv`, optionally run `"$SOK_CLI" ingest last`, run `"$SOK_CLI" lint --stage scaffold`, then `"$SOK_CLI" export-json --stage scaffold`. This JSON may contain `internal_context`; do not present it as a finished report and do not render it to HTML.
-- Final-report lane: complete a canonical human report Markdown file, review evidence into JSONL entries, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, then `"$SOK_CLI" render-html`. Only this lane produces human-facing HTML. Reviewed or verified evidence with `support_kind: supports`, `reviewed_at`, and a locator or support note can satisfy claims; `qualifies` narrows an already supported claim, `contradicts` records conflict, and `cataloged` source rows remain non-supporting.
+- Final-report lane: complete a field-specific human report Markdown file plus its structured evidence surfaces, review evidence into JSONL entries, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, then `"$SOK_CLI" render-html`. Only this lane produces human-facing HTML. Reviewed or verified evidence with `support_kind: supports`, `reviewed_at`, and a locator or support note can satisfy claims; `qualifies` narrows an already supported claim, `contradicts` records conflict, and `cataloged` source rows remain non-supporting.

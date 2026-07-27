@@ -2,7 +2,7 @@
 
 ## Product Definition
 
-Structure of Knowledge, or SoK, is a Codex skill and research harness that turns a learning or research goal into a bounded, evidence-grounded map of a field. It identifies the field's organizing questions, objects, representations, methods, evidence standards, source layers, dependencies, and practical learning sequence.
+Structure of Knowledge, or SoK, is a Codex skill and research harness that turns a learning or research goal into a bounded, evidence-grounded map of a field. It identifies the field's actual knowledge-bearing elements, their forms and warrants, load-bearing relations, source roles, and a reader-fit artifact architecture.
 
 SoK produces a reusable intermediate scaffold rather than a persistent knowledge base. Other agents and tools can adapt that scaffold into a human-readable report, curriculum, briefing, textbook plan, corpus plan, or interactive view.
 
@@ -17,9 +17,11 @@ SoK's scaffold idea is inspired by Jerome Bruner and the structure-of-knowledge 
 - `cli/src/`: Rust CLI for scaffolds, handoffs, source manifests, evidence ingestion, validation, and rendering.
 - `specs/sok-harness.yaml`: implementation-neutral stage and command contract.
 - `specs/sok-report.schema.json`: JSON-first report contract.
-- `reports/examples/`: bounded scaffold, evidence, JSON, and HTML-pipeline fixtures.
+- `cli/tests/fixtures/`: compact bounded inputs and JSON validation fixtures.
 
 Markdown is an authoring input. `sok-report.json` is the structured source of truth for validation and downstream tooling. HTML is a self-contained public view rendered only from validated `human_report` JSON.
+
+New human-report exports use `sok-report/v2` and preserve reviewed inventory rows in `report.field_elements`. The older `core_ideas`, `methods`, and `representations` arrays are compatibility projections rather than a universal ontology; v1 remains readable for legacy artifacts.
 
 ## Product Boundaries
 
@@ -34,12 +36,12 @@ Markdown is an authoring input. `sok-report.json` is the structured source of tr
 
 1. Frame the field, audience, goal, scope, and provisional domain profile.
 2. Build a source-role probe and record access metadata.
-3. Extract core structure, warrants, dependencies, and frontier questions.
-4. Generate an internal scaffold or complete a canonical human report.
-5. Ingest bounded source metadata into evidence JSONL when useful.
-6. Lint the selected lane and export `sok-report.json`.
-7. Validate final-report reliability gates.
-8. Render self-contained HTML only after strict validation succeeds.
+3. Extract field-native elements, warrants, and load-bearing relations; add frontier questions only when the goal requires them.
+4. Compare plausible organizing forms and choose a source-grounded report architecture.
+5. Generate an internal scaffold or complete a field-specific ordered human report.
+6. Ingest bounded source metadata into evidence JSONL when useful.
+7. Lint the selected lane and export `sok-report.json`.
+8. Validate final-report reliability gates and render HTML.
 
 ## Distribution
 
@@ -50,7 +52,7 @@ Markdown is an authoring input. `sok-report.json` is the structured source of tr
 
 ## Development Priorities
 
-- Increase inference reliability and make evidence support more explicit.
+- Increase field-structure inference reliability without turning provisional lenses into report templates.
 - Improve tool-use guidance for agents executing the skill.
 - Evaluate visualization choices against report relations, audience tasks, and information density.
 - Keep the public report concise while increasing the specificity and weight of each included claim.

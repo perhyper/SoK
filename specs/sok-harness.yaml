@@ -1,8 +1,9 @@
 name: structure-of-knowledge
-version: 0.2.0
+version: 0.3.0
 purpose: >
   Evidence-grounded harness for mapping an unfamiliar field into its knowledge
-  structure, source layers, learning sequence, and current frontier.
+  structure, source roles, and a reader-fit artifact architecture, with learning
+  or frontier modules only when the goal requires them.
 target_learner:
   default: learner_or_downstream_agent
   assumptions:
@@ -24,30 +25,38 @@ stages:
       - evidence_matrix
       - source_layer_map
   - id: structure_extraction
-    objective: Extract generative questions, objects, methods, representations, evidence standards, and threshold concepts.
+    objective: Extract field-native elements, their actual forms, roles, and load-bearing relations.
     required_artifacts:
-      - core_structure_matrix
-      - concept_or_network_map
+      - field_element_inventory
+      - load_bearing_relations
+  - id: architecture_design
+    objective: Compare organizing forms and choose a source-grounded, reader-fit narrative architecture.
+    required_artifacts:
+      - organizing_form_comparison
+      - report_architecture_decision
   - id: curriculum_design
+    condition: user_goal_requires_learning_path
     objective: Build a spiral or networked curriculum from field entry to the intended level of fluency.
     required_artifacts:
       - curriculum_roadmap
       - reading_ladder
       - practice_artifacts
   - id: frontier_mapping
+    condition: user_goal_requires_current_or_research_frontier
     objective: Identify current open problems, debates, schools, and research opportunities.
     required_artifacts:
       - frontier_map
       - debate_map
   - id: delivery
-    objective: Produce a report, relation-backed visuals when useful, citations, and verification notes.
+    objective: Produce a field-specific ordered narrative, relation-backed visuals when useful, citations, and verification notes.
     required_artifacts:
       - narrative_report
-      - visual_package
       - sources
+    conditional_artifacts:
+      visual_package: chosen_architecture_benefits_from_relation_backed_visuals
 quality_gates:
   - id: not_topic_list
-    rule: Output explains relations, hierarchy or network structure, inquiry methods, and progression.
+    rule: Output explains load-bearing relations, its chosen organizing form, and inquiry methods; hierarchy, network structure, or progression appear only when they fit the field and goal.
   - id: technical_integrity
     rule: Output preserves the field's concepts, warrants, and uncertainty while adapting explanation to the intended audience.
   - id: sourced_currentness
@@ -55,15 +64,18 @@ quality_gates:
   - id: actionable_access
     rule: Recommended sources include type, identifier, access route, free or paid status, and budget estimate or library guidance.
   - id: pedagogical_ladder
-    rule: Literature is assigned a curricular role, not merely listed.
+    condition: user_goal_requires_reading_or_curriculum_path
+    rule: Literature is assigned a pedagogical role, not merely listed.
   - id: preserved_report_structure
-    rule: Final-report exports preserve canonical Literature Ladder rows, explicit Relations rows, Curriculum Roadmap prerequisites, and relation-backed Visual Views when the Markdown declares them.
+    rule: Final-report exports preserve ordered narrative sections plus any declared machine surfaces without forcing those surfaces into the public table of contents.
   - id: evidence_support_semantics
     rule: Only reviewed or verified supports evidence with reviewed_at plus locator or support_note can satisfy claim support; cataloged, qualifies, contradicts, background, and example links remain visible but non-supporting.
   - id: strict_final_validation
     rule: Strict validation fails on embedded export warnings or errors, dangling endpoints, missing substantial-report structure without a structure waiver, public/internal boundary leaks, weak evidence semantics, and undated currentness claims.
   - id: domain_fit
-    rule: Formal fields may use prerequisite/proof graphs; ill-structured fields should use cases, networks, debates, or schools; infrastructure-bound fields must include instruments, datasets, collaborations, standards, and strategic reports.
+    rule: Field-name lenses are provisional; reviewed elements and relations determine whether the report uses prerequisites, systems, processes, cases, debates, chronology, scale, or another justified form.
+  - id: architecture_fit
+    rule: The report records why its organizing form and section sequence best convey the core ideas and necessary surrounding elements for the reader's goal.
   - id: source_role_fit
     rule: Source baskets are diagnostic roles, not quotas; conditional roles may be waived only with rationale tied to field structure and user goal.
   - id: curriculum_not_boundary
@@ -76,12 +88,16 @@ outputs:
   json_report: required_structured_source_of_truth
   html_interactive_report: optional_view_for_validated_human_report
   graph_views: optional_structured_views_selected_from_relations
-  canonical_final_markdown_surfaces:
-    literature_ladder: "## Literature Ladder table with Layer, Start here, Read for, Do not infer, Source IDs"
-    relations: "## Relations table with Relation ID, Relation kind, From type/reference, To type/reference, Rationale, Source IDs"
-    curriculum_prerequisites: "## Curriculum Roadmap table with Prerequisite IDs or Prerequisites"
-    visual_views: "## Visual Views table with View ID, View kind, Title, Purpose, Relation IDs, Node emphasis"
-    claims: "## Claims table with Statement, Claim type, Evidence requirement, Source IDs, Confidence, Temporal status, Notes"
+  structured_markdown_surfaces:
+    note: Canonical headings remain compatible; standalone, recognized sok:surface markers outside code fences allow field-specific public titles. Unknown or empty sok directives and duplicate markers are blocking diagnostics.
+    report_architecture: "report-architecture marker with Executive thesis, Chosen organizing form, and Architecture rationale"
+    field_elements: "field-elements marker with Element class, Observed element, Actual form in this field, Role, Load-bearing relations, Source IDs, Confidence"
+    field_element_export: "report.field_elements preserves free-form field-native classes before compatibility projection; relations may use field_element endpoints"
+    literature_ladder: "literature-ladder marker with Layer, Start here, Read for, Do not infer, Source IDs"
+    relations: "relations marker with Relation ID, Relation kind, From type/reference, To type/reference, Rationale, Source IDs"
+    curriculum_prerequisites: "curriculum marker with Prerequisite IDs or Prerequisites when a multi-step curriculum is present"
+    visual_views: "visual-views marker with View ID, View kind, Title, Purpose, Relation IDs, Node emphasis"
+    claims: "claims marker with Statement, Claim type, Evidence requirement, Source IDs, Confidence, Temporal status, Notes"
 agent_cli:
   language: rust
   manifest: cli/Cargo.toml
@@ -108,10 +124,10 @@ agent_cli:
   commands:
     init: Create an agent workspace with brief, tasks, report scaffold, source manifest, downloads, notes, and logs.
     brief: Generate a standalone agent handoff brief.
-    scaffold: Generate a domain-aware SoK report starter inferred from field type.
+    scaffold: Generate a source-review and report-architecture discovery canvas with a provisional field-name lens.
     handoff-report: Wrap a scaffold in next-agent instructions for completing a polished human-reader report.
     source-template: Create a CSV source manifest template.
-    audit-sources: Validate access metadata and curricular role fields.
+    audit-sources: Validate access metadata and source role or relevance fields.
     download-sources: Download only sources with default-allowed access statuses by default.
     ingest last: Normalize this run's source manifest into cataloged evidence JSONL without creating a persistent ledger.
     lint: Stage-aware pre-export check for Markdown, source manifests, and optional evidence ledgers.
@@ -136,29 +152,35 @@ agent_cli:
       render_html: false
       public_boundary: internal_context allowed only outside the public report payload
     final_report:
-      intent: Human-facing report generated from canonical Markdown and reviewed evidence.
+      intent: Human-facing report generated from field-specific ordered Markdown, with reviewed evidence when claims require it.
       commands:
         - lint --stage final
         - export-json --stage final
         - validate-report --strict
-        - render-html
+      optional_commands:
+        render-html: requested_output_includes_html
       inputs:
-        - canonical human report Markdown
+        - field-specific human report Markdown with a report architecture decision
         - sources.csv
-        - reviewed evidence JSONL
+      conditional_inputs:
+        reviewed evidence JSONL: report_contains_claims_requiring_reviewed_support
       outputs:
         - sok-report.json
-        - report.html
-      required_markdown_surfaces_for_substantial_reports:
-        - Literature Ladder
-        - Relations
-        - Curriculum Roadmap prerequisites
-        - Visual Views when a visual map or summary is declared
-        - Claims
+      conditional_outputs:
+        report.html: requested_output_includes_html
+      structured_surfaces_when_applicable:
+        - Relations for substantial field-structure claims
+        - Claims that require reviewed support
+        - Literature Ladder when the goal includes a reading path
+        - Curriculum prerequisites when a multi-step curriculum is present
+        - Visual Views when visual intent is declared
       strict_validation_expectations:
+        - sok-report/v2 human reports include both presentation and field_elements; v1 omission is legacy-only
+        - the Report Architecture surface has a non-empty executive thesis, chosen organizing form, architecture rationale, and rejected alternative with rationale
+        - a non-empty field-element inventory grounds the presentation in observed field forms
         - no embedded export warnings or errors unless accepted loss is waived
         - relation endpoints, visual nodes and edges, literature sources, claim sources, and curriculum prerequisites resolve to public report entities
-        - substantial final reports keep relations and at least one curriculum prerequisite unless structure_waivers explain the omission
+        - substantial final reports keep load-bearing relations; multi-step curricula keep at least one prerequisite unless structure_waivers explain the omission
         - reviewed or verified claim support uses support_kind supports with reviewed_at plus locator or support_note
       public_boundary: internal_context and diagnostics are not rendered
   quality_gate_commands:
@@ -169,7 +191,7 @@ agent_cli:
     - cli/target/release/sok --version
     - cli/target/release/sok --help
   modes:
-    research: SoK report, literature ladder, frontier map, and curriculum path.
+    research: Field-structured SoK report; add literature, frontier, curriculum, or visual modules only when the goal and architecture require them.
     textbook: Textbook thesis, chapter architecture, exercise ladder, and permissions plan.
     model-tuning: Legal corpus plan, access audit, exclusion list, and evaluation blueprint.
     curriculum: Module roadmap, practice artifacts, and scholarly assessment.

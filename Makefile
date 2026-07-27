@@ -23,7 +23,7 @@ package:
 	mkdir -p dist
 	tar --exclude='.DS_Store' \
 		-czf dist/structure-of-knowledge-skill.tar.gz \
-		LICENSE README.md $(SKILL_SOURCE)
+		LICENSE README.md docs/assets/sok-quantum-sensing-report.png $(SKILL_SOURCE)
 
 clean:
 	rm -rf cli/target dist

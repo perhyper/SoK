@@ -3,11 +3,12 @@
 use crate::{load_sources, source_access, Source};
 use anyhow::{bail, Context, Result};
 use chrono::{Duration, NaiveDate, SecondsFormat, Utc};
+use pulldown_cmark::{html, CowStr, Event, Options, Parser, Tag};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
@@ -18,6 +19,9 @@ pub const CHECK_SOURCE_MISSING_CURRICULAR_USE: &str = "source.missing-curricular
 pub const CHECK_EVIDENCE_CATALOGED_ONLY: &str = "evidence.cataloged-only";
 pub const CHECK_EXPORT_UNSUPPORTED_SECTION: &str = "export.unsupported-section";
 pub const CHECK_EXPORT_AMBIGUOUS_SECTION: &str = "export.ambiguous-section";
+pub const CHECK_EXPORT_UNKNOWN_SURFACE_MARKER: &str = "export.unknown-surface-marker";
+pub const CHECK_EXPORT_UNKNOWN_DIRECTIVE: &str = "export.unknown-directive";
+pub const CHECK_EXPORT_REPORT_ARCHITECTURE: &str = "export.report-architecture";
 pub const CHECK_EXPORT_MISSING_FIELD: &str = "export.missing-field";
 pub const CHECK_EXPORT_MISSING_PUBLIC_FIELD: &str = "export.missing-public-field";
 pub const CHECK_EXPORT_INTERNAL_SECTION_IN_FINAL: &str = "export.internal-section-in-final";
@@ -96,8 +100,12 @@ pub struct PublicReport {
     pub field: String,
     pub scope: Scope,
     pub domain_profile: DomainProfile,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<ReportPresentation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub literature_ladder: Vec<LiteratureLadderRow>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub field_elements: Vec<FieldElement>,
     pub core_ideas: Vec<KnowledgeItem>,
     pub methods: Vec<KnowledgeItem>,
     pub representations: Vec<KnowledgeItem>,
@@ -111,6 +119,31 @@ pub struct PublicReport {
     pub visual_views: Vec<VisualView>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub structure_waivers: Vec<StructureWaiver>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReportPresentation {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub thesis: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub organizing_form: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub rationale: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub alternatives_considered: String,
+    pub sections: Vec<ReportSection>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReportSection {
+    pub id: String,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub purpose: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub body_markdown: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visual_view_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -168,6 +201,20 @@ pub struct KnowledgeItem {
     pub source_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temporal: Option<TemporalMarker>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FieldElement {
+    pub id: String,
+    pub element_class: String,
+    pub label: String,
+    pub actual_form: String,
+    pub role: String,
+    pub load_bearing_relations: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<ClaimConfidence>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -424,6 +471,7 @@ pub struct RelationEndpoint {
 pub enum EntityType {
     #[default]
     Concept,
+    FieldElement,
     Claim,
     Source,
     CurriculumStep,
@@ -806,6 +854,7 @@ where
     }
 
     lint_stage_boundary(&markdown, &parsed, stage, &mut checks);
+    validate_markdown_report_architecture(&parsed, stage, &mut checks);
     lint_source_role_coverage(&parsed, &sources, &mut checks);
     lint_evidence_sources(&evidence, &sources, &mut checks);
     lint_evidence_semantics(&evidence, &mut checks);
@@ -868,7 +917,9 @@ fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>
             "field",
             "scope",
             "domain_profile",
+            "presentation",
             "literature_ladder",
+            "field_elements",
             "core_ideas",
             "methods",
             "representations",
@@ -929,6 +980,84 @@ fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>
         require_non_empty_string(domain, "classification", "/report/domain_profile", checks);
         require_non_empty_string(domain, "rationale", "/report/domain_profile", checks);
     }
+    if let Some(value) = report.get("presentation") {
+        if let Value::Object(presentation) = value {
+            validate_allowed_keys(
+                presentation,
+                "/report/presentation",
+                &[
+                    "thesis",
+                    "organizing_form",
+                    "rationale",
+                    "alternatives_considered",
+                    "sections",
+                ],
+                checks,
+            );
+            require_non_empty_string(presentation, "thesis", "/report/presentation", checks);
+            require_non_empty_string(
+                presentation,
+                "organizing_form",
+                "/report/presentation",
+                checks,
+            );
+            require_non_empty_string(presentation, "rationale", "/report/presentation", checks);
+            require_array(presentation, "sections", "/report/presentation", checks);
+            if let Some(Value::Array(sections)) = presentation.get("sections") {
+                if sections.is_empty() {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_SCHEMA_REQUIRED,
+                            "/report/presentation/sections must contain at least one public narrative section",
+                        )
+                        .with_target("/report/presentation/sections", ""),
+                    );
+                }
+                for (section_index, section) in sections.iter().enumerate() {
+                    let path = format!("/report/presentation/sections/{section_index}");
+                    let Some(section) = section.as_object() else {
+                        checks.push(
+                            DiagnosticCheck::error(
+                                CHECK_VALIDATE_SCHEMA_REQUIRED,
+                                format!("{path} must be an object"),
+                            )
+                            .with_target(path, ""),
+                        );
+                        continue;
+                    };
+                    validate_allowed_keys(
+                        section,
+                        &path,
+                        &["id", "title", "purpose", "body_markdown", "visual_view_ids"],
+                        checks,
+                    );
+                    require_non_empty_string(section, "id", &path, checks);
+                    require_non_empty_string(section, "title", &path, checks);
+                    if section.contains_key("visual_view_ids") {
+                        require_array(section, "visual_view_ids", &path, checks);
+                    }
+                }
+            }
+        } else {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    "/report/presentation must be an object",
+                )
+                .with_target("/report/presentation", ""),
+            );
+        }
+        match report.get("field_elements").and_then(Value::as_array) {
+            Some(field_elements) if !field_elements.is_empty() => {}
+            _ => checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_STRUCTURE_REQUIRED,
+                    "a report with presentation must include a non-empty /report/field_elements array",
+                )
+                .with_target("/report/field_elements", ""),
+            ),
+        }
+    }
     if let Some(standards) =
         require_object_for_validation(report, "evidence_standards", "/report", checks)
     {
@@ -959,7 +1088,12 @@ fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>
     ] {
         require_array(report, key, "/report", checks);
     }
-    for key in ["literature_ladder", "visual_views", "structure_waivers"] {
+    for key in [
+        "literature_ladder",
+        "field_elements",
+        "visual_views",
+        "structure_waivers",
+    ] {
         if report.contains_key(key) {
             require_array(report, key, "/report", checks);
         }
@@ -975,6 +1109,19 @@ fn validate_schema_level_fields(value: &Value, checks: &mut Vec<DiagnosticCheck>
             "read_for",
             "do_not_infer",
             "source_ids",
+        ],
+        checks,
+    );
+    validate_required_array_item_fields(
+        report,
+        "field_elements",
+        &[
+            "id",
+            "element_class",
+            "label",
+            "actual_form",
+            "role",
+            "load_bearing_relations",
         ],
         checks,
     );
@@ -1204,6 +1351,24 @@ fn validate_known_enum_strings(value: &Value, checks: &mut Vec<DiagnosticCheck>)
         return;
     };
 
+    if let Some(field_elements) = report.get("field_elements").and_then(Value::as_array) {
+        for (index, element) in field_elements.iter().enumerate() {
+            let Some(element) = element.as_object() else {
+                continue;
+            };
+            if element.contains_key("confidence") {
+                validate_string_enum(
+                    element,
+                    "confidence",
+                    &["high", "medium", "low", "unknown"],
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    &format!("/report/field_elements/{index}"),
+                    checks,
+                );
+            }
+        }
+    }
+
     if let Some(sources) = report.get("sources").and_then(Value::as_array) {
         for (index, source) in sources.iter().enumerate() {
             let Some(source) = source.as_object() else {
@@ -1320,6 +1485,7 @@ fn validate_known_enum_strings(value: &Value, checks: &mut Vec<DiagnosticCheck>)
                         "entity_type",
                         &[
                             "concept",
+                            "field_element",
                             "claim",
                             "source",
                             "curriculum_step",
@@ -1377,6 +1543,7 @@ fn validate_string_enum(
 
 #[derive(Debug, Default)]
 struct ReportIdIndex {
+    field_elements: BTreeSet<String>,
     concepts: BTreeSet<String>,
     methods: BTreeSet<String>,
     representations: BTreeSet<String>,
@@ -1391,6 +1558,60 @@ struct ReportIdIndex {
 impl ReportIdIndex {
     fn from_report(report: &PublicReport, checks: &mut Vec<DiagnosticCheck>) -> Self {
         let mut index = Self::default();
+        let mut field_element_labels = BTreeMap::<String, String>::new();
+        for (item_index, item) in report.field_elements.iter().enumerate() {
+            index.insert_entity(
+                "field_element",
+                &item.id,
+                format!("/report/field_elements/{item_index}/id"),
+                checks,
+            );
+            for (field, value) in [
+                ("element_class", item.element_class.as_str()),
+                ("label", item.label.as_str()),
+                ("actual_form", item.actual_form.as_str()),
+                ("role", item.role.as_str()),
+                (
+                    "load_bearing_relations",
+                    item.load_bearing_relations.as_str(),
+                ),
+            ] {
+                if value.trim().is_empty() || is_placeholder_text(value) {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_SCHEMA_REQUIRED,
+                            format!(
+                                "/report/field_elements/{item_index}/{field} must be non-empty and researched"
+                            ),
+                        )
+                        .with_target(
+                            format!("/report/field_elements/{item_index}/{field}"),
+                            &item.id,
+                        ),
+                    );
+                }
+            }
+            let normalized_label = normalize_id_text(&item.label);
+            if !normalized_label.is_empty() {
+                if let Some(existing_id) =
+                    field_element_labels.insert(normalized_label, item.id.clone())
+                {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_SCHEMA_REQUIRED,
+                            format!(
+                                "duplicate field element label {:?} on {} and {}",
+                                item.label, existing_id, item.id
+                            ),
+                        )
+                        .with_target(
+                            format!("/report/field_elements/{item_index}/label"),
+                            &item.id,
+                        ),
+                    );
+                }
+            }
+        }
         for (item_index, item) in report.core_ideas.iter().enumerate() {
             index.insert_entity(
                 "concept",
@@ -1487,6 +1708,9 @@ impl ReportIdIndex {
             );
         }
         match entity_type {
+            "field_element" => {
+                self.field_elements.insert(id.to_string());
+            }
             "concept" => {
                 self.concepts.insert(id.to_string());
             }
@@ -1514,6 +1738,7 @@ impl ReportIdIndex {
 
     fn has_entity(&self, entity_type: EntityType, id: &str) -> bool {
         match entity_type {
+            EntityType::FieldElement => self.field_elements.contains(id),
             EntityType::Concept => self.concepts.contains(id),
             EntityType::Claim => self.claims.contains(id),
             EntityType::Source => self.sources.contains(id),
@@ -1713,6 +1938,15 @@ fn validate_reference_consistency(
             checks,
         );
     }
+    for (item_index, item) in report.field_elements.iter().enumerate() {
+        validate_source_refs(
+            &item.source_ids,
+            index,
+            &format!("/report/field_elements/{item_index}/source_ids"),
+            &item.id,
+            checks,
+        );
+    }
     for (item_index, item) in report.core_ideas.iter().enumerate() {
         validate_source_refs(
             &item.source_ids,
@@ -1835,6 +2069,136 @@ fn validate_reference_consistency(
             checks,
         );
     }
+    if let Some(presentation) = &report.presentation {
+        let visual_view_ids = report
+            .visual_views
+            .iter()
+            .map(|view| view.id.as_str())
+            .collect::<BTreeSet<_>>();
+        let mut section_ids = BTreeSet::new();
+        let mut placed_visual_ids = BTreeSet::new();
+        for (section_index, section) in presentation.sections.iter().enumerate() {
+            if !is_stable_id(&section.id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_SCHEMA_REQUIRED,
+                        format!(
+                            "/report/presentation/sections/{section_index}/id is not a stable id: {:?}",
+                            section.id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/presentation/sections/{section_index}/id"),
+                        &section.id,
+                    ),
+                );
+            }
+            if is_reserved_renderer_id(&section.id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_SCHEMA_REQUIRED,
+                        format!(
+                            "report presentation section id {} is reserved by the HTML renderer",
+                            section.id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/presentation/sections/{section_index}/id"),
+                        &section.id,
+                    ),
+                );
+            }
+            if !section_ids.insert(section.id.as_str()) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_SCHEMA_REQUIRED,
+                        format!("duplicate report presentation section id {}", section.id),
+                    )
+                    .with_target(
+                        format!("/report/presentation/sections/{section_index}/id"),
+                        &section.id,
+                    ),
+                );
+            }
+            for visual_view_id in &section.visual_view_ids {
+                if !is_stable_id(visual_view_id) {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_SCHEMA_REQUIRED,
+                            format!(
+                                "presentation section {} has non-stable visual view id {:?}",
+                                section.id, visual_view_id
+                            ),
+                        )
+                        .with_target(
+                            format!(
+                                "/report/presentation/sections/{section_index}/visual_view_ids"
+                            ),
+                            visual_view_id,
+                        ),
+                    );
+                }
+                if !visual_view_ids.contains(visual_view_id.as_str()) {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_VISUAL_REFERENCE,
+                            format!(
+                                "report section {} references missing visual view {}",
+                                section.id, visual_view_id
+                            ),
+                        )
+                        .with_target(
+                            format!(
+                                "/report/presentation/sections/{section_index}/visual_view_ids"
+                            ),
+                            &section.id,
+                        ),
+                    );
+                }
+                if !placed_visual_ids.insert(visual_view_id.as_str()) {
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_VISUAL_REFERENCE,
+                            format!(
+                                "visual view {visual_view_id} is placed more than once in report.presentation"
+                            ),
+                        )
+                        .with_target(
+                            format!(
+                                "/report/presentation/sections/{section_index}/visual_view_ids"
+                            ),
+                            visual_view_id,
+                        ),
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn is_reserved_renderer_id(id: &str) -> bool {
+    matches!(
+        id,
+        "main-report"
+            | "evidence-appendix"
+            | "unplaced-visualizations"
+            | "reading-guide"
+            | "visualizations"
+            | "curriculum-path"
+            | "reading-ladder"
+            | "claims"
+            | "frontier-debates"
+            | "scope"
+            | "domain-profile"
+            | "field-elements"
+            | "core-ideas"
+            | "methods"
+            | "representations"
+            | "evidence-standards"
+            | "sources-evidence"
+            | "relations"
+            | "sok-visual-data"
+    ) || id.starts_with("visual-title-")
 }
 
 fn validate_source_refs(
@@ -2459,11 +2823,99 @@ fn validate_visual_references(
     index: &ReportIdIndex,
     checks: &mut Vec<DiagnosticCheck>,
 ) {
+    let relation_lookup = report
+        .relations
+        .iter()
+        .map(|relation| (relation.id.as_str(), relation))
+        .collect::<BTreeMap<_, _>>();
+    let mut view_ids = BTreeSet::new();
+
     for (view_index, view) in report.visual_views.iter().enumerate() {
-        let mut node_ids = BTreeSet::new();
+        let view_path = format!("/report/visual_views/{view_index}");
+        if !is_stable_id(&view.id) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_VISUAL_REFERENCE,
+                    format!("visual view id is not stable: {:?}", view.id),
+                )
+                .with_target(format!("{view_path}/id"), &view.id),
+            );
+        }
+        if !view_ids.insert(view.id.as_str()) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_VISUAL_REFERENCE,
+                    format!("duplicate visual view id {}", view.id),
+                )
+                .with_target(format!("{view_path}/id"), &view.id),
+            );
+        }
+        if visual_view_kind_label(view.kind).is_none() {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_VISUAL_REFERENCE,
+                    format!("visual view {} has unsupported kind custom", view.id),
+                )
+                .with_target(format!("{view_path}/kind"), &view.id),
+            );
+        }
+        if view.justification.trim().is_empty() {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_VISUAL_REFERENCE,
+                    format!("visual view {} requires a non-empty justification", view.id),
+                )
+                .with_target(format!("{view_path}/justification"), &view.id),
+            );
+        }
+        if view.nodes.len() < 2 {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_VISUAL_REFERENCE,
+                    format!("visual view {} requires at least two nodes", view.id),
+                )
+                .with_target(format!("{view_path}/nodes"), &view.id),
+            );
+        }
+
+        let mut node_lookup = BTreeMap::new();
+        let mut duplicate_node_ids = BTreeSet::new();
         for (node_index, node) in view.nodes.iter().enumerate() {
-            node_ids.insert(node.id.clone());
-            if !node.ref_id.trim().is_empty() && !index.has_entity(node.entity_type, &node.ref_id) {
+            let node_path = format!("{view_path}/nodes/{node_index}");
+            if !is_stable_id(&node.id) {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_VISUAL_REFERENCE,
+                        format!(
+                            "visual view {} node id is not stable: {:?}",
+                            view.id, node.id
+                        ),
+                    )
+                    .with_target(format!("{node_path}/id"), &view.id),
+                );
+            }
+            if node_lookup.insert(node.id.as_str(), node).is_some() {
+                duplicate_node_ids.insert(node.id.as_str());
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_VISUAL_REFERENCE,
+                        format!("visual view {} has duplicate node id {}", view.id, node.id),
+                    )
+                    .with_target(format!("{node_path}/id"), &view.id),
+                );
+            }
+            if node.ref_id.trim().is_empty() {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_VISUAL_REFERENCE,
+                        format!(
+                            "visual view {} node {} requires an entity ref_id",
+                            view.id, node.id
+                        ),
+                    )
+                    .with_target(format!("{node_path}/ref_id"), &view.id),
+                );
+            } else if !index.has_entity(node.entity_type, &node.ref_id) {
                 checks.push(
                     DiagnosticCheck::error(
                         CHECK_VALIDATE_VISUAL_REFERENCE,
@@ -2475,16 +2927,18 @@ fn validate_visual_references(
                             node.ref_id
                         ),
                     )
-                    .with_target(
-                        format!("/report/visual_views/{view_index}/nodes/{node_index}/ref_id"),
-                        &view.id,
-                    ),
+                    .with_target(format!("{node_path}/ref_id"), &view.id),
                 );
             }
         }
+
+        let mut valid_edge_count = 0;
         for (edge_index, edge) in view.edges.iter().enumerate() {
+            let edge_path = format!("{view_path}/edges/{edge_index}");
+            let mut edge_is_valid = true;
             for (endpoint_name, endpoint) in [("from", &edge.from), ("to", &edge.to)] {
-                if !node_ids.contains(endpoint) {
+                if !node_lookup.contains_key(endpoint.as_str()) {
+                    edge_is_valid = false;
                     checks.push(
                         DiagnosticCheck::error(
                             CHECK_VALIDATE_VISUAL_REFERENCE,
@@ -2493,16 +2947,41 @@ fn validate_visual_references(
                                 view.id, endpoint
                             ),
                         )
-                        .with_target(
-                            format!(
-                                "/report/visual_views/{view_index}/edges/{edge_index}/{endpoint_name}"
-                            ),
-                            &view.id,
-                        ),
+                        .with_target(format!("{edge_path}/{endpoint_name}"), &view.id),
                     );
+                } else if duplicate_node_ids.contains(endpoint.as_str()) {
+                    edge_is_valid = false;
                 }
             }
-            if !edge.relation_id.trim().is_empty() && !index.relations.contains(&edge.relation_id) {
+            if edge.from == edge.to {
+                edge_is_valid = false;
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_VISUAL_REFERENCE,
+                        format!(
+                            "visual view {} edge {} -> {} is a self-edge",
+                            view.id, edge.from, edge.to
+                        ),
+                    )
+                    .with_target(&edge_path, &view.id),
+                );
+            }
+
+            let relation = if edge.relation_id.trim().is_empty() {
+                edge_is_valid = false;
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_VISUAL_REFERENCE,
+                        format!(
+                            "visual view {} edge {} -> {} requires a relation_id",
+                            view.id, edge.from, edge.to
+                        ),
+                    )
+                    .with_target(format!("{edge_path}/relation_id"), &view.id),
+                );
+                None
+            } else if !index.relations.contains(&edge.relation_id) {
+                edge_is_valid = false;
                 checks.push(
                     DiagnosticCheck::error(
                         CHECK_VALIDATE_VISUAL_REFERENCE,
@@ -2511,12 +2990,58 @@ fn validate_visual_references(
                             view.id, edge.relation_id
                         ),
                     )
-                    .with_target(
-                        format!("/report/visual_views/{view_index}/edges/{edge_index}/relation_id"),
-                        &view.id,
-                    ),
+                    .with_target(format!("{edge_path}/relation_id"), &view.id),
                 );
+                None
+            } else {
+                relation_lookup.get(edge.relation_id.as_str()).copied()
+            };
+
+            if let (Some(relation), Some(from_node), Some(to_node)) = (
+                relation,
+                node_lookup.get(edge.from.as_str()).copied(),
+                node_lookup.get(edge.to.as_str()).copied(),
+            ) {
+                let endpoints_are_valid = [from_node, to_node].into_iter().all(|node| {
+                    is_stable_id(&node.id)
+                        && !duplicate_node_ids.contains(node.id.as_str())
+                        && !node.ref_id.trim().is_empty()
+                        && index.has_entity(node.entity_type, &node.ref_id)
+                });
+                if !endpoints_are_valid {
+                    edge_is_valid = false;
+                } else if !visual_relation_matches_nodes(relation, from_node, to_node) {
+                    edge_is_valid = false;
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_VISUAL_REFERENCE,
+                            format!(
+                                "visual view {} edge {} -> {} relation {} does not match the endpoint entity references",
+                                view.id, edge.from, edge.to, edge.relation_id
+                            ),
+                        )
+                        .with_target(format!("{edge_path}/relation_id"), &view.id),
+                    );
+                }
+            } else {
+                edge_is_valid = false;
             }
+
+            if edge_is_valid {
+                valid_edge_count += 1;
+            }
+        }
+        if valid_edge_count == 0 {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_VISUAL_REFERENCE,
+                    format!(
+                        "visual view {} requires at least one valid relation-backed edge",
+                        view.id
+                    ),
+                )
+                .with_target(format!("{view_path}/edges"), &view.id),
+            );
         }
     }
 }
@@ -2597,10 +3122,77 @@ fn validate_structure_waivers(report: &PublicReport, checks: &mut Vec<Diagnostic
 }
 
 fn validate_required_structure(document: &ReportDocument, checks: &mut Vec<DiagnosticCheck>) {
+    let report = &document.report;
+    if report.presentation.is_some() && report.field_elements.is_empty() {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_STRUCTURE_REQUIRED,
+                "a declared report presentation needs non-empty report.field_elements",
+            )
+            .with_target("/report/field_elements", ""),
+        );
+    }
     if document.metadata.report_type != ReportType::HumanReport {
         return;
     }
-    let report = &document.report;
+    if document.metadata.schema_version == "sok-report/v2" {
+        if report
+            .presentation
+            .as_ref()
+            .map(|presentation| presentation.sections.is_empty())
+            .unwrap_or(true)
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_STRUCTURE_REQUIRED,
+                    "sok-report/v2 human_report needs a non-empty report.presentation",
+                )
+                .with_target("/report/presentation", ""),
+            );
+        }
+        if report.field_elements.is_empty() {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_STRUCTURE_REQUIRED,
+                    "sok-report/v2 human_report needs non-empty report.field_elements",
+                )
+                .with_target("/report/field_elements", ""),
+            );
+        }
+        if report
+            .presentation
+            .as_ref()
+            .is_some_and(|presentation| presentation.alternatives_considered.trim().is_empty())
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_STRUCTURE_REQUIRED,
+                    "sok-report/v2 human_report needs a non-empty presentation.alternatives_considered decision trace",
+                )
+                .with_target("/report/presentation/alternatives_considered", ""),
+            );
+        }
+        for (index, element) in report.field_elements.iter().enumerate() {
+            let role = normalize_id_text(&element.role);
+            if (role.contains("core") || role.contains("surrounding"))
+                && element.source_ids.is_empty()
+            {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_EVIDENCE_SOURCE,
+                        format!(
+                            "field element {} has role {:?} but no source_ids",
+                            element.id, element.role
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/field_elements/{index}/source_ids"),
+                        &element.id,
+                    ),
+                );
+            }
+        }
+    }
     if substantial_final_report(report) {
         if report.relations.is_empty()
             && !has_structure_waiver(report, StructureWaiverScope::Relations)
@@ -2617,13 +3209,14 @@ fn validate_required_structure(document: &ReportDocument, checks: &mut Vec<Diagn
             .curriculum_path
             .iter()
             .any(|step| !step.prerequisite_ids.is_empty());
-        if !has_curriculum_prerequisite
+        if report.curriculum_path.len() > 1
+            && !has_curriculum_prerequisite
             && !has_structure_waiver(report, StructureWaiverScope::CurriculumPrerequisites)
         {
             checks.push(
                 DiagnosticCheck::error(
                     CHECK_VALIDATE_STRUCTURE_REQUIRED,
-                    "substantial human_report needs at least one curriculum prerequisite or a structure waiver",
+                    "a multi-step curriculum needs at least one prerequisite or a structure waiver",
                 )
                 .with_target("/report/curriculum_path", ""),
             );
@@ -2651,9 +3244,12 @@ fn substantial_final_report(report: &PublicReport) -> bool {
     if report.claims.len() > 2 || report.frontier_debates.len() > 1 {
         return true;
     }
-    let structural_count = report.core_ideas.len()
-        + report.methods.len()
-        + report.representations.len()
+    let field_structure_count = if report.field_elements.is_empty() {
+        report.core_ideas.len() + report.methods.len() + report.representations.len()
+    } else {
+        report.field_elements.len()
+    };
+    let structural_count = field_structure_count
         + report.literature_ladder.len()
         + report.curriculum_path.len()
         + report.frontier_debates.len();
@@ -2855,6 +3451,7 @@ fn access_status_label(status: AccessStatus) -> &'static str {
 fn entity_type_label(entity_type: EntityType) -> &'static str {
     match entity_type {
         EntityType::Concept => "concept",
+        EntityType::FieldElement => "field_element",
         EntityType::Claim => "claim",
         EntityType::Source => "source",
         EntityType::CurriculumStep => "curriculum_step",
@@ -2874,6 +3471,7 @@ struct MarkdownSection {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum CanonicalSection {
     ResearchFrame,
+    ReportArchitecture,
     DomainDecomposition,
     Orientation,
     DeepStructure,
@@ -2893,11 +3491,21 @@ enum CanonicalSection {
     Claims,
 }
 
+#[derive(Debug, Clone)]
+struct ParsedNarrativeSection {
+    title: String,
+    purpose: String,
+    body_markdown: String,
+    visual_view_ids: Vec<String>,
+}
+
 #[derive(Debug, Default)]
 struct ParsedMarkdownReport {
     title_field: String,
     sections: BTreeSet<CanonicalSection>,
     research_frame: BTreeMap<String, String>,
+    report_architecture: BTreeMap<String, String>,
+    narrative_sections: Vec<ParsedNarrativeSection>,
     domain_decomposition: String,
     orientation: String,
     deep_structure_rows: Vec<BTreeMap<String, String>>,
@@ -2948,6 +3556,7 @@ where
     let mut diagnostics = Vec::new();
     diagnostics.append(&mut parsed.diagnostics);
     diagnostics.extend(normalized_sources.diagnostics);
+    validate_markdown_report_architecture(&parsed, stage, &mut diagnostics);
 
     if let Some(path) = evidence_path.as_ref() {
         let mut reviewed_evidence: Vec<EvidenceEntry> = read_jsonl_file(path.as_ref())?;
@@ -2979,11 +3588,11 @@ where
     let source_lookup = SourceLookup::new(&sources);
     let scope = build_scope(&parsed, &mut diagnostics);
     let domain_profile = build_domain_profile(&parsed, stage, &mut diagnostics);
-    let (core_ideas, methods, representations) =
-        build_knowledge_items(&parsed, &source_lookup, &mut diagnostics);
+    let field_elements = build_field_elements(&parsed, &source_lookup);
+    let (core_ideas, methods, representations) = build_knowledge_items(&field_elements, &parsed);
     let evidence_standards = build_evidence_standards(&parsed);
     let literature_ladder = build_literature_ladder(&parsed, &source_lookup, &mut diagnostics);
-    let mut curriculum_path = build_curriculum_path(&parsed, &source_lookup, &mut diagnostics);
+    let mut curriculum_path = build_curriculum_path(&parsed, &source_lookup);
     let (frontier_debates, frontier_claims) =
         build_frontier_debates(&parsed, &source_lookup, &as_of, &review_after);
     let mut claim_seeds = build_claim_seeds(&parsed);
@@ -2997,7 +3606,7 @@ where
         &review_after,
         &mut diagnostics,
     );
-    let entity_index = ExportEntityIndex::new(
+    let mut entity_index = ExportEntityIndex::new(
         &core_ideas,
         &methods,
         &representations,
@@ -3006,6 +3615,7 @@ where
         &curriculum_path,
         &frontier_debates,
     );
+    entity_index.add_field_elements(&field_elements);
     apply_curriculum_prerequisites(
         &parsed,
         &mut curriculum_path,
@@ -3017,10 +3627,10 @@ where
     warn_if_unpreserved_visual_sections(&parsed, &visual_views, &mut diagnostics);
 
     warn_if_empty_public_sections(
+        &field_elements,
         &core_ideas,
         &methods,
         &representations,
-        &curriculum_path,
         &mut diagnostics,
     );
 
@@ -3046,9 +3656,13 @@ where
         ExportStage::Scaffold => ReportType::Scaffold,
         ExportStage::Final => ReportType::HumanReport,
     };
+    let presentation = match stage {
+        ExportStage::Scaffold => None,
+        ExportStage::Final => build_report_presentation(&parsed, &visual_views, &mut diagnostics),
+    };
     let mut document = ReportDocument {
         metadata: ReportMetadata {
-            schema_version: "sok-report/v1".to_string(),
+            schema_version: "sok-report/v2".to_string(),
             generated_at,
             report_type,
             temporal_review: TemporalMarker {
@@ -3081,7 +3695,9 @@ where
             field,
             scope,
             domain_profile,
+            presentation,
             literature_ladder,
+            field_elements,
             core_ideas,
             methods,
             representations,
@@ -3124,11 +3740,21 @@ fn parse_markdown_report(markdown: &str) -> ParsedMarkdownReport {
     let mut seen = BTreeSet::new();
 
     for section in sections {
+        let public_body = strip_sok_directives(&section.body);
+        let visual_view_ids = sok_directive_values(&section.body, "visual-view");
+        if is_public_narrative_section(section.canonical) {
+            parsed.narrative_sections.push(ParsedNarrativeSection {
+                title: section.title.clone(),
+                purpose: first_sok_directive_value(&section.body, "purpose"),
+                body_markdown: public_body,
+                visual_view_ids,
+            });
+        }
+
         let Some(canonical) = section.canonical else {
-            parsed.diagnostics.push(DiagnosticCheck::warning(
-                CHECK_EXPORT_UNSUPPORTED_SECTION,
-                format!("unsupported Markdown section {:?}", section.title),
-            ));
+            // Arbitrary H2 sections form the ordered public narrative. The
+            // canonical surfaces below remain available for machine extraction
+            // without dictating the report's table of contents.
             continue;
         };
         parsed.sections.insert(canonical);
@@ -3146,6 +3772,11 @@ fn parse_markdown_report(markdown: &str) -> ParsedMarkdownReport {
             CanonicalSection::ResearchFrame => {
                 parsed
                     .research_frame
+                    .extend(parse_key_value_table(&section.body));
+            }
+            CanonicalSection::ReportArchitecture => {
+                parsed
+                    .report_architecture
                     .extend(parse_key_value_table(&section.body));
             }
             CanonicalSection::DomainDecomposition => {
@@ -3231,13 +3862,17 @@ fn select_lint_parse_diagnostics(checks: &mut Vec<DiagnosticCheck>) -> Vec<Diagn
         .drain(..)
         .filter(|check| {
             check.check_id == CHECK_EXPORT_AMBIGUOUS_SECTION
+                || check.check_id == CHECK_EXPORT_UNKNOWN_SURFACE_MARKER
+                || check.check_id == CHECK_EXPORT_UNKNOWN_DIRECTIVE
                 || check.message.contains("unclosed fenced code block")
         })
         .collect()
 }
 
 fn parsed_has_any_canonical_content(parsed: &ParsedMarkdownReport) -> bool {
-    !parsed.title_field.trim().is_empty() || !parsed.sections.is_empty()
+    !parsed.title_field.trim().is_empty()
+        || !parsed.sections.is_empty()
+        || !parsed.narrative_sections.is_empty()
 }
 
 fn lint_stage_boundary(
@@ -3276,7 +3911,7 @@ fn lint_stage_boundary(
     }
 
     let mut seen = BTreeSet::new();
-    for (line_index, line) in markdown.lines().enumerate() {
+    for (line_index, line) in markdown_lines_outside_fences(markdown) {
         let trimmed = line.trim();
         if trimmed.is_empty() || !contains_non_public_scaffold_text(trimmed) {
             continue;
@@ -3302,6 +3937,163 @@ fn lint_stage_boundary(
                 )
                 .with_target(target, ""),
             ),
+        }
+    }
+}
+
+fn validate_markdown_report_architecture(
+    parsed: &ParsedMarkdownReport,
+    stage: ExportStage,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    if stage != ExportStage::Final {
+        return;
+    }
+    if !parsed_has_section(parsed, CanonicalSection::ReportArchitecture) {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_EXPORT_REPORT_ARCHITECTURE,
+                "final Markdown needs a Report Architecture surface chosen after field discovery",
+            )
+            .with_target("/report/presentation", ""),
+        );
+    }
+    for (label, keys) in [
+        ("Executive thesis", &["Executive thesis", "Thesis"][..]),
+        (
+            "Chosen organizing form",
+            &["Chosen organizing form", "Organizing form"][..],
+        ),
+        (
+            "Architecture rationale",
+            &["Architecture rationale", "Rationale", "Why this form"][..],
+        ),
+        (
+            "Rejected alternatives and why",
+            &[
+                "Rejected alternatives and why",
+                "Alternatives considered",
+                "Rejected alternatives",
+            ][..],
+        ),
+    ] {
+        if architecture_value(&parsed.report_architecture, keys)
+            .trim()
+            .is_empty()
+        {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_EXPORT_REPORT_ARCHITECTURE,
+                    format!("Report Architecture needs a non-empty {label} decision"),
+                )
+                .with_target("/report/presentation", label),
+            );
+        }
+    }
+    if parsed.narrative_sections.is_empty() {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_EXPORT_REPORT_ARCHITECTURE,
+                "final Markdown needs at least one field-specific public H2 section",
+            )
+            .with_target("/report/presentation/sections", ""),
+        );
+    }
+    let mut complete_field_rows = 0usize;
+    let mut saw_core = false;
+    let mut saw_surrounding = false;
+    for (row_index, row) in parsed.deep_structure_rows.iter().enumerate() {
+        let required = [
+            (
+                "Element class",
+                lookup_cell_any(row, &["Element class", "Class", "Element type"]),
+            ),
+            (
+                "Observed element",
+                lookup_cell_any(row, &["Observed element", "Element", "Name", "Title"]),
+            ),
+            (
+                "Actual form in this field",
+                lookup_cell_any(row, &["Actual form in this field"]),
+            ),
+            (
+                "Role",
+                lookup_cell_any(
+                    row,
+                    &[
+                        "Role",
+                        "Role: core / surrounding / context",
+                        "Structural role",
+                    ],
+                ),
+            ),
+            (
+                "Load-bearing relations",
+                lookup_cell_any(
+                    row,
+                    &[
+                        "Load-bearing relations",
+                        "Load bearing relations",
+                        "Key relations",
+                    ],
+                ),
+            ),
+            (
+                "Source IDs",
+                lookup_cell_any(row, &["Source IDs", "Sources", "Key sources"]),
+            ),
+        ];
+        let missing = required
+            .iter()
+            .filter_map(|(label, value)| {
+                (value.trim().is_empty() || is_placeholder_text(value)).then_some(*label)
+            })
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_EXPORT_REPORT_ARCHITECTURE,
+                    format!(
+                        "field-element inventory row {} needs researched values for {}",
+                        row_index + 1,
+                        missing.join(", ")
+                    ),
+                )
+                .with_target(format!("/report/field_elements/{row_index}"), ""),
+            );
+            continue;
+        }
+        complete_field_rows += 1;
+        let role = normalize_id_text(&required[3].1);
+        saw_core |= role.contains("core");
+        saw_surrounding |= role.contains("surrounding") || role.contains("context");
+    }
+    if complete_field_rows == 0 {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_EXPORT_REPORT_ARCHITECTURE,
+                "final Markdown needs at least one complete field-element inventory row so the architecture is grounded in observed field forms",
+            )
+            .with_target("/report/field_elements", ""),
+        );
+    } else {
+        if !saw_core {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_EXPORT_REPORT_ARCHITECTURE,
+                    "field-element inventory needs at least one element identified as core",
+                )
+                .with_target("/report/field_elements", ""),
+            );
+        }
+        if !saw_surrounding {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_EXPORT_REPORT_ARCHITECTURE,
+                    "field-element inventory needs at least one surrounding or context element needed to make the core intelligible",
+                )
+                .with_target("/report/field_elements", ""),
+            );
         }
     }
 }
@@ -3558,15 +4350,9 @@ fn claim_seed_requires_evidence(seed: &ClaimSeed, stage: ExportStage) -> bool {
 }
 
 fn lint_markdown_currentness(markdown: &str, checks: &mut Vec<DiagnosticCheck>) {
-    let mut in_code_fence = false;
-    for (line_index, line) in markdown.lines().enumerate() {
+    for (line_index, line) in markdown_lines_outside_fences(markdown) {
         let trimmed = line.trim();
-        if trimmed.starts_with("```") {
-            in_code_fence = !in_code_fence;
-            continue;
-        }
-        if in_code_fence
-            || trimmed.is_empty()
+        if trimmed.is_empty()
             || trimmed.starts_with('#')
             || is_likely_currentness_table_header(trimmed)
         {
@@ -3617,20 +4403,17 @@ fn parse_markdown_sections(
     let mut sections = Vec::new();
     let mut current_title = String::new();
     let mut current_body = Vec::new();
-    let mut in_code_fence = false;
+    let mut fence = None;
 
     for line in markdown.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("```") {
-            in_code_fence = !in_code_fence;
-        }
-        if !in_code_fence && trimmed.starts_with("## ") && !trimmed.starts_with("### ") {
+        let was_fenced = fence.is_some();
+        let is_fence_delimiter = update_markdown_fence(line, &mut fence);
+        let is_fenced = was_fenced || is_fence_delimiter || fence.is_some();
+        if !is_fenced && trimmed.starts_with("## ") && !trimmed.starts_with("### ") {
             if !current_title.is_empty() {
-                sections.push(MarkdownSection {
-                    canonical: canonical_section(&current_title),
-                    title: current_title,
-                    body: current_body.join("\n"),
-                });
+                let body = current_body.join("\n");
+                push_markdown_section(&mut sections, current_title, body, diagnostics);
                 current_body.clear();
             }
             current_title = trimmed.trim_start_matches('#').trim().to_string();
@@ -3639,31 +4422,228 @@ fn parse_markdown_sections(
         }
     }
 
-    if in_code_fence {
+    if fence.is_some() {
         diagnostics.push(DiagnosticCheck::warning(
             CHECK_EXPORT_UNSUPPORTED_SECTION,
             "Markdown has an unclosed fenced code block; fenced content was not interpreted",
         ));
     }
     if !current_title.is_empty() {
-        sections.push(MarkdownSection {
-            canonical: canonical_section(&current_title),
-            title: current_title,
-            body: current_body.join("\n"),
-        });
+        let body = current_body.join("\n");
+        push_markdown_section(&mut sections, current_title, body, diagnostics);
     }
     sections
+}
+
+fn push_markdown_section(
+    sections: &mut Vec<MarkdownSection>,
+    title: String,
+    body: String,
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) {
+    for (key, value) in standalone_sok_directives(&body) {
+        if !matches!(key.as_str(), "surface" | "purpose" | "visual-view") {
+            diagnostics.push(
+                DiagnosticCheck::error(
+                    CHECK_EXPORT_UNKNOWN_DIRECTIVE,
+                    format!("Markdown section {title:?} has unknown sok directive {key:?}"),
+                )
+                .with_target("/report/sections", &key),
+            );
+        } else if value.is_empty() {
+            diagnostics.push(
+                DiagnosticCheck::error(
+                    CHECK_EXPORT_UNKNOWN_DIRECTIVE,
+                    format!("Markdown section {title:?} has empty sok:{key} directive"),
+                )
+                .with_target("/report/sections", &key),
+            );
+        }
+    }
+    let markers = sok_directive_values(&body, "surface");
+    let canonical_from_marker = canonical_section_from_marker(&body);
+    if markers.len() > 1 {
+        diagnostics.push(
+            DiagnosticCheck::error(
+                CHECK_EXPORT_AMBIGUOUS_SECTION,
+                format!(
+                    "Markdown section {title:?} has multiple sok:surface markers: {}",
+                    markers.join(", ")
+                ),
+            )
+            .with_target("/report/sections", &title),
+        );
+    }
+    if let Some(marker) = markers.first() {
+        if canonical_from_marker.is_none() {
+            diagnostics.push(
+                DiagnosticCheck::error(
+                    CHECK_EXPORT_UNKNOWN_SURFACE_MARKER,
+                    format!("Markdown section {title:?} has unknown sok:surface marker {marker:?}"),
+                )
+                .with_target("/report/sections", marker),
+            );
+        }
+    }
+    sections.push(MarkdownSection {
+        canonical: canonical_from_marker.or_else(|| canonical_section(&title)),
+        title,
+        body,
+    });
+}
+
+fn canonical_section_from_marker(body: &str) -> Option<CanonicalSection> {
+    let surface = first_sok_directive_value(body, "surface");
+    match normalize_id_text(&surface).as_str() {
+        "report architecture" | "architecture" => Some(CanonicalSection::ReportArchitecture),
+        "domain decomposition" => Some(CanonicalSection::DomainDecomposition),
+        "orientation" => Some(CanonicalSection::Orientation),
+        "deep structure" | "field elements" | "element inventory" => {
+            Some(CanonicalSection::DeepStructure)
+        }
+        "source role probe" => Some(CanonicalSection::SourceRoleProbe),
+        "literature ladder" => Some(CanonicalSection::LiteratureLadder),
+        "relations" => Some(CanonicalSection::Relations),
+        "curriculum roadmap" | "curriculum" => Some(CanonicalSection::CurriculumRoadmap),
+        "practice assessment" | "practice" => Some(CanonicalSection::PracticeAssessment),
+        "frontier debates" | "frontier" => Some(CanonicalSection::FrontierDebates),
+        "visual map" => Some(CanonicalSection::VisualMap),
+        "visual summary" => Some(CanonicalSection::VisualSummary),
+        "visual views" => Some(CanonicalSection::VisualViews),
+        "claims" => Some(CanonicalSection::Claims),
+        _ => None,
+    }
+}
+
+fn is_public_narrative_section(section: Option<CanonicalSection>) -> bool {
+    matches!(
+        section,
+        None | Some(CanonicalSection::DomainDecomposition)
+            | Some(CanonicalSection::Orientation)
+            | Some(CanonicalSection::DeepStructure)
+            | Some(CanonicalSection::CurriculumRoadmap)
+            | Some(CanonicalSection::PracticeAssessment)
+            | Some(CanonicalSection::FrontierDebates)
+    )
+}
+
+fn sok_directive_values(body: &str, key: &str) -> Vec<String> {
+    standalone_sok_directives(body)
+        .into_iter()
+        .filter_map(|(candidate, value)| (candidate == key).then_some(value))
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+fn standalone_sok_directives(body: &str) -> Vec<(String, String)> {
+    let mut fence = None;
+    let mut values = Vec::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if update_markdown_fence(line, &mut fence) {
+            continue;
+        }
+        if fence.is_some() {
+            continue;
+        }
+        if let Some(directive) = trimmed
+            .strip_prefix("<!-- sok:")
+            .and_then(|value| value.strip_suffix("-->"))
+            .map(str::trim)
+        {
+            let mut parts = directive.splitn(2, char::is_whitespace);
+            let key = parts.next().unwrap_or_default().trim().to_string();
+            let value = parts.next().unwrap_or_default().trim().to_string();
+            values.push((key, value));
+        }
+    }
+    values
+}
+
+fn first_sok_directive_value(body: &str, key: &str) -> String {
+    sok_directive_values(body, key)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+}
+
+fn strip_sok_directives(body: &str) -> String {
+    let mut fence = None;
+    let mut lines = Vec::new();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if update_markdown_fence(line, &mut fence) {
+            lines.push(line);
+            continue;
+        }
+        if fence.is_none() && trimmed.starts_with("<!-- sok:") && trimmed.ends_with("-->") {
+            continue;
+        }
+        lines.push(line);
+    }
+    lines.join("\n").trim().to_string()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MarkdownFence {
+    marker: char,
+    length: usize,
+}
+
+fn update_markdown_fence(line: &str, fence: &mut Option<MarkdownFence>) -> bool {
+    let trimmed = line.trim();
+    let Some(marker) = trimmed.chars().next() else {
+        return false;
+    };
+    if !matches!(marker, '`' | '~') {
+        return false;
+    }
+    let length = trimmed.chars().take_while(|ch| *ch == marker).count();
+    if length < 3 {
+        return false;
+    }
+    let remainder = &trimmed[length..];
+
+    if let Some(active) = *fence {
+        if marker == active.marker && length >= active.length && remainder.trim().is_empty() {
+            *fence = None;
+            return true;
+        }
+        return false;
+    }
+
+    // CommonMark does not allow a backtick in the info string of a
+    // backtick-delimited code fence.
+    if marker == '`' && remainder.contains('`') {
+        return false;
+    }
+    *fence = Some(MarkdownFence { marker, length });
+    true
+}
+
+fn markdown_lines_outside_fences(markdown: &str) -> impl Iterator<Item = (usize, &str)> {
+    let mut fence = None;
+    markdown.lines().enumerate().filter(move |(_, line)| {
+        if update_markdown_fence(line, &mut fence) {
+            return false;
+        }
+        fence.is_none()
+    })
 }
 
 fn canonical_section(title: &str) -> Option<CanonicalSection> {
     let title = normalize_heading_title(title);
     match title.as_str() {
         "research frame" | "internal context" => Some(CanonicalSection::ResearchFrame),
-        "domain decomposition" => Some(CanonicalSection::DomainDecomposition),
-        "orientation" => Some(CanonicalSection::Orientation),
-        "the field s deep structure" | "field s deep structure" | "deep structure" => {
-            Some(CanonicalSection::DeepStructure)
+        "report architecture" | "report architecture decision" | "narrative architecture" => {
+            Some(CanonicalSection::ReportArchitecture)
         }
+        "domain decomposition" => Some(CanonicalSection::DomainDecomposition),
+        "orientation" | "executive orientation" => Some(CanonicalSection::Orientation),
+        "the field s deep structure"
+        | "field s deep structure"
+        | "deep structure"
+        | "field element inventory" => Some(CanonicalSection::DeepStructure),
         "source role probe" => Some(CanonicalSection::SourceRoleProbe),
         "literature ladder" | "literature ladder with access metadata" => {
             Some(CanonicalSection::LiteratureLadder)
@@ -3700,6 +4680,7 @@ fn canonical_section(title: &str) -> Option<CanonicalSection> {
 fn canonical_section_label(section: CanonicalSection) -> &'static str {
     match section {
         CanonicalSection::ResearchFrame => "Research Frame",
+        CanonicalSection::ReportArchitecture => "Report Architecture",
         CanonicalSection::DomainDecomposition => "Domain Decomposition",
         CanonicalSection::Orientation => "Orientation",
         CanonicalSection::DeepStructure => "Deep Structure",
@@ -3733,7 +4714,10 @@ fn parse_key_value_table(markdown: &str) -> BTreeMap<String, String> {
         .into_iter()
         .filter_map(|row| {
             let key = lookup_cell(&row, &["item", "key", "field", "label"]);
-            let value = lookup_cell(&row, &["value", "so k extraction", "in this field"]);
+            let value = lookup_cell(
+                &row,
+                &["value", "decision", "so k extraction", "in this field"],
+            );
             if key.is_empty() || value.is_empty() {
                 None
             } else {
@@ -3748,7 +4732,7 @@ fn parse_first_markdown_table(markdown: &str) -> Vec<BTreeMap<String, String>> {
     let mut rows = Vec::new();
     let mut in_table = false;
 
-    for line in markdown.lines() {
+    for (_, line) in markdown_lines_outside_fences(markdown) {
         let trimmed = line.trim();
         if !trimmed.starts_with('|') {
             if in_table && !trimmed.is_empty() {
@@ -3801,14 +4785,11 @@ fn is_table_separator(cells: &[String]) -> bool {
 
 fn public_section_text(markdown: &str) -> String {
     collapse_whitespace(
-        &markdown
-            .lines()
-            .filter(|line| {
+        &markdown_lines_outside_fences(markdown)
+            .filter_map(|(_, line)| {
                 let trimmed = line.trim();
-                !trimmed.is_empty()
-                    && !trimmed.starts_with('|')
-                    && !trimmed.starts_with("```")
-                    && !is_placeholder_text(trimmed)
+                (!trimmed.is_empty() && !trimmed.starts_with('|') && !is_placeholder_text(trimmed))
+                    .then_some(line)
             })
             .map(clean_inline_markdown)
             .collect::<Vec<_>>()
@@ -3817,16 +4798,15 @@ fn public_section_text(markdown: &str) -> String {
 }
 
 fn bullet_or_paragraph_lines(markdown: &str) -> Vec<String> {
-    markdown
-        .lines()
-        .map(|line| {
+    markdown_lines_outside_fences(markdown)
+        .map(|(_, line)| {
             line.trim()
                 .trim_start_matches("- ")
                 .trim_start_matches("* ")
                 .trim()
                 .to_string()
         })
-        .filter(|line| !line.is_empty() && !line.starts_with('|') && !line.starts_with("```"))
+        .filter(|line| !line.is_empty() && !line.starts_with('|'))
         .map(|line| clean_inline_markdown(&line))
         .collect()
 }
@@ -3847,9 +4827,8 @@ fn collapse_whitespace(raw: &str) -> String {
 }
 
 fn collect_placeholder_lines(markdown: &str) -> Vec<String> {
-    markdown
-        .lines()
-        .map(str::trim)
+    markdown_lines_outside_fences(markdown)
+        .map(|(_, line)| line.trim())
         .filter(|line| is_placeholder_text(line))
         .map(clean_inline_markdown)
         .collect()
@@ -3886,7 +4865,7 @@ fn lookup_cell_any(row: &BTreeMap<String, String>, keys: &[&str]) -> String {
 }
 
 fn infer_title_field(markdown: &str) -> String {
-    for line in markdown.lines() {
+    for (_, line) in markdown_lines_outside_fences(markdown) {
         let line = line.trim();
         if let Some(value) = line.strip_prefix("# Structure of Knowledge:") {
             return clean_inline_markdown(value);
@@ -3939,15 +4918,28 @@ fn build_scope(parsed: &ParsedMarkdownReport, diagnostics: &mut Vec<DiagnosticCh
         included.push(infer_report_field(parsed));
     }
 
+    let architecture_thesis =
+        architecture_value(&parsed.report_architecture, &["Executive thesis", "Thesis"]);
+    let first_narrative = parsed
+        .narrative_sections
+        .first()
+        .map(|section| public_section_text(&section.body_markdown))
+        .unwrap_or_default();
     let summary = first_non_empty([
         parsed.domain_decomposition.as_str(),
         parsed.orientation.as_str(),
-        "Bounded SoK export; public scope could not be fully inferred from canonical Markdown.",
+        architecture_thesis.as_str(),
+        first_narrative.as_str(),
+        "Bounded SoK export; public scope could not be inferred from the report narrative.",
     ]);
-    if parsed.domain_decomposition.is_empty() && parsed.orientation.is_empty() {
+    if parsed.domain_decomposition.is_empty()
+        && parsed.orientation.is_empty()
+        && architecture_thesis.is_empty()
+        && first_narrative.is_empty()
+    {
         diagnostics.push(DiagnosticCheck::warning(
             CHECK_EXPORT_MISSING_PUBLIC_FIELD,
-            "could not infer a public scope summary from Domain Decomposition or Orientation",
+            "could not infer a public scope summary from report architecture or narrative",
         ));
     }
 
@@ -3970,6 +4962,10 @@ fn build_domain_profile(
     stage: ExportStage,
     diagnostics: &mut Vec<DiagnosticCheck>,
 ) -> DomainProfile {
+    let declared_profile = architecture_value(
+        &parsed.report_architecture,
+        &["Domain profile", "Domain classification"],
+    );
     let raw = match stage {
         ExportStage::Scaffold => first_non_empty([
             parsed
@@ -3980,11 +4976,18 @@ fn build_domain_profile(
                 .research_frame
                 .get("Domain type")
                 .map_or("", String::as_str),
+            parsed
+                .research_frame
+                .get("Provisional lens")
+                .map_or("", String::as_str),
             parsed.domain_decomposition.as_str(),
         ]),
-        ExportStage::Final => parsed.domain_decomposition.clone(),
+        ExportStage::Final => first_non_empty([
+            declared_profile.as_str(),
+            parsed.domain_decomposition.as_str(),
+        ]),
     };
-    if raw.is_empty() {
+    if raw.is_empty() && parsed.narrative_sections.is_empty() {
         diagnostics.push(DiagnosticCheck::warning(
             CHECK_EXPORT_MISSING_PUBLIC_FIELD,
             "could not infer domain classification; using mixed",
@@ -3999,19 +5002,31 @@ fn build_domain_profile(
         .into_iter()
         .filter(|candidate| *candidate != classification)
         .collect();
+    let architecture_rationale = architecture_value(
+        &parsed.report_architecture,
+        &["Architecture rationale", "Rationale", "Why this form"],
+    );
     let rationale = first_non_empty([
         parsed.domain_decomposition.as_str(),
         raw.as_str(),
-        "Domain profile was not explicit in canonical Markdown.",
+        architecture_rationale.as_str(),
+        "No single domain label was allowed to determine the report architecture.",
     ]);
     let failure_modes = parsed
         .deep_structure_rows
         .iter()
-        .find(|row| normalize_id_text(&lookup_cell_any(row, &["Element"])).contains("failure mode"))
+        .find(|row| {
+            normalize_id_text(&lookup_cell_any(
+                row,
+                &["Observed element", "Element", "Element class"],
+            ))
+            .contains("failure mode")
+        })
         .map(|row| {
             split_listish(&first_non_empty([
                 lookup_cell_any(row, &["SoK extraction"]).as_str(),
                 lookup_cell_any(row, &["In this field"]).as_str(),
+                lookup_cell_any(row, &["Actual form in this field"]).as_str(),
                 lookup_cell_any(row, &["Why it matters"]).as_str(),
             ]))
         })
@@ -4052,41 +5067,120 @@ fn domain_classifications_from_text(raw: &str) -> Vec<DomainClassification> {
     out
 }
 
-fn build_knowledge_items(
+fn build_field_elements(
     parsed: &ParsedMarkdownReport,
     source_lookup: &SourceLookup,
-    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Vec<FieldElement> {
+    parsed
+        .deep_structure_rows
+        .iter()
+        .filter(|row| is_usable_deep_structure_row(row))
+        .map(|row| {
+            let label = lookup_cell_any(row, &["Observed element", "Element", "Name", "Title"]);
+            let explicit_id =
+                clean_inline_markdown(&lookup_cell_any(row, &["Element ID", "Element Id", "ID"]));
+            let fallback_actual_form = deep_structure_description(row);
+            let actual_form = first_non_empty([
+                lookup_cell_any(
+                    row,
+                    &[
+                        "Actual form in this field",
+                        "In this field",
+                        "SoK extraction",
+                        "First-pass scholarly representation",
+                        "Research-grade representation",
+                        "Why it matters",
+                    ],
+                )
+                .as_str(),
+                fallback_actual_form.as_str(),
+            ]);
+            FieldElement {
+                id: if explicit_id.trim().is_empty() {
+                    content_id("element", &[&label])
+                } else {
+                    explicit_id
+                },
+                element_class: lookup_cell_any(row, &["Element class", "Class", "Element type"]),
+                label,
+                actual_form,
+                role: lookup_cell_any(
+                    row,
+                    &[
+                        "Role",
+                        "Role: core / surrounding / context",
+                        "Structural role",
+                    ],
+                ),
+                load_bearing_relations: lookup_cell_any(
+                    row,
+                    &[
+                        "Load-bearing relations",
+                        "Load bearing relations",
+                        "Key relations",
+                        "Relations",
+                    ],
+                ),
+                source_ids: source_lookup.resolve_refs(&lookup_cell_any(
+                    row,
+                    &["Source IDs", "Sources", "Key sources", "Readings"],
+                )),
+                confidence: parse_claim_confidence(&lookup_cell_any(row, &["Confidence"])),
+            }
+        })
+        .collect()
+}
+
+fn build_knowledge_items(
+    field_elements: &[FieldElement],
+    parsed: &ParsedMarkdownReport,
 ) -> (Vec<KnowledgeItem>, Vec<KnowledgeItem>, Vec<KnowledgeItem>) {
     let mut core_ideas = Vec::new();
     let mut methods = Vec::new();
     let mut representations = Vec::new();
-    for row in &parsed.deep_structure_rows {
-        let element = lookup_cell_any(row, &["Element"]);
-        let normalized = normalize_id_text(&element);
-        let description = deep_structure_description(row);
-        if element.is_empty() || description.is_empty() || is_placeholder_text(&description) {
-            continue;
-        }
-        let source_ids = source_lookup.resolve_refs(&lookup_cell_any(
-            row,
-            &["Source IDs", "Sources", "Key sources", "Readings"],
-        ));
+    for element in field_elements {
+        let normalized_class = normalize_id_text(&first_non_empty([
+            element.element_class.as_str(),
+            element.label.as_str(),
+        ]));
+        let description = collapse_whitespace(
+            &[
+                element.actual_form.as_str(),
+                element.role.as_str(),
+                element.load_bearing_relations.as_str(),
+            ]
+            .into_iter()
+            .filter(|value| !value.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("; "),
+        );
         let item = KnowledgeItem {
-            id: content_id(knowledge_prefix(&normalized), &[&element]),
-            label: element,
+            id: content_id(knowledge_prefix(&normalized_class), &[&element.label]),
+            label: element.label.clone(),
             description,
-            source_ids,
+            source_ids: element.source_ids.clone(),
             ..KnowledgeItem::default()
         };
-        if normalized.contains("representation") {
+        if normalized_class.contains("representation")
+            || normalized_class.contains("model")
+            || normalized_class.contains("notation")
+        {
             representations.push(item);
-        } else if normalized.contains("syntactic")
-            || normalized.contains("method")
-            || normalized.contains("proof")
-            || normalized.contains("warrant")
+        } else if normalized_class.contains("syntactic")
+            || normalized_class.contains("method")
+            || normalized_class.contains("operation")
+            || normalized_class.contains("practice")
+            || normalized_class.contains("proof")
+            || normalized_class.contains("warrant")
+            || normalized_class.contains("evidence standard")
         {
             methods.push(item);
-        } else if normalized.contains("failure mode") {
+        } else if normalized_class.contains("failure mode")
+            || normalized_class.contains("frontier")
+            || normalized_class.contains("dispute")
+            || normalized_class.contains("debate")
+            || normalized_class.contains("open problem")
+        {
             continue;
         } else {
             core_ideas.push(item);
@@ -4109,23 +5203,22 @@ fn build_knowledge_items(
             ..KnowledgeItem::default()
         });
     }
-    if representations.is_empty() {
-        diagnostics.push(DiagnosticCheck::warning(
-            CHECK_EXPORT_MISSING_PUBLIC_FIELD,
-            "no canonical representation rows were inferred from Deep Structure",
-        ));
-    }
-
     (core_ideas, methods, representations)
 }
 
 fn knowledge_prefix(normalized_element: &str) -> &'static str {
-    if normalized_element.contains("representation") {
+    if normalized_element.contains("representation")
+        || normalized_element.contains("model")
+        || normalized_element.contains("notation")
+    {
         "rep"
     } else if normalized_element.contains("method")
+        || normalized_element.contains("operation")
+        || normalized_element.contains("practice")
         || normalized_element.contains("syntactic")
         || normalized_element.contains("proof")
         || normalized_element.contains("warrant")
+        || normalized_element.contains("evidence standard")
     {
         "method"
     } else {
@@ -4136,8 +5229,13 @@ fn knowledge_prefix(normalized_element: &str) -> &'static str {
 fn deep_structure_description(row: &BTreeMap<String, String>) -> String {
     let mut parts = Vec::new();
     for key in [
+        "sok extraction",
         "so k extraction",
         "in this field",
+        "actual form in this field",
+        "role",
+        "role core surrounding context",
+        "load bearing relations",
         "first pass scholarly representation",
         "research grade representation",
         "why it matters",
@@ -4149,6 +5247,12 @@ fn deep_structure_description(row: &BTreeMap<String, String>) -> String {
         }
     }
     collapse_whitespace(&parts.join("; "))
+}
+
+fn is_usable_deep_structure_row(row: &BTreeMap<String, String>) -> bool {
+    let observed_element = lookup_cell_any(row, &["Observed element", "Element", "Name", "Title"]);
+    let description = deep_structure_description(row);
+    !observed_element.is_empty() && !description.is_empty() && !is_placeholder_text(&description)
 }
 
 fn build_evidence_standards(parsed: &ParsedMarkdownReport) -> EvidenceStandards {
@@ -4324,7 +5428,6 @@ fn parse_source_requirement(raw: &str) -> SourceRoleRequirementKind {
 fn build_curriculum_path(
     parsed: &ParsedMarkdownReport,
     source_lookup: &SourceLookup,
-    diagnostics: &mut Vec<DiagnosticCheck>,
 ) -> Vec<CurriculumStep> {
     let mut steps = Vec::new();
     for (index, row) in parsed.curriculum_rows.iter().enumerate() {
@@ -4340,7 +5443,7 @@ fn build_curriculum_path(
         let practice_artifact = first_non_empty([
             lookup_cell_any(row, &["Practice artifact"]).as_str(),
             lookup_cell_any(row, &["Artifact"]).as_str(),
-            "Practice artifact not inferred from canonical Markdown.",
+            "Practice artifact not inferred from the structured report surface.",
         ]);
         let progress_criteria = split_listish(&lookup_cell_any(
             row,
@@ -4362,12 +5465,6 @@ fn build_curriculum_path(
         });
     }
 
-    if steps.is_empty() {
-        diagnostics.push(DiagnosticCheck::warning(
-            CHECK_EXPORT_MISSING_PUBLIC_FIELD,
-            "no canonical Curriculum Roadmap table rows were inferred",
-        ));
-    }
     steps
 }
 
@@ -4413,7 +5510,7 @@ fn apply_curriculum_prerequisites(
         };
         let mut prerequisite_ids = BTreeSet::new();
         for reference in refs {
-            match entity_index.resolve_any(reference) {
+            match entity_index.resolve_any_legacy_projection(reference) {
                 ExportReferenceResolution::Resolved(entity) => {
                     if entity.id == step.id {
                         diagnostics.push(
@@ -4475,6 +5572,7 @@ fn build_frontier_debates(
 ) -> (Vec<FrontierDebateItem>, Vec<ClaimSeed>) {
     let mut items = Vec::new();
     let mut claims = Vec::new();
+    let mut seen_titles = BTreeSet::new();
     for row in &parsed.frontier_rows {
         let title = first_non_empty([
             lookup_cell_any(row, &["Problem or debate"]).as_str(),
@@ -4484,11 +5582,12 @@ fn build_frontier_debates(
         if title.is_empty() || is_placeholder_text(&title) {
             continue;
         }
+        seen_titles.insert(normalize_id_text(&title));
         let summary = first_non_empty([
             lookup_cell_any(row, &["Current state"]).as_str(),
             lookup_cell_any(row, &["Current or frontier issue"]).as_str(),
             lookup_cell_any(row, &["Summary"]).as_str(),
-            "Frontier or debate summary not inferred from canonical Markdown.",
+            "Frontier or debate summary not inferred from the structured report surface.",
         ]);
         if is_placeholder_text(&summary) {
             continue;
@@ -4524,6 +5623,92 @@ fn build_frontier_debates(
             } else {
                 FrontierDebateKind::Frontier
             },
+            title,
+            summary,
+            why_it_matters,
+            required_background_ids: Vec::new(),
+            claim_ids: vec![claim_id],
+            source_ids,
+            temporal: TemporalMarker {
+                as_of: as_of.to_string(),
+                review_after: review_after.to_string(),
+                temporal_status: TemporalStatus::Current,
+                rationale: String::new(),
+            },
+        });
+    }
+    for row in &parsed.deep_structure_rows {
+        let element_class = normalize_id_text(&lookup_cell_any(
+            row,
+            &["Element class", "Class", "Element type", "Element"],
+        ));
+        if ![
+            "frontier",
+            "dispute",
+            "debate",
+            "open problem",
+            "controversy",
+        ]
+        .iter()
+        .any(|kind| element_class.contains(kind))
+        {
+            continue;
+        }
+        let title = lookup_cell_any(row, &["Observed element", "Element", "Name", "Title"]);
+        if title.is_empty()
+            || is_placeholder_text(&title)
+            || !seen_titles.insert(normalize_id_text(&title))
+        {
+            continue;
+        }
+        let summary = first_non_empty([
+            lookup_cell_any(row, &["Actual form in this field", "In this field"]).as_str(),
+            lookup_cell_any(row, &["SoK extraction", "Summary"]).as_str(),
+            title.as_str(),
+        ]);
+        let why_it_matters = first_non_empty([
+            lookup_cell_any(
+                row,
+                &[
+                    "Load-bearing relations",
+                    "Why it matters",
+                    "Role",
+                    "Role: core / surrounding / context",
+                ],
+            )
+            .as_str(),
+            "This field element marks a frontier, debate, or open-problem boundary.",
+        ]);
+        let source_refs = lookup_cell_any(row, &["Source IDs", "Sources", "Key sources"]);
+        let source_ids = source_lookup.resolve_refs(&source_refs);
+        let kind = if element_class.contains("debate")
+            || element_class.contains("dispute")
+            || element_class.contains("controversy")
+        {
+            FrontierDebateKind::Debate
+        } else if element_class.contains("open problem") {
+            FrontierDebateKind::OpenProblem
+        } else {
+            FrontierDebateKind::Frontier
+        };
+        let claim_statement = format!("{title}: {summary}");
+        let claim_id = content_id("claim", &[&claim_statement]);
+        claims.push(ClaimSeed {
+            statement: claim_statement,
+            claim_type: if kind == FrontierDebateKind::Debate {
+                ClaimType::Debate
+            } else {
+                ClaimType::Frontier
+            },
+            evidence_requirement: EvidenceRequirement::ReviewedSource,
+            source_refs: split_ref_list(&source_refs),
+            confidence: Some(ClaimConfidence::Unknown),
+            notes: String::new(),
+            temporal_status: Some(TemporalStatus::Current),
+        });
+        items.push(FrontierDebateItem {
+            id: content_id("frontier", &[&title]),
+            kind,
             title,
             summary,
             why_it_matters,
@@ -4627,7 +5812,10 @@ fn build_claims(
             }
         }
 
-        if !saw_satisfying_evidence && (!intended_source_ids.is_empty() || saw_cataloged_only) {
+        if stage == ExportStage::Final
+            && !saw_satisfying_evidence
+            && (!intended_source_ids.is_empty() || saw_cataloged_only)
+        {
             let check_id = if saw_cataloged_only {
                 CHECK_EVIDENCE_CATALOGED_ONLY
             } else {
@@ -4758,18 +5946,7 @@ fn build_relations(
         } else if is_stable_id(&explicit_id) {
             explicit_id
         } else {
-            diagnostics.push(
-                DiagnosticCheck::warning(
-                    CHECK_EXPORT_MISSING_PUBLIC_FIELD,
-                    format!(
-                        "Relations row {} has non-stable explicit relation id {:?}",
-                        index + 1,
-                        explicit_id
-                    ),
-                )
-                .with_target(format!("/report/relations/{index}/id"), &explicit_id),
-            );
-            continue;
+            content_id("rel", &[&explicit_id])
         };
         if !seen_ids.insert(id.clone()) {
             diagnostics.push(
@@ -4868,11 +6045,22 @@ fn resolve_relation_endpoint_from_row(
             id: entity.id,
         }),
         ExportReferenceResolution::Missing => {
+            let type_hint = match entity_index.resolve_any(&reference) {
+                ExportReferenceResolution::Resolved(candidate)
+                    if candidate.entity_type != entity_type =>
+                {
+                    format!(
+                        "; the field-element inventory exports this reference as {}, so revise the declared endpoint type if that classification is intended",
+                        entity_type_label(candidate.entity_type)
+                    )
+                }
+                _ => String::new(),
+            };
             diagnostics.push(
                 DiagnosticCheck::warning(
                     CHECK_EXPORT_UNRESOLVED_REFERENCE,
                     format!(
-                        "Relations row {} could not resolve {endpoint_name} endpoint {}:{:?}",
+                        "Relations row {} could not resolve {endpoint_name} endpoint {}:{:?}{type_hint}",
                         row_index + 1,
                         entity_type_label(entity_type),
                         reference
@@ -4944,7 +6132,12 @@ fn build_visual_views(
 
         let mut selected_relations = Vec::new();
         for relation_ref in relation_refs {
-            if let Some(relation) = relation_lookup.get(relation_ref.as_str()) {
+            let normalized_relation_ref = if is_stable_id(&relation_ref) {
+                relation_ref.clone()
+            } else {
+                content_id("rel", &[&relation_ref])
+            };
+            if let Some(relation) = relation_lookup.get(normalized_relation_ref.as_str()) {
                 selected_relations.push(*relation);
             } else {
                 diagnostics.push(
@@ -5097,6 +6290,21 @@ fn apply_visual_node_emphasis(
         ],
     ));
     for reference in emphasis_refs {
+        let normalized_reference = normalize_id_text(&reference);
+        let matching_existing_nodes = nodes_by_entity_id
+            .iter()
+            .filter(|(_, node)| {
+                node.ref_id == reference || normalize_id_text(&node.label) == normalized_reference
+            })
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        if matching_existing_nodes.len() == 1 {
+            if let Some(node) = nodes_by_entity_id.get_mut(&matching_existing_nodes[0]) {
+                node.description =
+                    "Emphasized by the Markdown visual view declaration.".to_string();
+            }
+            continue;
+        }
         match entity_index.resolve_any(&reference) {
             ExportReferenceResolution::Resolved(entity) => {
                 let endpoint = RelationEndpoint {
@@ -5230,6 +6438,87 @@ fn verification_rank(status: VerificationStatus) -> u8 {
     }
 }
 
+fn build_report_presentation(
+    parsed: &ParsedMarkdownReport,
+    visual_views: &[VisualView],
+    diagnostics: &mut Vec<DiagnosticCheck>,
+) -> Option<ReportPresentation> {
+    if parsed.narrative_sections.is_empty() && parsed.report_architecture.is_empty() {
+        return None;
+    }
+
+    let known_view_ids = visual_views
+        .iter()
+        .map(|view| view.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let sections = parsed
+        .narrative_sections
+        .iter()
+        .enumerate()
+        .map(|(index, section)| {
+            for visual_view_id in &section.visual_view_ids {
+                if !known_view_ids.contains(visual_view_id.as_str()) {
+                    diagnostics.push(
+                        DiagnosticCheck::warning(
+                            CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                            format!(
+                                "narrative section {:?} references unknown visual view {visual_view_id:?}",
+                                section.title
+                            ),
+                        )
+                        .with_target(
+                            format!("/report/presentation/sections/{index}/visual_view_ids"),
+                            visual_view_id,
+                        ),
+                    );
+                }
+            }
+            ReportSection {
+                id: content_id("section", &[&index.to_string(), &section.title]),
+                title: section.title.clone(),
+                purpose: section.purpose.clone(),
+                body_markdown: section.body_markdown.clone(),
+                visual_view_ids: section.visual_view_ids.clone(),
+            }
+        })
+        .collect();
+
+    let declared_thesis =
+        architecture_value(&parsed.report_architecture, &["Executive thesis", "Thesis"]);
+    Some(ReportPresentation {
+        thesis: first_non_empty([declared_thesis.as_str(), parsed.orientation.as_str()]),
+        organizing_form: architecture_value(
+            &parsed.report_architecture,
+            &["Chosen organizing form", "Organizing form"],
+        ),
+        rationale: architecture_value(
+            &parsed.report_architecture,
+            &["Architecture rationale", "Rationale", "Why this form"],
+        ),
+        alternatives_considered: architecture_value(
+            &parsed.report_architecture,
+            &[
+                "Rejected alternatives and why",
+                "Alternatives considered",
+                "Rejected alternatives",
+            ],
+        ),
+        sections,
+    })
+}
+
+fn architecture_value(values: &BTreeMap<String, String>, keys: &[&str]) -> String {
+    keys.iter()
+        .find_map(|key| {
+            let normalized_key = normalize_id_text(key);
+            values
+                .iter()
+                .find(|(candidate, _)| normalize_id_text(candidate) == normalized_key)
+                .map(|(_, value)| value.clone())
+        })
+        .unwrap_or_default()
+}
+
 fn build_internal_context(parsed: &ParsedMarkdownReport) -> InternalContext {
     let mut placeholder_state = BTreeMap::new();
     if !parsed.placeholder_lines.is_empty() {
@@ -5257,6 +6546,8 @@ fn build_internal_context(parsed: &ParsedMarkdownReport) -> InternalContext {
         "Scaffold stance",
         "Evidence posture",
         "Domain classification",
+        "Provisional lens",
+        "Why only provisional",
     ]
     .into_iter()
     .filter_map(|key| parsed.research_frame.get(key).cloned())
@@ -5289,24 +6580,21 @@ fn build_internal_context(parsed: &ParsedMarkdownReport) -> InternalContext {
 }
 
 fn warn_if_empty_public_sections(
+    field_elements: &[FieldElement],
     core_ideas: &[KnowledgeItem],
     methods: &[KnowledgeItem],
     representations: &[KnowledgeItem],
-    curriculum_path: &[CurriculumStep],
     diagnostics: &mut Vec<DiagnosticCheck>,
 ) {
-    for (is_empty, label) in [
-        (core_ideas.is_empty(), "core ideas"),
-        (methods.is_empty(), "methods"),
-        (representations.is_empty(), "representations"),
-        (curriculum_path.is_empty(), "curriculum path"),
-    ] {
-        if is_empty {
-            diagnostics.push(DiagnosticCheck::warning(
-                CHECK_EXPORT_MISSING_PUBLIC_FIELD,
-                format!("could not infer public {label} from canonical Markdown"),
-            ));
-        }
+    if field_elements.is_empty()
+        && core_ideas.is_empty()
+        && methods.is_empty()
+        && representations.is_empty()
+    {
+        diagnostics.push(DiagnosticCheck::warning(
+            CHECK_EXPORT_MISSING_PUBLIC_FIELD,
+            "could not infer any field elements from structured Markdown surfaces",
+        ));
     }
 }
 
@@ -5322,7 +6610,7 @@ struct SourceLookup {
 impl SourceLookup {
     fn new(sources: &[ReportSource]) -> Self {
         let mut aliases = BTreeMap::new();
-        for source in sources {
+        for (index, source) in sources.iter().enumerate() {
             for alias in [
                 source.id.as_str(),
                 source.title.as_str(),
@@ -5335,6 +6623,7 @@ impl SourceLookup {
                     aliases.insert(normalized, source.id.clone());
                 }
             }
+            aliases.insert(format!("s{}", index + 1), source.id.clone());
         }
         Self { aliases }
     }
@@ -5429,7 +6718,7 @@ impl ExportEntityIndex {
                 index.insert_alias(EntityType::Representation, &item.id, alias);
             }
         }
-        for source in sources {
+        for (source_index, source) in sources.iter().enumerate() {
             index.insert(
                 EntityType::Source,
                 &source.id,
@@ -5441,6 +6730,11 @@ impl ExportEntityIndex {
                     source.identifier.as_str(),
                     source.url.as_str(),
                 ],
+            );
+            index.insert_alias(
+                EntityType::Source,
+                &source.id,
+                &format!("S{}", source_index + 1),
             );
         }
         for claim in claims {
@@ -5468,6 +6762,17 @@ impl ExportEntityIndex {
             );
         }
         index
+    }
+
+    fn add_field_elements(&mut self, field_elements: &[FieldElement]) {
+        for item in field_elements {
+            self.insert(
+                EntityType::FieldElement,
+                &item.id,
+                &item.label,
+                [&item.id, &item.label],
+            );
+        }
     }
 
     fn insert<const N: usize>(
@@ -5545,7 +6850,77 @@ impl ExportEntityIndex {
         self.resolve_candidate_set(candidates)
     }
 
+    fn resolve_any_legacy_projection(&self, reference: &str) -> ExportReferenceResolution {
+        let reference = reference.trim();
+        if reference.is_empty() {
+            return ExportReferenceResolution::Missing;
+        }
+        if let Some(entity) = self.by_exact_id.get(reference) {
+            return ExportReferenceResolution::Resolved(entity.clone());
+        }
+        let normalized = normalize_id_text(reference);
+        let Some(candidates) = self.aliases_all.get(&normalized) else {
+            return ExportReferenceResolution::Missing;
+        };
+        let legacy_candidates = candidates
+            .iter()
+            .filter(|id| {
+                self.by_exact_id
+                    .get(*id)
+                    .map(|entity| entity.entity_type != EntityType::FieldElement)
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        if legacy_candidates.is_empty() {
+            self.resolve_candidate_set(candidates)
+        } else {
+            self.resolve_candidate_set_without_field_preference(&legacy_candidates)
+        }
+    }
+
     fn resolve_candidate_set(&self, candidates: &BTreeSet<String>) -> ExportReferenceResolution {
+        if candidates.len() == 1 {
+            let id = candidates
+                .iter()
+                .next()
+                .expect("candidate set is not empty");
+            self.by_exact_id
+                .get(id)
+                .cloned()
+                .map(ExportReferenceResolution::Resolved)
+                .unwrap_or(ExportReferenceResolution::Missing)
+        } else {
+            let field_elements = candidates
+                .iter()
+                .filter_map(|id| self.by_exact_id.get(id))
+                .filter(|entity| entity.entity_type == EntityType::FieldElement)
+                .collect::<Vec<_>>();
+            if field_elements.len() == 1 {
+                let field_element = field_elements[0];
+                let field_label = normalize_id_text(&field_element.label);
+                let only_derived_projections = candidates
+                    .iter()
+                    .filter_map(|id| self.by_exact_id.get(id))
+                    .filter(|entity| entity.id != field_element.id)
+                    .all(|entity| {
+                        matches!(
+                            entity.entity_type,
+                            EntityType::Concept | EntityType::Method | EntityType::Representation
+                        ) && normalize_id_text(&entity.label) == field_label
+                    });
+                if only_derived_projections {
+                    return ExportReferenceResolution::Resolved(field_element.clone());
+                }
+            }
+            self.resolve_candidate_set_without_field_preference(candidates)
+        }
+    }
+
+    fn resolve_candidate_set_without_field_preference(
+        &self,
+        candidates: &BTreeSet<String>,
+    ) -> ExportReferenceResolution {
         if candidates.len() == 1 {
             let id = candidates
                 .iter()
@@ -5585,6 +6960,9 @@ fn split_listish(raw: &str) -> Vec<String> {
 
 fn parse_entity_type_input(raw: &str) -> Option<EntityType> {
     match normalize_access_status_label(raw).as_str() {
+        "field_element" | "field_elements" | "element" | "elements" => {
+            Some(EntityType::FieldElement)
+        }
         "concept" | "core_idea" | "core_ideas" | "idea" | "threshold_concept" => {
             Some(EntityType::Concept)
         }
@@ -5671,14 +7049,15 @@ fn parse_source_role(raw: &str) -> SourceRole {
         ("method", SourceRole::Method),
         ("representation", SourceRole::Representation),
         ("evidence", SourceRole::Evidence),
-        ("synthesis", SourceRole::Synthesis),
         ("frontier", SourceRole::Frontier),
         ("debate", SourceRole::Debate),
+        ("infrastructure", SourceRole::Infrastructure),
         ("standard", SourceRole::Standard),
         ("dataset", SourceRole::Dataset),
         ("data", SourceRole::Dataset),
-        ("infrastructure", SourceRole::Infrastructure),
+        ("synthesis", SourceRole::Synthesis),
         ("critique", SourceRole::Critique),
+        ("pedagogical", SourceRole::Curriculum),
         ("curriculum", SourceRole::Curriculum),
     ] {
         if text.contains(needle) {
@@ -5971,7 +7350,7 @@ pub fn normalize_report_source_with_id(source: &Source, id: String) -> ReportSou
         source.why_it_matters.as_str(),
         source.use_in_curriculum.as_str(),
         source.notes.as_str(),
-        "Cataloged source; curricular role not yet specified.",
+        "Cataloged source; source role or relevance not yet specified.",
     ]);
     ReportSource {
         id,
@@ -6104,7 +7483,7 @@ pub fn source_manifest_diagnostics(sources: &[ReportSource]) -> Vec<DiagnosticCh
         }
         if source
             .why_it_matters
-            .starts_with("Cataloged source; curricular role")
+            .starts_with("Cataloged source; source role or relevance")
         {
             diagnostics.push(
                 DiagnosticCheck::warning(
@@ -6245,54 +7624,57 @@ pub fn render_html_report(document: &ReportDocument) -> Result<String> {
     html.push_str("<p class=\"eyebrow\">Structure of Knowledge Report</p>\n<h1>");
     push_escaped(&mut html, &report.field);
     html.push_str("</h1>\n");
-    if !report.scope.summary.trim().is_empty() {
+    let presentation = report
+        .presentation
+        .as_ref()
+        .filter(|presentation| !presentation.sections.is_empty());
+    let header_summary = presentation
+        .map(|presentation| presentation.thesis.as_str())
+        .filter(|thesis| !thesis.trim().is_empty())
+        .unwrap_or(report.scope.summary.as_str());
+    if !header_summary.trim().is_empty() {
         html.push_str("<p class=\"summary\">");
-        push_escaped(&mut html, &report.scope.summary);
+        push_escaped(&mut html, header_summary);
         html.push_str("</p>\n");
     }
-    push_nav(&mut html, !views.is_empty());
+    if let Some(presentation) = presentation {
+        push_presentation_nav(&mut html, presentation);
+    } else {
+        push_nav(&mut html, report, !views.is_empty());
+    }
     html.push_str("</header>\n<main id=\"main-report\">\n");
 
-    push_reading_guide_section(&mut html, document, !views.is_empty());
-    if !views.is_empty() {
-        push_visual_section(&mut html, &views);
-    }
-    push_curriculum_section(
-        &mut html,
-        &report.curriculum_path,
-        &entity_labels,
-        &source_labels,
-    );
-    push_reading_ladder_section(&mut html, report, &source_labels);
-    push_claims_section(&mut html, &report.claims, &source_labels);
-    push_frontier_section(&mut html, report, &entity_labels, &source_labels);
+    if let Some(presentation) = presentation {
+        push_presentation_report(
+            &mut html,
+            presentation,
+            &views,
+            report,
+            &entity_labels,
+            &source_labels,
+        );
+    } else {
+        push_reading_guide_section(&mut html, document, !views.is_empty());
+        if !views.is_empty() {
+            push_visual_section(&mut html, &views);
+        }
+        push_curriculum_section(
+            &mut html,
+            &report.curriculum_path,
+            &entity_labels,
+            &source_labels,
+        );
+        push_reading_ladder_section(&mut html, report, &source_labels);
+        push_claims_section(&mut html, &report.claims, &source_labels);
+        push_frontier_section(&mut html, report, &entity_labels, &source_labels);
 
-    push_scope_section(&mut html, &report.scope);
-    push_domain_profile_section(&mut html, &report.domain_profile);
-    push_knowledge_section(
-        &mut html,
-        "core-ideas",
-        "Core Ideas",
-        &report.core_ideas,
-        &source_labels,
-    );
-    push_knowledge_section(
-        &mut html,
-        "methods",
-        "Methods",
-        &report.methods,
-        &source_labels,
-    );
-    push_knowledge_section(
-        &mut html,
-        "representations",
-        "Representations",
-        &report.representations,
-        &source_labels,
-    );
-    push_evidence_standards_section(&mut html, &report.evidence_standards);
-    push_sources_and_evidence_section(&mut html, report);
-    push_relations_section(&mut html, &report.relations, &entity_labels, &source_labels);
+        push_scope_section(&mut html, &report.scope);
+        push_domain_profile_section(&mut html, &report.domain_profile);
+        push_field_elements_or_legacy(&mut html, report, &source_labels);
+        push_evidence_standards_section(&mut html, &report.evidence_standards);
+        push_sources_and_evidence_section(&mut html, report);
+        push_relations_section(&mut html, &report.relations, &entity_labels, &source_labels);
+    }
 
     html.push_str("</main>\n</div>\n");
     if let Some(visual_json) = visual_json {
@@ -6410,6 +7792,61 @@ h4 {
 .report-section {
   padding: 28px 0;
   border-bottom: 1px solid var(--line);
+}
+.architecture-note {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
+  gap: 14px;
+  margin: 24px 0 0;
+  padding: 14px 16px;
+  border-left: 4px solid var(--accent);
+  background: var(--accent-soft);
+}
+.architecture-note p { margin: 0; }
+.architecture-note span {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.section-purpose {
+  max-width: 820px;
+  margin: -0.35rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+.narrative-body {
+  max-width: 880px;
+  min-width: 0;
+  overflow-x: auto;
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  font-size: 1.04rem;
+}
+.narrative-body h3,
+.narrative-body h4 { margin-top: 1.4rem; }
+.narrative-body p,
+.narrative-body ul,
+.narrative-body ol,
+.narrative-body blockquote { max-width: 78ch; }
+.narrative-body blockquote {
+  margin-left: 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+.structured-appendix {
+  margin-top: 36px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.structured-appendix > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 700;
 }
 .prose {
   max-width: 860px;
@@ -6694,6 +8131,7 @@ tr:last-child td { border-bottom: 0; }
   }
   .guide-list li,
   .path-step,
+  .architecture-note,
   .reader-dl,
   .compact-dl {
     grid-template-columns: 1fr;
@@ -6737,6 +8175,12 @@ tr:last-child td { border-bottom: 0; }
   .table-scroll {
     overflow: visible;
   }
+  details.structured-appendix > summary {
+    display: none;
+  }
+  details.structured-appendix:not([open]) > :not(summary) {
+    display: block !important;
+  }
   table {
     min-width: 0;
     font-size: 9pt;
@@ -6769,12 +8213,27 @@ const REPORT_JS: &str = r##"(function () {
   function textNode(value) {
     return document.createTextNode(value == null ? "" : String(value));
   }
-  function shortLabel(label) {
-    label = String(label || "");
-    return label.length > 30 ? label.slice(0, 27) + "..." : label;
+  function labelLines(node) {
+    if (Array.isArray(node.label_lines) && node.label_lines.length > 0) {
+      return node.label_lines.slice(0, 2);
+    }
+    var label = String(node.label || node.id || "");
+    return [label.length > 20 ? label.slice(0, 19) + "\u2026" : label];
   }
   function layout(view) {
     var nodes = view.nodes || [];
+    if (view.kind === "knowledge_spine" || view.kind === "dependency_path") {
+      var ranked = {};
+      var hasCompleteLayout = nodes.length > 0;
+      nodes.forEach(function (node) {
+        if (!node.layout || typeof node.layout.x !== "number" || typeof node.layout.y !== "number") {
+          hasCompleteLayout = false;
+          return;
+        }
+        ranked[node.id] = { x: node.layout.x, y: node.layout.y };
+      });
+      if (hasCompleteLayout) return ranked;
+    }
     if (view.kind === "concept_source") {
       var left = nodes.filter(function (node) { return node.entity_type === "source"; });
       var right = nodes.filter(function (node) { return node.entity_type !== "source"; });
@@ -6891,10 +8350,18 @@ const REPORT_JS: &str = r##"(function () {
       }));
       var text = el("text", {
         "x": point.x,
-        "y": point.y + 4,
+        "y": point.y,
         "text-anchor": "middle"
       });
-      text.appendChild(textNode(shortLabel(node.label || node.id)));
+      var lines = labelLines(node);
+      lines.forEach(function (line, index) {
+        var tspan = el("tspan", {
+          "x": point.x,
+          "dy": index === 0 ? (lines.length === 1 ? "4" : "-4") : "15"
+        });
+        tspan.appendChild(textNode(line));
+        text.appendChild(tspan);
+      });
       group.appendChild(text);
       group.addEventListener("mouseenter", function () { activate(svg, view, node.id); });
       group.addEventListener("focus", function () { activate(svg, view, node.id); });
@@ -6943,8 +8410,20 @@ struct RenderVisualView {
 struct RenderVisualNode {
     id: String,
     label: String,
+    label_lines: Vec<String>,
     entity_type: String,
     description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    layout: Option<RenderVisualNodeLayout>,
+}
+
+#[derive(Debug, Serialize)]
+struct RenderVisualNodeLayout {
+    rank: usize,
+    lane: &'static str,
+    order: usize,
+    x: u16,
+    y: u16,
 }
 
 #[derive(Debug, Serialize)]
@@ -6956,6 +8435,20 @@ struct RenderVisualEdge {
     relation_id: String,
     from_label: String,
     to_label: String,
+}
+
+#[derive(Debug, Clone)]
+struct VisualLayoutEdge {
+    from: usize,
+    to: usize,
+    secondary: bool,
+}
+
+#[derive(Debug, Clone)]
+struct VisualLayoutPath {
+    nodes: Vec<usize>,
+    secondary_edges: usize,
+    auxiliary_nodes: usize,
 }
 
 fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
@@ -6973,7 +8466,7 @@ fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
                 return None;
             }
             let mut node_ids = BTreeSet::new();
-            let nodes = view
+            let mut nodes = view
                 .nodes
                 .iter()
                 .filter_map(|node| {
@@ -6981,11 +8474,14 @@ fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
                         return None;
                     }
                     node_ids.insert(node.id.clone());
+                    let label = first_non_empty([node.label.as_str(), node.id.as_str()]);
                     Some(RenderVisualNode {
                         id: node.id.clone(),
-                        label: first_non_empty([node.label.as_str(), node.id.as_str()]),
+                        label_lines: visual_node_label_lines(&label),
+                        label,
                         entity_type: entity_type_label(node.entity_type).to_string(),
                         description: node.description.clone(),
+                        layout: None,
                     })
                 })
                 .collect::<Vec<_>>();
@@ -7043,6 +8539,12 @@ fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
             if nodes.len() < 2 || edges.is_empty() {
                 return None;
             }
+            if matches!(
+                view.kind,
+                VisualViewKind::KnowledgeSpine | VisualViewKind::DependencyPath
+            ) {
+                apply_directed_visual_layout(&mut nodes, &edges);
+            }
             let title = first_non_empty([view.title.as_str(), kind]);
             Some(RenderVisualView {
                 id: view.id.clone(),
@@ -7055,6 +8557,439 @@ fn renderable_visual_views(report: &PublicReport) -> Vec<RenderVisualView> {
             })
         })
         .collect()
+}
+
+fn visual_node_label_lines(label: &str) -> Vec<String> {
+    const MAX_LINE_CHARS: usize = 20;
+
+    fn char_len(value: &str) -> usize {
+        value.chars().count()
+    }
+
+    fn ellipsize(value: &str) -> String {
+        if char_len(value) <= MAX_LINE_CHARS {
+            return value.to_string();
+        }
+        value
+            .chars()
+            .take(MAX_LINE_CHARS - 1)
+            .chain(std::iter::once('…'))
+            .collect()
+    }
+
+    let normalized = label.split_whitespace().collect::<Vec<_>>().join(" ");
+    if char_len(&normalized) <= MAX_LINE_CHARS {
+        return vec![normalized];
+    }
+
+    let words = normalized.split_whitespace().collect::<Vec<_>>();
+    if words.len() == 1 {
+        let first = normalized.chars().take(MAX_LINE_CHARS).collect::<String>();
+        let rest = normalized.chars().skip(MAX_LINE_CHARS).collect::<String>();
+        return vec![first, ellipsize(&rest)];
+    }
+
+    let split = (1..words.len())
+        .min_by_key(|split| {
+            let left_len = char_len(&words[..*split].join(" "));
+            let right_len = char_len(&words[*split..].join(" "));
+            (
+                left_len.saturating_sub(MAX_LINE_CHARS) + right_len.saturating_sub(MAX_LINE_CHARS),
+                left_len.max(right_len),
+                left_len.abs_diff(right_len),
+                *split,
+            )
+        })
+        .unwrap_or(1);
+    vec![
+        ellipsize(&words[..split].join(" ")),
+        ellipsize(&words[split..].join(" ")),
+    ]
+}
+
+fn apply_directed_visual_layout(nodes: &mut [RenderVisualNode], edges: &[RenderVisualEdge]) {
+    const MIN_X: i32 = 100;
+    const MAX_X: i32 = 860;
+    const PRIMARY_Y: u16 = 110;
+    const SECONDARY_Y: u16 = 275;
+    const SECONDARY_SPACING: i32 = 176;
+
+    let node_index = nodes
+        .iter()
+        .enumerate()
+        .map(|(index, node)| (node.id.as_str(), index))
+        .collect::<BTreeMap<_, _>>();
+    let mut layout_edges = edges
+        .iter()
+        .filter_map(|edge| {
+            let from = node_index.get(edge.from.as_str()).copied()?;
+            let to = node_index.get(edge.to.as_str()).copied()?;
+            Some(VisualLayoutEdge {
+                from,
+                to,
+                secondary: visual_layout_edge_is_secondary(edge, &nodes[from], &nodes[to]),
+            })
+        })
+        .collect::<Vec<_>>();
+    layout_edges.sort_by(|left, right| {
+        (
+            nodes[left.from].id.as_str(),
+            nodes[left.to].id.as_str(),
+            left.secondary,
+        )
+            .cmp(&(
+                nodes[right.from].id.as_str(),
+                nodes[right.to].id.as_str(),
+                right.secondary,
+            ))
+    });
+    if layout_edges.is_empty() {
+        return;
+    }
+
+    let (topological_order, ranks) = directed_visual_order_and_ranks(nodes, &layout_edges);
+    let topological_positions = topological_order
+        .iter()
+        .enumerate()
+        .map(|(position, node)| (*node, position))
+        .collect::<BTreeMap<_, _>>();
+    let primary_eligible = nodes
+        .iter()
+        .map(|node| !visual_layout_node_is_auxiliary(node))
+        .collect::<Vec<_>>();
+    let mut primary_path = longest_directed_visual_path(
+        nodes,
+        &layout_edges,
+        &topological_order,
+        &topological_positions,
+        &primary_eligible,
+        true,
+    )
+    .unwrap_or_default();
+
+    if primary_path.len() == 1 {
+        primary_path = vec![
+            most_connected_visual_node(nodes, &layout_edges, &primary_eligible)
+                .unwrap_or(primary_path[0]),
+        ];
+    } else if primary_path.is_empty() {
+        let all_nodes = vec![true; nodes.len()];
+        primary_path = longest_directed_visual_path(
+            nodes,
+            &layout_edges,
+            &topological_order,
+            &topological_positions,
+            &all_nodes,
+            false,
+        )
+        .unwrap_or_default();
+    }
+    if primary_path.is_empty() {
+        return;
+    }
+
+    let primary_set = primary_path.iter().copied().collect::<BTreeSet<_>>();
+    let mut primary_x = BTreeMap::new();
+    for (order, node_index) in primary_path.iter().copied().enumerate() {
+        let x = if primary_path.len() == 1 {
+            (MIN_X + MAX_X) / 2
+        } else {
+            MIN_X + ((MAX_X - MIN_X) * order as i32) / (primary_path.len() as i32 - 1)
+        };
+        primary_x.insert(node_index, x);
+        nodes[node_index].layout = Some(RenderVisualNodeLayout {
+            rank: ranks[node_index],
+            lane: "primary",
+            order,
+            x: x as u16,
+            y: PRIMARY_Y,
+        });
+    }
+
+    let mut adjacency = vec![Vec::new(); nodes.len()];
+    for edge in &layout_edges {
+        adjacency[edge.from].push(edge.to);
+        adjacency[edge.to].push(edge.from);
+    }
+    for neighbors in &mut adjacency {
+        neighbors.sort_by(|left, right| nodes[*left].id.cmp(&nodes[*right].id));
+        neighbors.dedup();
+    }
+
+    let mut groups = BTreeMap::<i32, Vec<usize>>::new();
+    for node_index in 0..nodes.len() {
+        if primary_set.contains(&node_index) {
+            continue;
+        }
+        let anchor_x = closest_primary_anchor_x(node_index, &primary_x, &adjacency).unwrap_or(480);
+        groups.entry(anchor_x).or_default().push(node_index);
+    }
+
+    let mut secondary = Vec::<(usize, i32)>::new();
+    for (anchor_x, mut group) in groups {
+        group.sort_by(|left, right| {
+            (ranks[*left], nodes[*left].id.as_str())
+                .cmp(&(ranks[*right], nodes[*right].id.as_str()))
+        });
+        let width = group.len() as i32 - 1;
+        for (position, node_index) in group.into_iter().enumerate() {
+            let offset = (position as i32 * 2 - width) * (SECONDARY_SPACING / 2);
+            secondary.push((node_index, anchor_x + offset));
+        }
+    }
+    secondary.sort_by(|(left_node, left_x), (right_node, right_x)| {
+        (left_x, ranks[*left_node], nodes[*left_node].id.as_str()).cmp(&(
+            right_x,
+            ranks[*right_node],
+            nodes[*right_node].id.as_str(),
+        ))
+    });
+
+    let spacing = if secondary.len() <= 1 {
+        0
+    } else {
+        SECONDARY_SPACING.min((MAX_X - MIN_X) / (secondary.len() as i32 - 1))
+    };
+    let mut secondary_x = secondary
+        .iter()
+        .map(|(_, desired_x)| (*desired_x).clamp(MIN_X, MAX_X))
+        .collect::<Vec<_>>();
+    for index in 1..secondary_x.len() {
+        secondary_x[index] = secondary_x[index].max(secondary_x[index - 1] + spacing);
+    }
+    if secondary_x.last().copied().unwrap_or(MAX_X) > MAX_X {
+        if let Some(last) = secondary_x.last_mut() {
+            *last = MAX_X;
+        }
+        for index in (0..secondary_x.len().saturating_sub(1)).rev() {
+            secondary_x[index] = secondary_x[index].min(secondary_x[index + 1] - spacing);
+        }
+    }
+    if secondary_x.first().copied().unwrap_or(MIN_X) < MIN_X {
+        if let Some(first) = secondary_x.first_mut() {
+            *first = MIN_X;
+        }
+        for index in 1..secondary_x.len() {
+            secondary_x[index] = secondary_x[index].max(secondary_x[index - 1] + spacing);
+        }
+    }
+
+    for (order, ((node_index, _), x)) in secondary.into_iter().zip(secondary_x).enumerate() {
+        nodes[node_index].layout = Some(RenderVisualNodeLayout {
+            rank: ranks[node_index],
+            lane: "secondary",
+            order,
+            x: x as u16,
+            y: SECONDARY_Y,
+        });
+    }
+}
+
+fn visual_layout_node_is_auxiliary(node: &RenderVisualNode) -> bool {
+    matches!(
+        node.entity_type.as_str(),
+        "source" | "claim" | "frontier_debate"
+    )
+}
+
+fn visual_layout_edge_is_secondary(
+    edge: &RenderVisualEdge,
+    from: &RenderVisualNode,
+    to: &RenderVisualNode,
+) -> bool {
+    let kind = edge.kind.trim().to_ascii_lowercase();
+    visual_layout_node_is_auxiliary(from)
+        || visual_layout_node_is_auxiliary(to)
+        || kind.contains("qualif")
+        || kind.contains("contradict")
+}
+
+fn directed_visual_order_and_ranks(
+    nodes: &[RenderVisualNode],
+    edges: &[VisualLayoutEdge],
+) -> (Vec<usize>, Vec<usize>) {
+    let mut outgoing = vec![Vec::new(); nodes.len()];
+    let mut indegree = vec![0usize; nodes.len()];
+    for edge in edges {
+        outgoing[edge.from].push(edge.to);
+        indegree[edge.to] += 1;
+    }
+    for neighbors in &mut outgoing {
+        neighbors.sort_by(|left, right| nodes[*left].id.cmp(&nodes[*right].id));
+    }
+
+    let mut remaining = vec![true; nodes.len()];
+    let mut ready = BTreeSet::<(String, usize)>::new();
+    for (index, node) in nodes.iter().enumerate() {
+        if indegree[index] == 0 {
+            ready.insert((node.id.clone(), index));
+        }
+    }
+    let mut order = Vec::with_capacity(nodes.len());
+    let mut ranks = vec![0usize; nodes.len()];
+
+    while order.len() < nodes.len() {
+        let next = ready.iter().next().cloned().or_else(|| {
+            nodes
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| remaining[*index])
+                .min_by(|(_, left), (_, right)| left.id.cmp(&right.id))
+                .map(|(index, node)| (node.id.clone(), index))
+        });
+        let Some((id, current)) = next else {
+            break;
+        };
+        ready.remove(&(id, current));
+        if !remaining[current] {
+            continue;
+        }
+        remaining[current] = false;
+        order.push(current);
+
+        for &target in &outgoing[current] {
+            if !remaining[target] {
+                continue;
+            }
+            ranks[target] = ranks[target].max(ranks[current] + 1);
+            indegree[target] = indegree[target].saturating_sub(1);
+            if indegree[target] == 0 {
+                ready.insert((nodes[target].id.clone(), target));
+            }
+        }
+    }
+    (order, ranks)
+}
+
+fn longest_directed_visual_path(
+    nodes: &[RenderVisualNode],
+    edges: &[VisualLayoutEdge],
+    topological_order: &[usize],
+    topological_positions: &BTreeMap<usize, usize>,
+    eligible_nodes: &[bool],
+    structural_only: bool,
+) -> Option<Vec<usize>> {
+    let mut best = vec![None::<VisualLayoutPath>; nodes.len()];
+    for &current in topological_order {
+        if !eligible_nodes[current] {
+            continue;
+        }
+        let mut current_best = VisualLayoutPath {
+            nodes: vec![current],
+            secondary_edges: 0,
+            auxiliary_nodes: usize::from(visual_layout_node_is_auxiliary(&nodes[current])),
+        };
+        for edge in edges.iter().filter(|edge| edge.to == current) {
+            if structural_only && edge.secondary {
+                continue;
+            }
+            if !eligible_nodes[edge.from]
+                || topological_positions.get(&edge.from) >= topological_positions.get(&current)
+            {
+                continue;
+            }
+            let Some(prefix) = best[edge.from].as_ref() else {
+                continue;
+            };
+            let mut candidate = prefix.clone();
+            candidate.nodes.push(current);
+            candidate.secondary_edges += usize::from(edge.secondary);
+            candidate.auxiliary_nodes +=
+                usize::from(visual_layout_node_is_auxiliary(&nodes[current]));
+            if visual_layout_path_is_better(&candidate, &current_best, nodes) {
+                current_best = candidate;
+            }
+        }
+        best[current] = Some(current_best);
+    }
+
+    best.into_iter()
+        .flatten()
+        .reduce(|current, candidate| {
+            if visual_layout_path_is_better(&candidate, &current, nodes) {
+                candidate
+            } else {
+                current
+            }
+        })
+        .map(|path| path.nodes)
+}
+
+fn visual_layout_path_is_better(
+    candidate: &VisualLayoutPath,
+    current: &VisualLayoutPath,
+    nodes: &[RenderVisualNode],
+) -> bool {
+    if candidate.nodes.len() != current.nodes.len() {
+        return candidate.nodes.len() > current.nodes.len();
+    }
+    if candidate.secondary_edges != current.secondary_edges {
+        return candidate.secondary_edges < current.secondary_edges;
+    }
+    if candidate.auxiliary_nodes != current.auxiliary_nodes {
+        return candidate.auxiliary_nodes < current.auxiliary_nodes;
+    }
+    candidate
+        .nodes
+        .iter()
+        .map(|index| nodes[*index].id.as_str())
+        .cmp(current.nodes.iter().map(|index| nodes[*index].id.as_str()))
+        .is_lt()
+}
+
+fn most_connected_visual_node(
+    nodes: &[RenderVisualNode],
+    edges: &[VisualLayoutEdge],
+    eligible_nodes: &[bool],
+) -> Option<usize> {
+    (0..nodes.len())
+        .filter(|index| eligible_nodes[*index])
+        .min_by(|left, right| {
+            let left_degree = edges
+                .iter()
+                .filter(|edge| edge.from == *left || edge.to == *left)
+                .count();
+            let right_degree = edges
+                .iter()
+                .filter(|edge| edge.from == *right || edge.to == *right)
+                .count();
+            let left_indegree = edges.iter().filter(|edge| edge.to == *left).count();
+            let right_indegree = edges.iter().filter(|edge| edge.to == *right).count();
+            right_degree
+                .cmp(&left_degree)
+                .then_with(|| right_indegree.cmp(&left_indegree))
+                .then_with(|| nodes[*left].id.cmp(&nodes[*right].id))
+        })
+}
+
+fn closest_primary_anchor_x(
+    start: usize,
+    primary_x: &BTreeMap<usize, i32>,
+    adjacency: &[Vec<usize>],
+) -> Option<i32> {
+    let mut queue = VecDeque::from([(start, 0usize)]);
+    let mut visited = vec![false; adjacency.len()];
+    visited[start] = true;
+    let mut closest_distance = None;
+    let mut anchors = Vec::new();
+
+    while let Some((current, distance)) = queue.pop_front() {
+        if closest_distance.is_some_and(|closest| distance > closest) {
+            break;
+        }
+        if let Some(x) = primary_x.get(&current) {
+            closest_distance = Some(distance);
+            anchors.push(*x);
+            continue;
+        }
+        for &neighbor in &adjacency[current] {
+            if !visited[neighbor] {
+                visited[neighbor] = true;
+                queue.push_back((neighbor, distance + 1));
+            }
+        }
+    }
+    (!anchors.is_empty()).then(|| anchors.iter().sum::<i32>() / anchors.len() as i32)
 }
 
 fn visual_relation_matches_nodes(
@@ -7097,7 +9032,189 @@ fn visual_alt_text(
     )
 }
 
-fn push_nav(html: &mut String, has_visuals: bool) {
+fn push_presentation_nav(html: &mut String, presentation: &ReportPresentation) {
+    html.push_str("<nav class=\"section-nav\" aria-label=\"Report sections\">\n");
+    for section in &presentation.sections {
+        html.push_str("<a href=\"#");
+        push_escaped_attr(html, &section.id);
+        html.push_str("\">");
+        push_escaped(html, &section.title);
+        html.push_str("</a>\n");
+    }
+    html.push_str("<a href=\"#evidence-appendix\">Evidence trail</a>\n</nav>\n");
+}
+
+fn push_presentation_report(
+    html: &mut String,
+    presentation: &ReportPresentation,
+    views: &[RenderVisualView],
+    report: &PublicReport,
+    entity_labels: &BTreeMap<String, String>,
+    source_labels: &BTreeMap<String, String>,
+) {
+    if !presentation.organizing_form.trim().is_empty() || !presentation.rationale.trim().is_empty()
+    {
+        html.push_str("<aside class=\"architecture-note\" aria-label=\"Report architecture\">\n");
+        if !presentation.organizing_form.trim().is_empty() {
+            html.push_str("<p><span>Organizing form</span>");
+            push_escaped(html, &presentation.organizing_form);
+            html.push_str("</p>\n");
+        }
+        if !presentation.rationale.trim().is_empty() {
+            html.push_str("<p>");
+            push_escaped(html, &presentation.rationale);
+            html.push_str("</p>\n");
+        }
+        html.push_str("</aside>\n");
+    }
+
+    let views_by_id = views
+        .iter()
+        .map(|view| (view.id.as_str(), view))
+        .collect::<BTreeMap<_, _>>();
+    let assigned_view_ids = presentation
+        .sections
+        .iter()
+        .flat_map(|section| section.visual_view_ids.iter().map(String::as_str))
+        .collect::<BTreeSet<_>>();
+
+    for section in &presentation.sections {
+        push_section_open(html, &section.id, &section.title);
+        if !section.purpose.trim().is_empty() {
+            html.push_str("<p class=\"section-purpose\">");
+            push_escaped(html, &section.purpose);
+            html.push_str("</p>\n");
+        }
+        push_safe_markdown(html, &section.body_markdown, &section.id);
+        for view_id in &section.visual_view_ids {
+            if let Some(view) = views_by_id.get(view_id.as_str()) {
+                push_visual_card(html, view);
+            }
+        }
+        html.push_str("</section>\n");
+    }
+
+    html.push_str("<details class=\"structured-appendix\" id=\"evidence-appendix\">\n");
+    html.push_str("<summary>Evidence and structured data</summary>\n");
+    html.push_str("<p class=\"muted\">Machine-verifiable support for the narrative above. It is kept separate so the evidence contract does not dictate the report's reading order.</p>\n");
+    let unassigned_views = views
+        .iter()
+        .filter(|view| !assigned_view_ids.contains(view.id.as_str()))
+        .collect::<Vec<_>>();
+    if !unassigned_views.is_empty() {
+        push_section_open(html, "unplaced-visualizations", "Additional Visual Views");
+        for view in unassigned_views {
+            push_visual_card(html, view);
+        }
+        html.push_str("</section>\n");
+    }
+    push_scope_section(html, &report.scope);
+    push_domain_profile_section(html, &report.domain_profile);
+    push_field_elements_or_legacy(html, report, source_labels);
+    push_curriculum_section(html, &report.curriculum_path, entity_labels, source_labels);
+    push_reading_ladder_section(html, report, source_labels);
+    push_frontier_section(html, report, entity_labels, source_labels);
+    push_evidence_standards_section(html, &report.evidence_standards);
+    push_claims_section(html, &report.claims, source_labels);
+    push_sources_and_evidence_section(html, report);
+    push_relations_section(html, &report.relations, entity_labels, source_labels);
+    html.push_str("</details>\n");
+}
+
+fn push_safe_markdown(html_output: &mut String, markdown: &str, footnote_namespace: &str) {
+    if markdown.trim().is_empty() {
+        return;
+    }
+    let options = Options::ENABLE_TABLES
+        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_TASKLISTS
+        | Options::ENABLE_FOOTNOTES;
+    let events = Parser::new_ext(markdown, options).map(|event| match event {
+        Event::Html(raw) | Event::InlineHtml(raw) => Event::Text(CowStr::from(raw.into_string())),
+        Event::Start(Tag::Link {
+            link_type,
+            dest_url,
+            title,
+            id,
+        }) => Event::Start(Tag::Link {
+            link_type,
+            dest_url: safe_markdown_destination(dest_url),
+            title,
+            id,
+        }),
+        Event::Start(Tag::Image {
+            link_type,
+            dest_url,
+            title,
+            id,
+        }) => Event::Start(Tag::Image {
+            link_type,
+            dest_url: safe_markdown_image_destination(dest_url),
+            title,
+            id,
+        }),
+        Event::Start(Tag::FootnoteDefinition(label)) => Event::Start(Tag::FootnoteDefinition(
+            namespaced_footnote_label(footnote_namespace, label),
+        )),
+        Event::FootnoteReference(label) => {
+            Event::FootnoteReference(namespaced_footnote_label(footnote_namespace, label))
+        }
+        other => other,
+    });
+    html_output.push_str("<div class=\"narrative-body\">\n");
+    html::push_html(html_output, events);
+    html_output.push_str("</div>\n");
+}
+
+fn safe_markdown_destination(destination: CowStr<'_>) -> CowStr<'_> {
+    let normalized = destination
+        .trim()
+        .chars()
+        .filter(|character| !character.is_ascii_control() && !character.is_ascii_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let first_path_delimiter = normalized.find(['/', '?', '#']).unwrap_or(normalized.len());
+    let scheme = normalized
+        .find(':')
+        .filter(|colon| *colon < first_path_delimiter)
+        .map(|colon| &normalized[..colon]);
+    if scheme.is_none() || matches!(scheme, Some("http" | "https" | "mailto")) {
+        destination
+    } else {
+        CowStr::Borrowed("#blocked-unsafe-link")
+    }
+}
+
+fn safe_markdown_image_destination(destination: CowStr<'_>) -> CowStr<'_> {
+    let trimmed = destination.trim();
+    let Some((metadata, payload)) = trimmed.split_once(',') else {
+        return CowStr::Borrowed("#blocked-external-image");
+    };
+    let metadata = metadata.to_ascii_lowercase();
+    let safe_raster_type = matches!(
+        metadata.as_str(),
+        "data:image/png;base64"
+            | "data:image/jpeg;base64"
+            | "data:image/jpg;base64"
+            | "data:image/gif;base64"
+            | "data:image/webp;base64"
+    );
+    let safe_base64_payload = !payload.is_empty()
+        && payload
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'='));
+    if safe_raster_type && safe_base64_payload {
+        destination
+    } else {
+        CowStr::Borrowed("#blocked-external-image")
+    }
+}
+
+fn namespaced_footnote_label<'a>(namespace: &str, label: CowStr<'a>) -> CowStr<'a> {
+    CowStr::from(format!("{namespace}-{label}"))
+}
+
+fn push_nav(html: &mut String, report: &PublicReport, has_visuals: bool) {
     let mut items = vec![
         ("reading-guide", "Reading Guide"),
         ("curriculum-path", "Curriculum Path"),
@@ -7106,13 +9223,25 @@ fn push_nav(html: &mut String, has_visuals: bool) {
         ("frontier-debates", "Frontier Guidance"),
         ("scope", "Scope"),
         ("domain-profile", "Domain Profile"),
-        ("core-ideas", "Core Ideas"),
-        ("methods", "Methods"),
-        ("representations", "Representations"),
         ("evidence-standards", "Evidence Standards"),
         ("sources-evidence", "Source Catalog"),
         ("relations", "Relation Audit"),
     ];
+    let structure_index = items
+        .iter()
+        .position(|(id, _)| *id == "evidence-standards")
+        .unwrap_or(items.len());
+    if report.field_elements.is_empty() {
+        for item in [
+            ("representations", "Representations"),
+            ("methods", "Methods"),
+            ("core-ideas", "Core Ideas"),
+        ] {
+            items.insert(structure_index, item);
+        }
+    } else {
+        items.insert(structure_index, ("field-elements", "Field Elements"));
+    }
     if has_visuals {
         items.insert(1, ("visualizations", "Knowledge Map"));
     }
@@ -7204,6 +9333,70 @@ fn push_domain_profile_section(html: &mut String, profile: &DomainProfile) {
     push_paragraph(html, &profile.rationale);
     push_string_list(html, "Failure Modes", &profile.failure_modes);
     html.push_str("</section>\n");
+}
+
+fn push_field_elements_or_legacy(
+    html: &mut String,
+    report: &PublicReport,
+    source_labels: &BTreeMap<String, String>,
+) {
+    if report.field_elements.is_empty() {
+        push_knowledge_section(
+            html,
+            "core-ideas",
+            "Core Ideas",
+            &report.core_ideas,
+            source_labels,
+        );
+        push_knowledge_section(html, "methods", "Methods", &report.methods, source_labels);
+        push_knowledge_section(
+            html,
+            "representations",
+            "Representations",
+            &report.representations,
+            source_labels,
+        );
+    } else {
+        push_field_elements_section(html, &report.field_elements, source_labels);
+    }
+}
+
+fn push_field_elements_section(
+    html: &mut String,
+    elements: &[FieldElement],
+    source_labels: &BTreeMap<String, String>,
+) {
+    push_section_open(html, "field-elements", "Field Elements");
+    html.push_str("<div class=\"item-grid\">\n");
+    for element in elements {
+        html.push_str("<article class=\"item-card\">\n<h3>");
+        push_escaped(html, &element.label);
+        html.push_str("</h3>\n<div class=\"badge-row\">");
+        push_badge(html, &element.element_class);
+        push_badge(html, &element.role);
+        if let Some(confidence) = element.confidence {
+            push_badge(html, claim_confidence_label(confidence));
+        }
+        html.push_str("</div>\n<dl class=\"compact-dl\">\n");
+        push_dl_item(html, "Actual form", &element.actual_form);
+        push_dl_item(
+            html,
+            "Load-bearing relations",
+            &element.load_bearing_relations,
+        );
+        html.push_str("</dl>\n");
+        push_source_reference_list(html, "Sources", &element.source_ids, source_labels);
+        push_raw_details(
+            html,
+            "Raw field element identifier",
+            &[
+                ("Element ID", element.id.clone()),
+                ("Source IDs", element.source_ids.join(", ")),
+            ],
+        );
+        html.push_str("</article>\n");
+    }
+    html.push_str("</div>\n</section>\n");
 }
 
 fn push_knowledge_section(
@@ -7603,71 +9796,75 @@ fn push_relations_section(
 fn push_visual_section(html: &mut String, views: &[RenderVisualView]) {
     push_section_open(html, "visualizations", "Knowledge Map");
     for view in views {
-        html.push_str("<article class=\"visual-card\" aria-labelledby=\"visual-title-");
-        push_escaped_attr(html, &view.id);
-        html.push_str("\">\n<h3 id=\"visual-title-");
-        push_escaped_attr(html, &view.id);
-        html.push_str("\">");
-        push_escaped(html, &view.title);
-        html.push_str("</h3>\n<p class=\"meta\">");
-        push_escaped(html, &view.justification);
-        html.push_str("</p>\n<div class=\"visual-canvas\" data-visual-mount=\"");
-        push_escaped_attr(html, &view.id);
-        html.push_str("\" role=\"region\" aria-label=\"Interactive visual view: ");
-        push_escaped_attr(html, &view.title);
-        html.push_str("\"></div>\n");
-        html.push_str("<noscript><p class=\"muted\">The text alternative below contains the same graph nodes and edges.</p></noscript>\n");
-        html.push_str(
-            "<div class=\"visual-fallback\" role=\"group\" aria-label=\"Text alternative for ",
-        );
-        push_escaped_attr(html, &view.title);
-        html.push_str("\">\n<p>");
-        push_escaped(html, &view.alt);
-        html.push_str("</p>\n<h4>Nodes</h4>\n<ul>\n");
-        for node in &view.nodes {
-            html.push_str("<li><strong>");
-            push_escaped(html, &node.label);
-            html.push_str("</strong> ");
-            push_escaped(html, &format!("({})", node.entity_type));
-            if !node.description.trim().is_empty() {
-                html.push_str(": ");
-                push_escaped(html, &node.description);
-            }
-            html.push_str("</li>\n");
-        }
-        html.push_str("</ul>\n<h4>Edges</h4>\n<ul>\n");
-        for edge in &view.edges {
-            html.push_str("<li>");
-            push_escaped(
-                html,
-                &format!(
-                    "{} -> {} ({})",
-                    edge.from_label,
-                    edge.to_label,
-                    first_non_empty([edge.label.as_str(), edge.kind.as_str(), "related"])
-                ),
-            );
-            html.push_str("</li>\n");
-        }
-        html.push_str("</ul>\n");
-        push_raw_details(
-            html,
-            "Raw visual identifiers",
-            &[
-                ("Visual view ID", view.id.clone()),
-                (
-                    "Relation IDs",
-                    view.edges
-                        .iter()
-                        .map(|edge| edge.relation_id.clone())
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                ),
-            ],
-        );
-        html.push_str("</div>\n</article>\n");
+        push_visual_card(html, view);
     }
     html.push_str("</section>\n");
+}
+
+fn push_visual_card(html: &mut String, view: &RenderVisualView) {
+    html.push_str("<article class=\"visual-card\" aria-labelledby=\"visual-title-");
+    push_escaped_attr(html, &view.id);
+    html.push_str("\">\n<h3 id=\"visual-title-");
+    push_escaped_attr(html, &view.id);
+    html.push_str("\">");
+    push_escaped(html, &view.title);
+    html.push_str("</h3>\n<p class=\"meta\">");
+    push_escaped(html, &view.justification);
+    html.push_str("</p>\n<div class=\"visual-canvas\" data-visual-mount=\"");
+    push_escaped_attr(html, &view.id);
+    html.push_str("\" role=\"region\" aria-label=\"Interactive visual view: ");
+    push_escaped_attr(html, &view.title);
+    html.push_str("\"></div>\n");
+    html.push_str("<noscript><p class=\"muted\">The text alternative below contains the same graph nodes and edges.</p></noscript>\n");
+    html.push_str(
+        "<div class=\"visual-fallback\" role=\"group\" aria-label=\"Text alternative for ",
+    );
+    push_escaped_attr(html, &view.title);
+    html.push_str("\">\n<p>");
+    push_escaped(html, &view.alt);
+    html.push_str("</p>\n<h4>Nodes</h4>\n<ul>\n");
+    for node in &view.nodes {
+        html.push_str("<li><strong>");
+        push_escaped(html, &node.label);
+        html.push_str("</strong> ");
+        push_escaped(html, &format!("({})", node.entity_type));
+        if !node.description.trim().is_empty() {
+            html.push_str(": ");
+            push_escaped(html, &node.description);
+        }
+        html.push_str("</li>\n");
+    }
+    html.push_str("</ul>\n<h4>Edges</h4>\n<ul>\n");
+    for edge in &view.edges {
+        html.push_str("<li>");
+        push_escaped(
+            html,
+            &format!(
+                "{} -> {} ({})",
+                edge.from_label,
+                edge.to_label,
+                first_non_empty([edge.label.as_str(), edge.kind.as_str(), "related"])
+            ),
+        );
+        html.push_str("</li>\n");
+    }
+    html.push_str("</ul>\n");
+    push_raw_details(
+        html,
+        "Raw visual identifiers",
+        &[
+            ("Visual view ID", view.id.clone()),
+            (
+                "Relation IDs",
+                view.edges
+                    .iter()
+                    .map(|edge| edge.relation_id.clone())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+        ],
+    );
+    html.push_str("</div>\n</article>\n");
 }
 
 fn push_section_open(html: &mut String, id: &str, title: &str) {
@@ -7921,6 +10118,12 @@ fn entity_label_lookup(report: &PublicReport) -> BTreeMap<String, String> {
     let mut labels = BTreeMap::new();
     for source in &report.sources {
         labels.insert(source.id.clone(), source_display_label(source));
+    }
+    for item in &report.field_elements {
+        labels.insert(
+            item.id.clone(),
+            first_non_empty([item.label.as_str(), item.id.as_str()]),
+        );
     }
     for item in &report.core_ideas {
         labels.insert(

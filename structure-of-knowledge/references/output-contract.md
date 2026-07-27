@@ -1,56 +1,68 @@
 # SoK Output Contract
 
-## Required Package for Substantial Tasks
+## Semantic Obligations for Substantial Tasks
 
-A full SoK answer should contain:
+A full SoK run must establish these findings before it chooses a public report shape:
 
-1. Executive orientation: what the field is, why it matters, and what kind of scholarly path this report builds.
-2. Preliminary domain profile: the candidate formal, interpretive, empirical, computational, professional, infrastructure-bound, emerging, interdisciplinary, or mixed lenses to verify through source review.
-3. Structure of knowledge: core questions, objects, representations, methods, evidence standards, and threshold concepts.
-4. Source role probe: role-based evidence requirements, including required, conditional, optional, and waived roles with rationale.
-5. Literature stack: entry points, foundational works, core textbooks or monographs, primary corpora or cases, methods sources, survey/frontier readings, standards, datasets, or infrastructure sources as appropriate.
-6. Curriculum roadmap: field-newcomer to research-fluent sequence with modules, objectives, readings, practice tasks, and outputs.
-7. Frontier and debates: current problems, unresolved tensions, major schools, and research opportunities when the goal requires them.
-8. Visual package: graph views selected from structured concepts, claims, sources, curriculum steps, frontier/debate items, and relations when useful.
-9. Quality notes: assumptions, source limits, waived source-role rationale, and what should be verified next.
+1. The field boundary, reader goal, and a provisional domain profile that source review may revise.
+2. The field-native elements that carry knowledge in this run: questions, objects, cases, representations, methods, warrants, institutions, instruments, datasets, practices, disputes, or other observed forms.
+3. The few load-bearing relations that make those elements cohere, including which ideas are core and which surrounding elements are necessary for understanding them.
+4. A role-based evidence plan with required, conditional, and waived source roles plus rationale.
+5. A comparison of plausible organizing forms and an explicit report-architecture decision.
+6. Claims, sources, currentness limits, and verification notes sufficient for the artifact being produced.
+
+Literature ladders, curricula, frontier maps, visual views, and practice plans are capability modules. Include them when they serve the user goal or the chosen architecture; do not turn them into mandatory public chapters.
 
 For delegated agent work, also produce an agent packet when useful: `agent-brief.md`, `tasks.md`, `sources.csv`, `report.md`, `downloads/`, `notes/`, and `logs/`. Use `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok init` from an installed skill, or run `cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- init` from a repository checkout.
 
-Keep agent scaffolds and human-reader reports separate. Scaffolds may expose learner profile, original goal, assumptions, placeholders, and quality-gate notes. Human-reader reports should hide that machinery, surface only interpretation-relevant scope notes, and replace scaffold placeholders with researched sources or remove them. Use `sok scaffold` for the first artifact and `sok handoff-report` when passing the scaffold to a next agent for report completion.
+Keep agent scaffolds and human-reader reports separate. Scaffolds may expose learner profile, original goal, candidate lenses, assumptions, placeholders, rejected organizing forms, and quality-gate notes. Human-reader reports should hide that machinery, surface only interpretation-relevant scope notes, and replace scaffold placeholders with researched sources or remove them. Use `sok scaffold` for the discovery canvas and `sok handoff-report` when passing it to a next agent for report completion.
 
-For tool-facing output, `sok-report.json` is the structured source of truth. Markdown scaffolds and canonical Markdown reports are bounded inputs to `sok export-json`; HTML is a rendered public view of validated `human_report` JSON. `internal_context` and `diagnostics` are never public report content.
+For tool-facing output, `sok-report.json` is the structured source of truth. Markdown scaffolds and human reports are bounded inputs to `sok export-json`; HTML is a rendered public view of validated `human_report` JSON. `internal_context` and `diagnostics` are never public report content.
 
-## Recommended Section Template
+## Field-First Report Composition
 
-Use this shape unless the user requested a different format:
+Do not select the table of contents from a universal template or from the field name alone.
+
+1. Review boundary, foundation, and method sources.
+2. Build the field-element inventory and identify load-bearing relations.
+3. Compare at least two organizing forms against those findings and the reader's task.
+4. Select the executive thesis, core ideas, important surrounding elements, narrative sequence, and visual logic.
+5. Record the decision in a `## Report Architecture` key/value table.
+6. Write ordered, field-specific `##` narrative sections.
+7. Add machine-verifiable surfaces only where needed.
+
+The architecture table requires `Executive thesis`, `Chosen organizing form`, `Architecture rationale`, and `Rejected alternatives and why`. The last field preserves evidence that at least one plausible competing form was considered rather than allowing the chosen form to be asserted without comparison. The exporter preserves every public H2 in order under `report.presentation.sections`; arbitrary headings are not discarded. The HTML renderer follows that order and keeps validation data in a separate collapsed evidence appendix.
+
+All four architecture decisions, a complete field-element inventory with core and surrounding/context roles, and at least one public narrative section are required for new final-Markdown exports. New exports use `sok-report/v2`, where human reports require both `presentation` and `field_elements`; v1 keeps them optional only for legacy artifacts.
+
+Use `<!-- sok:purpose ... -->` to attach a concise section purpose and `<!-- sok:visual-view view-id -->` to place a declared visual view inside a narrative section.
+
+Structured surfaces may retain canonical headings or use a field-specific heading followed by one marker:
 
 ```markdown
-# Structure of Knowledge: [Field]
-
-## 1. Orientation
-## 2. The Field's Deep Structure
-## 3. Concept and Prerequisite Map
-## 4. Source Role Probe
-## 5. Literature Ladder
-## 6. Curriculum Roadmap
-## 7. Practice and Assessment
-## 8. Frontier, Debates, and Open Problems
-## 9. Visual Summary
-## 10. Sources and Further Reading
+<!-- sok:surface report-architecture -->
+<!-- sok:surface field-elements -->
+<!-- sok:surface literature-ladder -->
+<!-- sok:surface relations -->
+<!-- sok:surface curriculum -->
+<!-- sok:surface visual-views -->
+<!-- sok:surface claims -->
 ```
 
-The CLI scaffold should keep this section shape while specializing the starter content to the inferred domain structure. Formal fields should foreground prerequisite/proof graphs and counterexample practice; ill-structured fields should foreground cases, schools, lenses, and debate maps; infrastructure-bound fields should foreground instruments, datasets, collaborations, standards, uncertainty practices, and strategic reports.
+Canonical headings remain supported for compatibility. Markers decouple machine extraction from the public title.
 
-The inferred structure is provisional. Use source review to revise it into a profile of the strongest lenses, not a single restrictive category. Existing university curricula, syllabi, and course maps are evidence of stabilized pedagogical consensus; they must not define the boundary of the field by themselves.
+Directives must be recognized, non-empty, and written as standalone lines outside fenced code; surface markers must also be unique within a section. Unknown, empty, or duplicate controls are blocking diagnostics rather than silent data loss.
 
-## Tables
+## Machine-Facing Tables
 
-Core structure matrix:
+Field-element inventory:
 
-| Element | In this field | First-pass representation | Deeper synthesis | Why it matters |
-|---|---|---|---|---|
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
 
-Canonical final-report literature ladder:
+The exporter preserves these rows in `report.field_elements` before deriving the legacy `core_ideas`, `methods`, and `representations` compatibility views. Use `field_element` relation endpoints when a case, instrument, institution, dataset, practice, dispute, or other field-native class should remain addressable without being renamed as a concept.
+
+Structured literature ladder:
 
 | Layer | Start here | Read for | Do not infer | Source IDs | Notes |
 |---|---|---|---|---|---|
@@ -60,7 +72,7 @@ Source role probe:
 | Source role | Status | Candidate source pattern | What it tests | Waiver or revision rule |
 |---|---|---|---|---|
 
-Canonical final-report curriculum roadmap:
+Structured curriculum roadmap:
 
 | Phase | Module | Essential question | Readings | Practice artifact | Progress criteria | Prerequisite IDs |
 |---|---|---|---|---|---|---|
@@ -70,22 +82,22 @@ Frontier map:
 | Problem or debate | Current state | Key sources | Required background | Why it is hard |
 |---|---|---|---|---|
 
-Canonical final-report relations:
+Structured relations:
 
 | Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale | Source IDs |
 |---|---|---|---|---|---|---|---|
 
-Canonical final-report visual views:
+Structured visual views:
 
 | View ID | View kind | Title | Purpose | Relation IDs | Node emphasis |
 |---|---|---|---|---|---|
 
-Canonical final-report claims:
+Structured claims:
 
 | Statement | Claim type | Evidence requirement | Source IDs | Confidence | Temporal status | Notes |
 |---|---|---|---|---|---|---|
 
-`Source IDs`, relation endpoints, prerequisite references, and visual node emphasis may use stable JSON IDs or unambiguous source titles / row labels from the bounded Markdown and manifest. Ambiguous or unresolved references must become diagnostics, not silent guesses. Valid relation endpoint types are `concept`, `method`, `representation`, `claim`, `source`, `curriculum_step`, and `frontier_debate`. Valid relation kinds include `depends_on`, `supports`, `qualifies`, `contradicts`, `precedes`, `introduces`, `uses_method`, `represented_by`, `grounds`, `motivates`, `part_of`, and `maps_to`.
+`Source IDs`, relation endpoints, prerequisite references, and visual node emphasis may use stable JSON IDs or unambiguous source titles / row labels from the bounded Markdown and manifest. Ambiguous or unresolved references must become diagnostics, not silent guesses. Valid relation endpoint types are `field_element`, `concept`, `method`, `representation`, `claim`, `source`, `curriculum_step`, and `frontier_debate`. Valid relation kinds include `depends_on`, `supports`, `qualifies`, `contradicts`, `precedes`, `introduces`, `uses_method`, `represented_by`, `grounds`, `motivates`, `part_of`, and `maps_to`.
 
 ## Structured Visual Views
 
@@ -125,7 +137,7 @@ When rendering HTML, the renderer should instantiate only declared `visual_views
 
 ## Strict Final Validation
 
-Before publication, final reports should pass `sok lint --stage final`, `sok export-json --stage final`, `sok validate-report --strict`, and then `sok render-html`. Strict validation treats embedded export warnings as blocking unless an accepted-loss waiver is explicit. Substantial final reports need preserved relations, at least one curriculum prerequisite, and relation-backed visual views when the Markdown declared a visual map or visual summary; intentional omissions require `structure_waivers`.
+Before publication, final reports should pass `sok lint --stage final`, `sok export-json --stage final`, `sok validate-report --strict`, and then `sok render-html`. Strict validation treats embedded export warnings as blocking unless an accepted-loss waiver is explicit. Substantial final reports need preserved load-bearing relations. A multi-step curriculum needs at least one prerequisite, and declared visual intent needs relation-backed visual views; intentional omissions require `structure_waivers`.
 
 Claim support is semantic. `support_kind: supports` can satisfy an affirmative claim when the evidence is `reviewed` or `verified` and includes `reviewed_at` plus a locator or support note. `qualifies` narrows or contextualizes an already supported claim, `contradicts` records conflict or confidence limits, and `background` / `example` remain visible but non-supporting. `cataloged` evidence from source ingestion never satisfies claim support by itself.
 
@@ -134,7 +146,7 @@ Claim support is semantic. `support_kind: supports` can satisfy an affirmative c
 - Write for a scholar entering the field, not for a general audience.
 - Preserve technical terms, formal distinctions, and hard concepts. Introduce them through examples and relations, but do not soften them into popular explanation.
 - Mark difficulty honestly. Do not pretend foundational texts are always good first reads.
-- Prefer a useful curriculum over encyclopedic completeness.
+- When the goal requires a curriculum, prefer a useful path over encyclopedic completeness.
 
 ## Access Metadata
 
@@ -149,12 +161,12 @@ Every recommended source should be actionable:
 
 ## Minimal Answer Variant
 
-For small requests, return:
+For small requests, return only what serves the request:
 
 - A short structure map.
-- Five to ten key readings grouped by purpose.
-- A three-stage scholarly learning path.
-- One note about current frontier or debate.
+- A few source pointers grouped by purpose when the user needs readings or verification.
+- A compact next-step path when the user asks how to learn or act.
+- A dated frontier or debate note only when currentness matters.
 
 ## Agent Artifact Variants
 
