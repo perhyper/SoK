@@ -88,6 +88,11 @@ outputs:
   json_report: required_structured_source_of_truth
   html_interactive_report: optional_view_for_validated_human_report
   graph_views: optional_structured_views_selected_from_relations
+  declarative_discovery_profiles:
+    reference: structure-of-knowledge/references/discovery-profiles.v1.json
+    rule: Profile inference and projection keyword mappings are versioned advisory data. Generated or explicit profile proposals remain provisional until source review and may be revised.
+    unknown_locale_fallback: Unknown locales or unmatched profile signals use the open profile and must not silently assign formal, interpretive, or infrastructure semantics.
+    stable_markdown_surface: Language-neutral sok: markers remain the structured Markdown interface; localized prose terms are only parsing aids where declared.
   structured_markdown_surfaces:
     note: Canonical headings remain compatible; standalone, recognized sok:surface markers outside code fences allow field-specific public titles. Unknown or empty sok directives and duplicate markers are blocking diagnostics.
     report_architecture: "report-architecture marker with Executive thesis, Chosen organizing form, and Architecture rationale"

@@ -232,6 +232,12 @@ pub fn build_report_scaffold(field: &str, learner: &str, goal: &str, weeks: i32)
 | Time budget | {duration} |
 | Provisional lens | {classification_hint} |
 | Why only provisional | {why_this_hint} |
+| Profile proposal | {profile_id} |
+| Profile proposer type | inference |
+| Profile locale | {profile_locale} |
+| Profile version | {profile_version} |
+| Profile confidence | {profile_confidence} |
+| Profile rationale | {profile_rationale} |
 
 ## Discovery Rule
 
@@ -293,11 +299,17 @@ Claims, relations, reading ladders, curricula, and visual declarations are machi
 ## Scaffold Quality Notes
 
 - The field name selected a provisional discovery lens only; source findings must control the final structure.
+- Profile proposal metadata is advisory until source review revises or confirms it.
 - A completed run identifies core and surrounding elements, compares organizing forms, and records why the chosen report architecture fits.
 - Existing curricula are evidence of pedagogical consensus, not the boundary or automatic table of contents of the field.
 "#,
-        classification_hint = profile.classification_hint,
-        why_this_hint = profile.why_this_hint,
+        classification_hint = profile.classification_hint.as_str(),
+        why_this_hint = profile.why_this_hint.as_str(),
+        profile_id = profile.profile_id.as_str(),
+        profile_locale = profile.locale.as_str(),
+        profile_version = profile.profile_version.as_str(),
+        profile_confidence = profile.inference_confidence(),
+        profile_rationale = profile.inference_rationale(),
         lenses = profile.render_lenses(),
         questions = profile.render_questions(),
         source_roles = profile.render_source_roles()

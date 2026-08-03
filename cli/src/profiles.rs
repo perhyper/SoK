@@ -3,24 +3,97 @@
 //! These profiles narrow the first source search. They must never determine the
 //! final report architecture; source-reviewed field findings do that later.
 
+use serde::Deserialize;
+use std::sync::OnceLock;
+
+const DISCOVERY_PROFILES_JSON: &str =
+    include_str!("../../structure-of-knowledge/references/discovery-profiles.v1.json");
+const DISCOVERY_PROFILES_SCHEMA_VERSION: &str = "sok-discovery-profiles/v1";
+
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct DiscoveryProfile {
-    pub(crate) classification_hint: &'static str,
-    pub(crate) why_this_hint: &'static str,
-    pub(crate) lenses: Vec<DiscoveryLens>,
-    pub(crate) questions: Vec<&'static str>,
-    pub(crate) source_roles: Vec<SourceRoleProbe>,
+    pub(crate) profile_id: String,
+    pub(crate) profile_version: String,
+    pub(crate) locale: String,
+    pub(crate) classification_hint: String,
+    pub(crate) why_this_hint: String,
+    #[serde(default)]
+    signal_terms: Vec<ProfileTerm>,
+    #[serde(default, rename = "lens_prompts")]
+    lenses: Vec<DiscoveryLens>,
+    #[serde(default, rename = "scaffold_questions")]
+    questions: Vec<String>,
+    #[serde(default, rename = "source_role_probes")]
+    source_roles: Vec<SourceRoleProbe>,
+    #[serde(default)]
+    projection_keyword_mappings: Vec<ProjectionKeywordMapping>,
+    #[serde(default)]
+    fallback_behavior: ProfileFallbackBehavior,
+    #[serde(skip)]
+    matched_signal: Option<ProfileTerm>,
 }
 
-pub(crate) struct DiscoveryLens {
-    name: &'static str,
-    inspect: &'static str,
-    revise_when: &'static str,
+#[derive(Debug, Clone, Deserialize)]
+struct DiscoveryLens {
+    name: String,
+    inspect: String,
+    revise_when: String,
 }
 
-pub(crate) struct SourceRoleProbe {
-    role: &'static str,
-    inspect: &'static str,
-    decision_rule: &'static str,
+#[derive(Debug, Clone, Deserialize)]
+struct SourceRoleProbe {
+    role: String,
+    inspect: String,
+    decision_rule: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct ProfileFallbackBehavior {
+    #[serde(default)]
+    advisory_message: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DiscoveryProfilesFile {
+    schema_version: String,
+    fallback_profile_id: String,
+    inference_order: Vec<String>,
+    profiles: Vec<DiscoveryProfile>,
+    #[serde(default)]
+    domain_classification_terms: Vec<DomainClassificationTerm>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DomainClassificationTerm {
+    classification: String,
+    terms: Vec<ProfileTerm>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ProjectionKeywordMapping {
+    projection: String,
+    item_prefix: String,
+    terms: Vec<ProfileTerm>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ProfileTerm {
+    term: String,
+    locale: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ProjectionRole {
+    CoreIdea,
+    Method,
+    Representation,
+    Omit,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectionMatch {
+    pub(crate) role: ProjectionRole,
+    pub(crate) item_prefix: String,
 }
 
 impl DiscoveryProfile {
@@ -57,248 +130,157 @@ impl DiscoveryProfile {
             .collect::<Vec<_>>()
             .join("\n")
     }
+
+    pub(crate) fn inference_confidence(&self) -> &'static str {
+        if self.matched_signal.is_some() {
+            "medium"
+        } else {
+            "low"
+        }
+    }
+
+    pub(crate) fn inference_rationale(&self) -> String {
+        match &self.matched_signal {
+            Some(signal) => format!(
+                "Matched field-name signal {:?} for locale {}; provisional until source review.",
+                signal.term, signal.locale
+            ),
+            None => first_non_empty([
+                self.fallback_behavior.advisory_message.as_str(),
+                "No profile signal matched; using an open advisory fallback until source review.",
+            ]),
+        }
+    }
 }
 
 pub(crate) fn infer_discovery_profile(field: &str) -> DiscoveryProfile {
-    let normalized = field.to_ascii_lowercase();
-    if contains_any(&normalized, INFRASTRUCTURE_DOMAIN_SIGNALS) {
-        infrastructure_discovery_profile()
-    } else if contains_any(&normalized, ILL_STRUCTURED_DOMAIN_SIGNALS) {
-        interpretive_discovery_profile()
-    } else if contains_any(&normalized, FORMAL_DOMAIN_SIGNALS) {
-        formal_discovery_profile()
-    } else {
-        open_discovery_profile()
+    let data = discovery_profiles();
+    let normalized_field = normalize_profile_text(field);
+
+    for profile_id in &data.inference_order {
+        for profile in data
+            .profiles
+            .iter()
+            .filter(|profile| profile.profile_id == *profile_id)
+        {
+            if let Some(signal) = first_matching_term(&normalized_field, &profile.signal_terms) {
+                let mut matched = profile.clone();
+                matched.locale = signal.locale.clone();
+                matched.matched_signal = Some(signal.clone());
+                return matched;
+            }
+        }
+    }
+
+    fallback_profile(data)
+}
+
+pub(crate) fn domain_classification_ids_from_text(raw: &str) -> Vec<String> {
+    let data = discovery_profiles();
+    let text = normalize_profile_text(raw);
+    let mut out = Vec::new();
+    for mapping in &data.domain_classification_terms {
+        if first_matching_term(&text, &mapping.terms).is_some()
+            && !out.contains(&mapping.classification)
+        {
+            out.push(mapping.classification.clone());
+        }
+    }
+    out
+}
+
+pub(crate) fn projection_for_element_class(raw: &str) -> ProjectionMatch {
+    let text = normalize_profile_text(raw);
+    for profile in &discovery_profiles().profiles {
+        for mapping in &profile.projection_keyword_mappings {
+            if first_matching_term(&text, &mapping.terms).is_some() {
+                return ProjectionMatch {
+                    role: projection_role(&mapping.projection),
+                    item_prefix: mapping.item_prefix.clone(),
+                };
+            }
+        }
+    }
+
+    ProjectionMatch {
+        role: ProjectionRole::CoreIdea,
+        item_prefix: "concept".to_string(),
     }
 }
 
-fn contains_any(value: &str, signals: &[&str]) -> bool {
-    signals.iter().any(|signal| value.contains(signal))
+#[cfg(test)]
+pub(crate) fn embedded_profile_schema_version() -> &'static str {
+    discovery_profiles().schema_version.as_str()
 }
 
-const FORMAL_DOMAIN_SIGNALS: &[&str] = &[
-    "algebra",
-    "analysis",
-    "automata",
-    "category theory",
-    "complexity",
-    "cryptography",
-    "formal methods",
-    "geometry",
-    "logic",
-    "mathematics",
-    "number theory",
-    "optimization",
-    "probability",
-    "proof",
-    "quantum information",
-    "set theory",
-    "statistics",
-    "theoretical computer science",
-    "topology",
-    "type theory",
-];
-
-const ILL_STRUCTURED_DOMAIN_SIGNALS: &[&str] = &[
-    "anthropology",
-    "constitutional",
-    "critical theory",
-    "design",
-    "education",
-    "ethics",
-    "governance",
-    "history",
-    "law",
-    "legal",
-    "literature",
-    "management",
-    "media studies",
-    "policy",
-    "political",
-    "sociology",
-    "strategy",
-    "urban planning",
-];
-
-const INFRASTRUCTURE_DOMAIN_SIGNALS: &[&str] = &[
-    "accelerator",
-    "astronomy",
-    "astrophysics",
-    "bioinformatics",
-    "climate",
-    "collider",
-    "earth observation",
-    "epidemiology",
-    "genomics",
-    "gravitational wave",
-    "high energy physics",
-    "materials characterization",
-    "metabolomics",
-    "neuroscience",
-    "oceanography",
-    "particle physics",
-    "proteomics",
-    "remote sensing",
-    "seismology",
-    "synchrotron",
-];
-
-fn common_source_roles() -> Vec<SourceRoleProbe> {
-    vec![
-        SourceRoleProbe {
-            role: "Boundary / orientation",
-            inspect: "How experts delimit the field and name its recurring questions and objects.",
-            decision_rule: "Required unless the scope is already explicitly bounded by the user.",
-        },
-        SourceRoleProbe {
-            role: "Foundation / canonical corpus",
-            inspect:
-                "Which concepts, cases, results, or practices recur across authoritative accounts.",
-            decision_rule:
-                "Require the source form that actually carries durable knowledge in this field.",
-        },
-        SourceRoleProbe {
-            role: "Method / warrant",
-            inspect: "How the field produces, tests, interprets, or rejects claims.",
-            decision_rule: "Required; split by community when warrant standards differ.",
-        },
-        SourceRoleProbe {
-            role: "Pedagogical sequence",
-            inspect: "Which dependencies or threshold concepts repeatedly shape expert teaching.",
-            decision_rule: "Required for learning, curriculum, onboarding, or staged-practice goals; otherwise optional or waived. Never use it as the field boundary.",
-        },
-        SourceRoleProbe {
-            role: "Current synthesis / frontier",
-            inspect: "Which questions, methods, standards, or disagreements are changing now.",
-            decision_rule: "Required only when the goal includes current state or research entry.",
-        },
-    ]
+fn discovery_profiles() -> &'static DiscoveryProfilesFile {
+    static DATA: OnceLock<DiscoveryProfilesFile> = OnceLock::new();
+    DATA.get_or_init(|| {
+        let data: DiscoveryProfilesFile = serde_json::from_str(DISCOVERY_PROFILES_JSON)
+            .expect("embedded discovery profiles JSON must parse");
+        assert_eq!(
+            data.schema_version, DISCOVERY_PROFILES_SCHEMA_VERSION,
+            "embedded discovery profiles schema version changed without loader update"
+        );
+        data
+    })
 }
 
-fn formal_discovery_profile() -> DiscoveryProfile {
-    DiscoveryProfile {
-        classification_hint: "formal or theory-led candidate",
-        why_this_hint:
-            "The field name suggests that objects, transformations, invariants, and proof may organize part of the domain.",
-        lenses: vec![
-            DiscoveryLens {
-                name: "Object grammar",
-                inspect: "Definitions, canonical examples, non-examples, transformations, and equivalence.",
-                revise_when: "Cases, instruments, institutions, or empirical practices carry more explanatory weight than formal objects.",
-            },
-            DiscoveryLens {
-                name: "Dependency and invariance",
-                inspect: "Prerequisites, constructions, theorem families, invariants, and counterexamples.",
-                revise_when: "The field is better organized by a process, controversy, chronology, or problem ecology.",
-            },
-            DiscoveryLens {
-                name: "Proof and validation",
-                inspect: "Accepted proof styles, derivations, reductions, computations, and failure tests.",
-                revise_when: "Multiple communities use materially different warrants.",
-            },
-        ],
-        questions: vec![
-            "Which objects and transformations recur across independent boundary sources?",
-            "Which relations are genuinely load-bearing: prerequisite, equivalence, construction, classification, or limitation?",
-            "Which representations make expert work possible, and when do they mislead?",
-            "Do applications or computational infrastructure reorganize what appears to be a purely formal field?",
-        ],
-        source_roles: common_source_roles(),
+fn fallback_profile(data: &DiscoveryProfilesFile) -> DiscoveryProfile {
+    let mut profile = data
+        .profiles
+        .iter()
+        .find(|profile| profile.profile_id == data.fallback_profile_id)
+        .cloned()
+        .or_else(|| data.profiles.first().cloned())
+        .expect("embedded discovery profiles must define at least one profile");
+    profile.locale = "und".to_string();
+    profile.matched_signal = None;
+    profile
+}
+
+fn first_matching_term<'a>(text: &str, terms: &'a [ProfileTerm]) -> Option<&'a ProfileTerm> {
+    terms
+        .iter()
+        .filter_map(|signal| {
+            let needle = normalize_profile_text(&signal.term);
+            (!needle.is_empty() && text.contains(&needle))
+                .then_some((needle.chars().count(), signal))
+        })
+        .max_by_key(|(length, _)| *length)
+        .map(|(_, signal)| signal)
+}
+
+fn projection_role(value: &str) -> ProjectionRole {
+    match normalize_profile_text(value).as_str() {
+        "method" => ProjectionRole::Method,
+        "representation" => ProjectionRole::Representation,
+        "omit" => ProjectionRole::Omit,
+        _ => ProjectionRole::CoreIdea,
     }
 }
 
-fn interpretive_discovery_profile() -> DiscoveryProfile {
-    DiscoveryProfile {
-        classification_hint: "interpretive or contested candidate",
-        why_this_hint:
-            "The field name suggests that cases, institutions, schools, or competing interpretations may organize part of the domain.",
-        lenses: vec![
-            DiscoveryLens {
-                name: "Cases and contexts",
-                inspect: "Canonical cases, texts, artifacts, episodes, institutions, and boundary cases.",
-                revise_when: "Stable formal objects or a shared causal mechanism better explains the field.",
-            },
-            DiscoveryLens {
-                name: "Schools and disputes",
-                inspect: "Competing lenses, normative commitments, interpretive traditions, and live controversies.",
-                revise_when: "Apparent schools are historical labels rather than active organizing structures.",
-            },
-            DiscoveryLens {
-                name: "Situated warrants",
-                inspect: "Source criticism, precedent, comparison, triangulation, interpretation, and normative argument.",
-                revise_when: "One warrant system is broadly shared or the goal concerns only one bounded practice.",
-            },
-        ],
-        questions: vec![
-            "Which cases or texts change the meaning of the field's central concepts?",
-            "Where do expert communities disagree about evidence rather than merely conclusions?",
-            "Which institutions or historical conditions make the current structure intelligible?",
-            "Would a debate network, case constellation, genealogy, or comparative matrix reveal more than a hierarchy?",
-        ],
-        source_roles: common_source_roles(),
+fn normalize_profile_text(raw: &str) -> String {
+    let mut output = String::new();
+    let mut previous_space = true;
+    for ch in raw.chars() {
+        if ch.is_alphanumeric() {
+            for folded in ch.to_lowercase() {
+                output.push(folded);
+            }
+            previous_space = false;
+        } else if !previous_space {
+            output.push(' ');
+            previous_space = true;
+        }
     }
+    output.trim().to_string()
 }
 
-fn infrastructure_discovery_profile() -> DiscoveryProfile {
-    DiscoveryProfile {
-        classification_hint: "empirical or infrastructure-bound candidate",
-        why_this_hint:
-            "The field name suggests that instruments, data products, collaborations, or standards may shape what can be known.",
-        lenses: vec![
-            DiscoveryLens {
-                name: "Phenomenon-to-data chain",
-                inspect: "Phenomena, instruments, acquisition, calibration, processing, models, and inference.",
-                revise_when: "The field is organized mainly by formal theory or clinical/professional decisions.",
-            },
-            DiscoveryLens {
-                name: "Infrastructure and coordination",
-                inspect: "Facilities, datasets, software, standards, collaborations, governance, and access.",
-                revise_when: "Infrastructure supports the field but does not shape its central questions or warrants.",
-            },
-            DiscoveryLens {
-                name: "Uncertainty and validation",
-                inspect: "Error budgets, benchmarks, controls, replication, sensitivity, and model comparison.",
-                revise_when: "Different subfields require separate validation chains.",
-            },
-        ],
-        questions: vec![
-            "Where does the object of study become an observation, dataset, or model output?",
-            "Which infrastructure choices constrain the questions that can be asked?",
-            "Which uncertainty transformations are load-bearing but usually hidden?",
-            "Would a pipeline, multiscale system, actor network, or decision flow best expose the field's structure?",
-        ],
-        source_roles: common_source_roles(),
-    }
-}
-
-fn open_discovery_profile() -> DiscoveryProfile {
-    DiscoveryProfile {
-        classification_hint: "open or mixed candidate",
-        why_this_hint:
-            "The field name alone does not justify a dominant organizing lens.",
-        lenses: vec![
-            DiscoveryLens {
-                name: "Objects and concepts",
-                inspect: "Recurring objects, categories, representations, and transformations.",
-                revise_when: "They are local vocabulary rather than the field's organizing structure.",
-            },
-            DiscoveryLens {
-                name: "Practices and warrants",
-                inspect: "Methods, evidence standards, decision rules, and expert performances.",
-                revise_when: "Different communities require separate maps.",
-            },
-            DiscoveryLens {
-                name: "History, institutions, and infrastructure",
-                inspect: "Cases, actors, facilities, standards, datasets, and path dependencies.",
-                revise_when: "They provide context but do not organize the field's knowledge.",
-            },
-        ],
-        questions: vec![
-            "What questions recur across independent descriptions of the field?",
-            "What kinds of things are manipulated, compared, interpreted, measured, or built?",
-            "Which relations make those elements cohere rather than remain a topic list?",
-            "Which candidate organizing form survives comparison against the sources and the user's goal?",
-        ],
-        source_roles: common_source_roles(),
-    }
+fn first_non_empty(values: [&str; 2]) -> String {
+    values
+        .into_iter()
+        .find(|value| !value.trim().is_empty())
+        .unwrap_or("")
+        .to_string()
 }

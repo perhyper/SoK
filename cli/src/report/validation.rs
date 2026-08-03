@@ -181,6 +181,19 @@ pub(crate) fn validate_schema_level_fields(value: &Value, checks: &mut Vec<Diagn
     let Some(report) = require_object_for_validation(root, "report", "/", checks) else {
         return;
     };
+    if let Some(value) = root.get("internal_context") {
+        if let Some(internal_context) = value.as_object() {
+            validate_internal_context_fields(internal_context, checks);
+        } else {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    "/internal_context must be an object",
+                )
+                .with_target("/internal_context", ""),
+            );
+        }
+    }
 
     validate_allowed_keys(
         metadata,
@@ -469,6 +482,85 @@ pub(crate) fn validate_schema_level_fields(value: &Value, checks: &mut Vec<Diagn
         &["scope", "rationale"],
         checks,
     );
+}
+
+pub(crate) fn validate_internal_context_fields(
+    internal_context: &serde_json::Map<String, Value>,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    validate_allowed_keys(
+        internal_context,
+        "/internal_context",
+        &[
+            "raw_learner_profile",
+            "original_goal",
+            "prompt_derived_assumptions",
+            "placeholder_state",
+            "profile_proposals",
+            "handoff_notes",
+        ],
+        checks,
+    );
+
+    if internal_context.contains_key("profile_proposals") {
+        require_array(
+            internal_context,
+            "profile_proposals",
+            "/internal_context",
+            checks,
+        );
+    }
+    let Some(profile_proposals) = internal_context
+        .get("profile_proposals")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+
+    for (index, proposal) in profile_proposals.iter().enumerate() {
+        let path = format!("/internal_context/profile_proposals/{index}");
+        let Some(proposal) = proposal.as_object() else {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!("{path} must be an object"),
+                )
+                .with_target(path, ""),
+            );
+            continue;
+        };
+        validate_allowed_keys(
+            proposal,
+            &path,
+            &[
+                "proposer_type",
+                "profile_id",
+                "profile_version",
+                "locale",
+                "confidence",
+                "rationale",
+            ],
+            checks,
+        );
+        for key in [
+            "proposer_type",
+            "profile_id",
+            "profile_version",
+            "locale",
+            "confidence",
+            "rationale",
+        ] {
+            require_non_empty_string(proposal, key, &path, checks);
+        }
+        validate_string_enum(
+            proposal,
+            "proposer_type",
+            &["user", "agent", "inference", "unknown"],
+            CHECK_VALIDATE_SCHEMA_REQUIRED,
+            &path,
+            checks,
+        );
+    }
 }
 
 pub(crate) fn validate_allowed_keys(
@@ -1156,6 +1248,7 @@ pub(crate) fn is_public_boundary_key(key: &str) -> bool {
             | "original_goal"
             | "prompt_derived_assumptions"
             | "placeholder_state"
+            | "profile_proposals"
             | "handoff_notes"
             | "raw_prompt_intent"
             | "prompt_intent"

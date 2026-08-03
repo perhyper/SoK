@@ -4,6 +4,7 @@ use super::provenance::*;
 use super::relations::*;
 use super::validation::*;
 use super::*;
+use crate::profiles::{self, ProjectionRole};
 
 #[derive(Debug, Clone)]
 pub(crate) struct MarkdownSection {
@@ -1598,30 +1599,28 @@ pub(crate) fn build_domain_profile(
 }
 
 pub(crate) fn domain_classifications_from_text(raw: &str) -> Vec<DomainClassification> {
-    let text = normalize_id_text(raw);
     let mut out = Vec::new();
-    for (needle, classification) in [
-        ("formal", DomainClassification::Formal),
-        ("well structured", DomainClassification::WellStructured),
-        ("ill structured", DomainClassification::IllStructured),
-        (
-            "professional practice",
-            DomainClassification::ProfessionalPractice,
-        ),
-        ("instrument bound", DomainClassification::InstrumentBound),
-        (
-            "infrastructure bound",
-            DomainClassification::InfrastructureBound,
-        ),
-        ("emerging", DomainClassification::Emerging),
-        ("interdisciplinary", DomainClassification::Interdisciplinary),
-        ("mixed", DomainClassification::Mixed),
-    ] {
-        if text.contains(needle) && !out.contains(&classification) {
+    for classification_id in profiles::domain_classification_ids_from_text(raw) {
+        if let Some(classification) = domain_classification_from_id(&classification_id) {
             out.push(classification);
         }
     }
     out
+}
+
+pub(crate) fn domain_classification_from_id(raw: &str) -> Option<DomainClassification> {
+    match raw {
+        "formal" => Some(DomainClassification::Formal),
+        "well_structured" => Some(DomainClassification::WellStructured),
+        "ill_structured" => Some(DomainClassification::IllStructured),
+        "professional_practice" => Some(DomainClassification::ProfessionalPractice),
+        "instrument_bound" => Some(DomainClassification::InstrumentBound),
+        "infrastructure_bound" => Some(DomainClassification::InfrastructureBound),
+        "emerging" => Some(DomainClassification::Emerging),
+        "interdisciplinary" => Some(DomainClassification::Interdisciplinary),
+        "mixed" => Some(DomainClassification::Mixed),
+        _ => None,
+    }
 }
 
 pub(crate) fn build_field_elements(
@@ -1702,10 +1701,9 @@ pub(crate) fn build_knowledge_items(
     let mut methods = Vec::new();
     let mut representations = Vec::new();
     for element in field_elements {
-        let normalized_class = normalize_id_text(&first_non_empty([
-            element.element_class.as_str(),
-            element.label.as_str(),
-        ]));
+        let element_class =
+            first_non_empty([element.element_class.as_str(), element.label.as_str()]);
+        let projection = profiles::projection_for_element_class(&element_class);
         let description = collapse_whitespace(
             &[
                 element.actual_form.as_str(),
@@ -1718,35 +1716,17 @@ pub(crate) fn build_knowledge_items(
             .join("; "),
         );
         let item = KnowledgeItem {
-            id: content_id(knowledge_prefix(&normalized_class), &[&element.label]),
+            id: content_id(&projection.item_prefix, &[&element.label]),
             label: element.label.clone(),
             description,
             source_ids: element.source_ids.clone(),
             ..KnowledgeItem::default()
         };
-        if normalized_class.contains("representation")
-            || normalized_class.contains("model")
-            || normalized_class.contains("notation")
-        {
-            representations.push(item);
-        } else if normalized_class.contains("syntactic")
-            || normalized_class.contains("method")
-            || normalized_class.contains("operation")
-            || normalized_class.contains("practice")
-            || normalized_class.contains("proof")
-            || normalized_class.contains("warrant")
-            || normalized_class.contains("evidence standard")
-        {
-            methods.push(item);
-        } else if normalized_class.contains("failure mode")
-            || normalized_class.contains("frontier")
-            || normalized_class.contains("dispute")
-            || normalized_class.contains("debate")
-            || normalized_class.contains("open problem")
-        {
-            continue;
-        } else {
-            core_ideas.push(item);
+        match projection.role {
+            ProjectionRole::Representation => representations.push(item),
+            ProjectionRole::Method => methods.push(item),
+            ProjectionRole::Omit => continue,
+            ProjectionRole::CoreIdea => core_ideas.push(item),
         }
     }
 
@@ -1767,26 +1747,6 @@ pub(crate) fn build_knowledge_items(
         });
     }
     (core_ideas, methods, representations)
-}
-
-pub(crate) fn knowledge_prefix(normalized_element: &str) -> &'static str {
-    if normalized_element.contains("representation")
-        || normalized_element.contains("model")
-        || normalized_element.contains("notation")
-    {
-        "rep"
-    } else if normalized_element.contains("method")
-        || normalized_element.contains("operation")
-        || normalized_element.contains("practice")
-        || normalized_element.contains("syntactic")
-        || normalized_element.contains("proof")
-        || normalized_element.contains("warrant")
-        || normalized_element.contains("evidence standard")
-    {
-        "method"
-    } else {
-        "concept"
-    }
 }
 
 pub(crate) fn deep_structure_description(row: &BTreeMap<String, String>) -> String {
@@ -2938,7 +2898,89 @@ pub(crate) fn build_internal_context(parsed: &ParsedMarkdownReport) -> InternalC
             .unwrap_or_default(),
         prompt_derived_assumptions,
         placeholder_state,
+        profile_proposals: profile_proposals_from_research_frame(&parsed.research_frame),
         handoff_notes,
+    }
+}
+
+pub(crate) fn profile_proposals_from_research_frame(
+    research_frame: &BTreeMap<String, String>,
+) -> Vec<ProfileProposal> {
+    let profile_id = architecture_value(
+        research_frame,
+        &["Profile proposal", "Proposed profile", "Profile ID"],
+    );
+    let profile_version = architecture_value(
+        research_frame,
+        &[
+            "Profile version",
+            "Proposed profile version",
+            "Profile proposal version",
+        ],
+    );
+    let locale = architecture_value(
+        research_frame,
+        &["Profile locale", "Proposed profile locale", "Locale"],
+    );
+    let proposer = architecture_value(
+        research_frame,
+        &[
+            "Profile proposer type",
+            "Profile proposer",
+            "Proposer type",
+            "Proposed by",
+        ],
+    );
+    let confidence = architecture_value(
+        research_frame,
+        &[
+            "Profile confidence",
+            "Profile proposal confidence",
+            "Confidence",
+        ],
+    );
+    let rationale = architecture_value(
+        research_frame,
+        &[
+            "Profile rationale",
+            "Profile proposal rationale",
+            "Rationale",
+        ],
+    );
+
+    if [
+        profile_id.as_str(),
+        profile_version.as_str(),
+        locale.as_str(),
+        proposer.as_str(),
+        confidence.as_str(),
+        rationale.as_str(),
+    ]
+    .iter()
+    .all(|value| value.trim().is_empty())
+    {
+        return Vec::new();
+    }
+
+    vec![ProfileProposal {
+        proposer_type: parse_profile_proposer_type(&proposer),
+        profile_id: first_non_empty([profile_id.as_str(), "open"]),
+        profile_version: first_non_empty([profile_version.as_str(), "unknown"]),
+        locale: first_non_empty([locale.as_str(), "und"]),
+        confidence: first_non_empty([confidence.as_str(), "unknown"]),
+        rationale: first_non_empty([
+            rationale.as_str(),
+            "Profile proposal imported from Research Frame; provisional until source review.",
+        ]),
+    }]
+}
+
+pub(crate) fn parse_profile_proposer_type(raw: &str) -> ProfileProposerType {
+    match normalize_id_text(raw).as_str() {
+        "user" => ProfileProposerType::User,
+        "agent" => ProfileProposerType::Agent,
+        "inference" => ProfileProposerType::Inference,
+        _ => ProfileProposerType::Unknown,
     }
 }
 

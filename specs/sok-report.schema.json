@@ -777,6 +777,30 @@
         "rationale": { "$ref": "#/$defs/non_empty_string" }
       }
     },
+    "profile_proposal": {
+      "description": "Advisory scaffold-stage proposal for which declarative discovery profile to test during source review. It is not authoritative public report semantics.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposer_type",
+        "profile_id",
+        "profile_version",
+        "locale",
+        "confidence",
+        "rationale"
+      ],
+      "properties": {
+        "proposer_type": {
+          "type": "string",
+          "enum": ["user", "agent", "inference", "unknown"]
+        },
+        "profile_id": { "$ref": "#/$defs/non_empty_string" },
+        "profile_version": { "$ref": "#/$defs/non_empty_string" },
+        "locale": { "$ref": "#/$defs/non_empty_string" },
+        "confidence": { "$ref": "#/$defs/non_empty_string" },
+        "rationale": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
     "internal_context": {
       "type": "object",
       "additionalProperties": false,
@@ -787,6 +811,10 @@
         "placeholder_state": {
           "type": "object",
           "additionalProperties": true
+        },
+        "profile_proposals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/profile_proposal" }
         },
         "handoff_notes": { "$ref": "#/$defs/string_list" }
       }

@@ -585,6 +585,32 @@ pub enum StructureWaiverScope {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileProposal {
+    #[serde(default)]
+    pub proposer_type: ProfileProposerType,
+    #[serde(default)]
+    pub profile_id: String,
+    #[serde(default)]
+    pub profile_version: String,
+    #[serde(default)]
+    pub locale: String,
+    #[serde(default)]
+    pub confidence: String,
+    #[serde(default)]
+    pub rationale: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProfileProposerType {
+    User,
+    Agent,
+    Inference,
+    #[default]
+    Unknown,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InternalContext {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub raw_learner_profile: String,
@@ -594,6 +620,8 @@ pub struct InternalContext {
     pub prompt_derived_assumptions: Vec<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub placeholder_state: BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile_proposals: Vec<ProfileProposal>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub handoff_notes: Vec<String>,
 }
