@@ -6,6 +6,7 @@ pub mod core;
 mod downloader;
 mod profiles;
 pub mod report;
+pub mod run_manifest;
 mod scaffold;
 mod sources;
 

@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use crate::downloader::*;
 use crate::report;
+use crate::run_manifest::{self, RunFile, RunManifestSpec, SemanticPayload};
 use crate::scaffold::*;
 use crate::sources::*;
 
@@ -21,6 +22,8 @@ pub(crate) fn run_init(args: &[String]) -> Result<()> {
     let output_format = flags.string("output-format", "markdown");
     let weeks = flags.int("weeks", 0)?;
     let out = flags.string("out", "");
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
 
     require_field(&field)?;
     validate_mode(&mode)?;
@@ -61,6 +64,25 @@ pub(crate) fn run_init(args: &[String]) -> Result<()> {
     write_sources_csv(out_dir.join("sources.csv"))?;
 
     println!("Created SoK agent workspace: {}", out_dir.display());
+    let output_files = vec![
+        run_file("agent-pack", out_dir.join("sok-agent-pack.json")),
+        run_file("agent-brief", out_dir.join("agent-brief.md")),
+        run_file("tasks", out_dir.join("tasks.md")),
+        run_file("report-scaffold", out_dir.join("report.md")),
+        run_file("source-manifest", out_dir.join("sources.csv")),
+    ];
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "init",
+        args,
+        stage: "init",
+        profile_version: run_manifest::default_profile_version_for_field(&field),
+        started_at,
+        inputs: Vec::new(),
+        outputs: output_files,
+        semantic_payloads: Vec::new(),
+        network: false,
+    })?;
     Ok(())
 }
 
@@ -73,6 +95,8 @@ pub(crate) fn run_brief(args: &[String]) -> Result<()> {
     let output_format = flags.string("output-format", "markdown");
     let output = flags.string("output", "");
     let weeks = flags.int("weeks", 0)?;
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
 
     require_field(&field)?;
     validate_mode(&mode)?;
@@ -83,6 +107,22 @@ pub(crate) fn run_brief(args: &[String]) -> Result<()> {
         write_text(&output, &content)?;
         println!("Wrote {output}");
     }
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "brief",
+        args,
+        stage: "brief",
+        profile_version: run_manifest::default_profile_version_for_field(&field),
+        started_at,
+        inputs: Vec::new(),
+        outputs: output_file("brief", &output),
+        semantic_payloads: vec![SemanticPayload::from_text(
+            "brief",
+            "stdout-or-file",
+            &content,
+        )],
+        network: false,
+    })?;
     Ok(())
 }
 
@@ -93,6 +133,8 @@ pub(crate) fn run_scaffold(args: &[String]) -> Result<()> {
     let goal = flags.string("goal", "build field-entry to research-fluent understanding");
     let output = flags.string("output", "");
     let weeks = flags.int("weeks", 0)?;
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
 
     require_field(&field)?;
     let content = build_report_scaffold(&field, &learner, &goal, weeks);
@@ -102,6 +144,22 @@ pub(crate) fn run_scaffold(args: &[String]) -> Result<()> {
         write_text(&output, &content)?;
         println!("Wrote {output}");
     }
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "scaffold",
+        args,
+        stage: "scaffold",
+        profile_version: run_manifest::default_profile_version_for_field(&field),
+        started_at,
+        inputs: Vec::new(),
+        outputs: output_file("report-scaffold", &output),
+        semantic_payloads: vec![SemanticPayload::from_text(
+            "report-scaffold",
+            "stdout-or-file",
+            &content,
+        )],
+        network: false,
+    })?;
     Ok(())
 }
 
@@ -113,6 +171,8 @@ pub(crate) fn run_handoff_report(args: &[String]) -> Result<()> {
     let scaffold_path = flags.string("scaffold", "");
     let output = flags.string("output", "");
     let mut weeks = flags.int("weeks", 0)?;
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
 
     let mut scaffold = String::new();
     if !scaffold_path.is_empty() {
@@ -149,17 +209,47 @@ pub(crate) fn run_handoff_report(args: &[String]) -> Result<()> {
         write_text(&output, &content)?;
         println!("Wrote {output}");
     }
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "handoff-report",
+        args,
+        stage: "handoff-report",
+        profile_version: run_manifest::default_profile_version_for_field(&field),
+        started_at,
+        inputs: input_file("scaffold", &scaffold_path),
+        outputs: output_file("handoff-report", &output),
+        semantic_payloads: vec![SemanticPayload::from_text(
+            "handoff-report",
+            "stdout-or-file",
+            &content,
+        )],
+        network: false,
+    })?;
     Ok(())
 }
 
 pub(crate) fn run_source_template(args: &[String]) -> Result<()> {
     let flags = parse_flags(args, &[])?;
     let output = flags.string("output", "");
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
     if output.is_empty() {
         bail!("--output is required");
     }
     write_sources_csv(&output)?;
     println!("Wrote {output}");
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "source-template",
+        args,
+        stage: "source-template",
+        profile_version: "unknown".to_string(),
+        started_at,
+        inputs: Vec::new(),
+        outputs: output_file("source-manifest-template", &output),
+        semantic_payloads: Vec::new(),
+        network: false,
+    })?;
     Ok(())
 }
 
@@ -182,7 +272,7 @@ pub(crate) fn print_ingest_usage() {
         r#"SoK ingest commands
 
 Usage:
-  sok ingest last --sources <sources.csv|sources.tsv|sources.json> --output <evidence.jsonl>
+  sok ingest last --sources <sources.csv|sources.tsv|sources.json> --output <evidence.jsonl> [--run-manifest <sok-run.json>]
 
 Commands:
   last   Normalize the current run's source manifest into cataloged evidence JSONL.
@@ -204,6 +294,8 @@ pub(crate) fn run_ingest_last(args: &[String]) -> Result<()> {
     let sources = flags.string("sources", "");
     let manifest = flags.string("manifest", "");
     let output = flags.string("output", "");
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
 
     if !sources.is_empty() && !manifest.is_empty() && sources != manifest {
         bail!("use only one of --sources or --manifest");
@@ -232,6 +324,18 @@ pub(crate) fn run_ingest_last(args: &[String]) -> Result<()> {
             );
         }
     }
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "ingest last",
+        args,
+        stage: "ingest",
+        profile_version: "unknown".to_string(),
+        started_at,
+        inputs: input_file("source-manifest", &input),
+        outputs: output_file("evidence-jsonl", &output),
+        semantic_payloads: Vec::new(),
+        network: false,
+    })?;
     Ok(())
 }
 
@@ -247,8 +351,8 @@ pub(crate) fn ingest_last_manifest(
 pub(crate) fn print_ingest_last_usage() {
     println!(
         r#"Usage:
-  sok ingest last --sources <sources.csv|sources.tsv|sources.json> --output <evidence.jsonl>
-  sok ingest last --manifest <sources.csv|sources.tsv|sources.json> --output <evidence.jsonl>
+  sok ingest last --sources <sources.csv|sources.tsv|sources.json> --output <evidence.jsonl> [--run-manifest <sok-run.json>]
+  sok ingest last --manifest <sources.csv|sources.tsv|sources.json> --output <evidence.jsonl> [--run-manifest <sok-run.json>]
 
 Writes one cataloged EvidenceEntry JSON object per source row.
 The command does not download, crawl, browse, or append to any global ledger.
@@ -275,8 +379,11 @@ pub(crate) fn run_export_json(args: &[String]) -> Result<()> {
     let evidence_package = flags.string("evidence-package", "");
     let pedagogy = flags.string("pedagogy", "");
     let output = flags.string("output", "");
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
 
     let stage = parse_export_stage(&stage)?;
+    let stage_label = export_stage_label(stage);
     if !report_path.is_empty() && !scaffold_path.is_empty() && report_path != scaffold_path {
         bail!("use only one of --report or --scaffold");
     }
@@ -310,6 +417,29 @@ pub(crate) fn run_export_json(args: &[String]) -> Result<()> {
     )?;
     report::write_json_file(&output, &document)?;
     println!("Wrote {output}");
+    let mut inputs = vec![
+        run_file("markdown-report", report_input),
+        run_file("source-manifest", sources.as_str()),
+    ];
+    inputs.extend(input_file("evidence-jsonl", &evidence));
+    inputs.extend(input_file("sok-knowledge", &knowledge));
+    inputs.extend(input_file("sok-evidence", &evidence_package));
+    inputs.extend(input_file("sok-pedagogy", &pedagogy));
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "export-json",
+        args,
+        stage: stage_label,
+        profile_version: run_manifest::profile_version_from_report(&document),
+        started_at,
+        inputs,
+        outputs: output_file("sok-report", &output),
+        semantic_payloads: vec![SemanticPayload::from_report_document(
+            "sok-report",
+            &document,
+        )?],
+        network: false,
+    })?;
     if let Some(diagnostics) = document.diagnostics {
         println!("Diagnostics: {}", diagnostics.checks.len());
         for check in diagnostics.checks {
@@ -336,8 +466,8 @@ fn parse_export_stage(stage: &str) -> Result<report::ExportStage> {
 pub(crate) fn print_export_json_usage() {
     println!(
         r#"Usage:
-  sok export-json --stage scaffold|final --report <report.md> --sources <sources.csv|sources.tsv|sources.json> --output <sok-report.json> [--evidence <evidence.jsonl>]
-  sok export-json --stage scaffold|final --scaffold <report.md> --sources <sources.csv|sources.tsv|sources.json> --output <sok-report.json> [--evidence <evidence.jsonl>]
+  sok export-json --stage scaffold|final --report <report.md> --sources <sources.csv|sources.tsv|sources.json> --output <sok-report.json> [--evidence <evidence.jsonl>] [--run-manifest <sok-run.json>]
+  sok export-json --stage scaffold|final --scaffold <report.md> --sources <sources.csv|sources.tsv|sources.json> --output <sok-report.json> [--evidence <evidence.jsonl>] [--run-manifest <sok-run.json>]
 
 The --scaffold flag is a path alias for --report.
 Machine lane sidecars are optional: --knowledge <sok-knowledge.json>, --evidence-package <sok-evidence.json>, and --pedagogy <sok-pedagogy.json>.
@@ -480,6 +610,8 @@ pub(crate) fn run_migrate_ids(args: &[String]) -> Result<()> {
     let flags = parse_flags(args, &[])?;
     let input = flags.string("input", "");
     let output = flags.string("output", "");
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
     if input.is_empty() {
         bail!("--input is required");
     }
@@ -500,13 +632,29 @@ pub(crate) fn run_migrate_ids(args: &[String]) -> Result<()> {
     let migration = report::build_id_migration(&document);
     report::write_json_file(&output, &migration)?;
     println!("Wrote {output}");
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "migrate-ids",
+        args,
+        stage: "migrate-ids",
+        profile_version: "unknown".to_string(),
+        started_at,
+        inputs: input_file("sok-report", &input),
+        outputs: output_file("id-migration-map", &output),
+        semantic_payloads: vec![SemanticPayload::from_json_value(
+            "id-migration-map",
+            "id-migration-map",
+            &serde_json::to_value(&migration)?,
+        )?],
+        network: false,
+    })?;
     Ok(())
 }
 
 pub(crate) fn print_migrate_ids_usage() {
     println!(
         r#"Usage:
-  sok migrate-ids --input <sok-report.json> --output <id-map.json>
+  sok migrate-ids --input <sok-report.json> --output <id-map.json> [--run-manifest <sok-run.json>]
 
 Reads a sok-report/v1 or sok-report/v2 artifact and writes a deterministic old-to-new ID migration map.
 The input report is never rewritten in place."#
@@ -535,6 +683,8 @@ pub(crate) fn run_render_html(args: &[String]) -> Result<()> {
     let flags = parse_flags(args, &[])?;
     let input = flags.string("input", "");
     let output = flags.string("output", "");
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
     if input.is_empty() {
         bail!("--input is required");
     }
@@ -544,13 +694,29 @@ pub(crate) fn run_render_html(args: &[String]) -> Result<()> {
 
     report::render_html_report_file(&input, &output)?;
     println!("Wrote {output}");
+    let document: report::ReportDocument = report::read_json_file(&input)?;
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "render-html",
+        args,
+        stage: "render-html",
+        profile_version: run_manifest::profile_version_from_report(&document),
+        started_at,
+        inputs: input_file("sok-report", &input),
+        outputs: output_file("html-report", &output),
+        semantic_payloads: vec![SemanticPayload::from_report_document(
+            "rendered-sok-report",
+            &document,
+        )?],
+        network: false,
+    })?;
     Ok(())
 }
 
 pub(crate) fn print_render_html_usage() {
     println!(
         r#"Usage:
-  sok render-html --input <sok-report.json> --output <report.html>
+  sok render-html --input <sok-report.json> --output <report.html> [--run-manifest <sok-run.json>]
 
 Renders a validated human_report JSON file into a self-contained local HTML report.
 Only the explicit public report payload is rendered; internal_context and diagnostics are ignored."#
@@ -574,6 +740,71 @@ fn diagnostic_severity_label(severity: report::DiagnosticSeverity) -> &'static s
         report::DiagnosticSeverity::Info => "info",
         report::DiagnosticSeverity::Warning => "warning",
         report::DiagnosticSeverity::Error => "error",
+    }
+}
+
+fn run_file(kind: &str, path: impl Into<PathBuf>) -> RunFile {
+    RunFile::new(kind, path)
+}
+
+fn input_file(kind: &str, path: &str) -> Vec<RunFile> {
+    if path.trim().is_empty() {
+        Vec::new()
+    } else {
+        vec![run_file(kind, path)]
+    }
+}
+
+fn output_file(kind: &str, path: &str) -> Vec<RunFile> {
+    if path.trim().is_empty() {
+        Vec::new()
+    } else {
+        vec![run_file(kind, path)]
+    }
+}
+
+struct OptionalRunManifest<'a> {
+    path: &'a str,
+    command: &'a str,
+    args: &'a [String],
+    stage: &'a str,
+    profile_version: String,
+    started_at: String,
+    inputs: Vec<RunFile>,
+    outputs: Vec<RunFile>,
+    semantic_payloads: Vec<SemanticPayload>,
+    network: bool,
+}
+
+fn write_optional_run_manifest(request: OptionalRunManifest<'_>) -> Result<()> {
+    if request.path.trim().is_empty() {
+        return Ok(());
+    }
+
+    let mut spec = RunManifestSpec::new(request.command);
+    spec.command_args = request.args.to_vec();
+    spec.stage = request.stage.to_string();
+    spec.profile_version = request.profile_version;
+    spec.started_at = request.started_at;
+    spec.finished_at = run_manifest::timestamp_now();
+    spec.declared_permissions = run_manifest::declared_permissions_for_files(
+        &request.inputs,
+        &request.outputs,
+        request.network,
+    );
+    spec.bounded_input_files = request.inputs;
+    spec.output_files = request.outputs;
+    spec.semantic_payloads = request.semantic_payloads;
+    let manifest = run_manifest::build_run_manifest(spec)?;
+    run_manifest::write_run_manifest(request.path, &manifest)?;
+    println!("Wrote {}", request.path);
+    Ok(())
+}
+
+fn export_stage_label(stage: report::ExportStage) -> &'static str {
+    match stage {
+        report::ExportStage::Scaffold => "scaffold",
+        report::ExportStage::Final => "final",
     }
 }
 
@@ -613,6 +844,8 @@ pub(crate) fn run_download_sources(args: &[String]) -> Result<()> {
     let dry_run = flags.bool("dry-run");
     let max_mb = flags.int("max-mb", 100)?;
     let timeout_seconds = flags.int("timeout", 30)?;
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
 
     if manifest.is_empty() {
         bail!("--manifest is required");
@@ -640,6 +873,7 @@ pub(crate) fn run_download_sources(args: &[String]) -> Result<()> {
         .append(true)
         .open(&log_path)
         .with_context(|| format!("open {}", log_path.display()))?;
+    let mut downloaded_outputs = Vec::new();
 
     for (index, item) in sources.iter().enumerate() {
         let mut record = DownloadRecord {
@@ -677,6 +911,9 @@ pub(crate) fn run_download_sources(args: &[String]) -> Result<()> {
         ) {
             Ok(()) => {
                 write_download_record(&mut log_file, &record)?;
+                if !record.path.trim().is_empty() {
+                    downloaded_outputs.push(run_file("downloaded-source", record.path.as_str()));
+                }
                 println!("DOWNLOADED {}: {}", record.title, record.path);
             }
             Err(err) => {
@@ -688,6 +925,24 @@ pub(crate) fn run_download_sources(args: &[String]) -> Result<()> {
         }
     }
     println!("Wrote log: {}", log_path.display());
+    let mut output_files = vec![run_file("download-log", log_path)];
+    output_files.extend(downloaded_outputs);
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "download-sources",
+        args,
+        stage: if dry_run {
+            "download-dry-run"
+        } else {
+            "download"
+        },
+        profile_version: "unknown".to_string(),
+        started_at,
+        inputs: input_file("source-manifest", &manifest),
+        outputs: output_files,
+        semantic_payloads: Vec::new(),
+        network: !dry_run,
+    })?;
     Ok(())
 }
 
@@ -695,6 +950,8 @@ pub(crate) fn run_specificity(args: &[String]) -> Result<()> {
     let flags = parse_flags(args, &[])?;
     let field = flags.string("field", "");
     let output = flags.string("output", "");
+    let run_manifest_path = flags.string("run-manifest", "");
+    let started_at = run_manifest::timestamp_now();
     require_field(&field)?;
     let content = build_specificity_checklist(&field);
     if output.is_empty() {
@@ -703,6 +960,22 @@ pub(crate) fn run_specificity(args: &[String]) -> Result<()> {
         write_text(&output, &content)?;
         println!("Wrote {output}");
     }
+    write_optional_run_manifest(OptionalRunManifest {
+        path: &run_manifest_path,
+        command: "specificity",
+        args,
+        stage: "specificity",
+        profile_version: run_manifest::default_profile_version_for_field(&field),
+        started_at,
+        inputs: Vec::new(),
+        outputs: output_file("specificity-checklist", &output),
+        semantic_payloads: vec![SemanticPayload::from_text(
+            "specificity-checklist",
+            "stdout-or-file",
+            &content,
+        )],
+        network: false,
+    })?;
     Ok(())
 }
 

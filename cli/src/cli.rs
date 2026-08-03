@@ -112,7 +112,7 @@ pub(crate) fn print_command_usage(command: &str) -> Result<()> {
 fn print_init_usage() {
     println!(
         r#"Usage:
-  sok init --field <field> --out <directory> [--learner <description>] [--goal <goal>] [--mode research|textbook|model-tuning|curriculum] [--weeks <number>] [--output-format <format>]
+  sok init --field <field> --out <directory> [--learner <description>] [--goal <goal>] [--mode research|textbook|model-tuning|curriculum] [--weeks <number>] [--output-format <format>] [--run-manifest <sok-run.json>]
 
 Creates an agent workspace with a brief, task list, report scaffold, header-only source manifest, and working directories."#
     );
@@ -121,7 +121,7 @@ Creates an agent workspace with a brief, task list, report scaffold, header-only
 fn print_brief_usage() {
     println!(
         r#"Usage:
-  sok brief --field <field> [--learner <description>] [--goal <goal>] [--mode research|textbook|model-tuning|curriculum] [--weeks <number>] [--output-format <format>] [--output <brief.md>]
+  sok brief --field <field> [--learner <description>] [--goal <goal>] [--mode research|textbook|model-tuning|curriculum] [--weeks <number>] [--output-format <format>] [--output <brief.md>] [--run-manifest <sok-run.json>]
 
 Writes the brief to --output or prints it to standard output."#
     );
@@ -130,7 +130,7 @@ Writes the brief to --output or prints it to standard output."#
 fn print_scaffold_usage() {
     println!(
         r#"Usage:
-  sok scaffold --field <field> [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <scaffold.md>]
+  sok scaffold --field <field> [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <scaffold.md>] [--run-manifest <sok-run.json>]
 
 Writes a provisional source-review and report-architecture canvas to --output or prints it to standard output."#
     );
@@ -139,8 +139,8 @@ Writes a provisional source-review and report-architecture canvas to --output or
 fn print_handoff_report_usage() {
     println!(
         r#"Usage:
-  sok handoff-report --scaffold <scaffold.md> [--field <field>] [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <handoff.md>]
-  sok handoff-report --field <field> [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <handoff.md>]
+  sok handoff-report --scaffold <scaffold.md> [--field <field>] [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <handoff.md>] [--run-manifest <sok-run.json>]
+  sok handoff-report --field <field> [--learner <description>] [--goal <goal>] [--weeks <number>] [--output <handoff.md>] [--run-manifest <sok-run.json>]
 
 Uses the supplied scaffold when present; otherwise creates one from --field. Writes to --output or standard output."#
     );
@@ -149,7 +149,7 @@ Uses the supplied scaffold when present; otherwise creates one from --field. Wri
 fn print_source_template_usage() {
     println!(
         r#"Usage:
-  sok source-template --output <sources.csv>
+  sok source-template --output <sources.csv> [--run-manifest <sok-run.json>]
 
 Creates a header-only source manifest. Add real source rows before ingesting it; the template never inserts placeholder evidence."#
     );
@@ -167,7 +167,7 @@ Checks source identity, access, and source-role metadata. --strict returns an er
 fn print_download_sources_usage() {
     println!(
         r#"Usage:
-  sok download-sources --manifest <sources.csv|sources.tsv|sources.json> --out-dir <directory> [--allow-status <comma-separated-statuses>] [--include-unknown] [--dry-run] [--max-mb <number>] [--timeout <seconds>]
+  sok download-sources --manifest <sources.csv|sources.tsv|sources.json> --out-dir <directory> [--allow-status <comma-separated-statuses>] [--include-unknown] [--dry-run] [--max-mb <number>] [--timeout <seconds>] [--run-manifest <sok-run.json>]
 
 Downloads only sources allowed by access status. Inspect a --dry-run before permitting network downloads."#
     );
@@ -176,7 +176,7 @@ Downloads only sources allowed by access status. Inspect a --dry-run before perm
 fn print_specificity_usage() {
     println!(
         r#"Usage:
-  sok specificity --field <field> [--output <checklist.md>]
+  sok specificity --field <field> [--output <checklist.md>] [--run-manifest <sok-run.json>]
 
 Writes a domain-task specificity checklist to --output or prints it to standard output."#
     );

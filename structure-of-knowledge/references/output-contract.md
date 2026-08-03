@@ -19,6 +19,8 @@ Keep agent scaffolds and human-reader reports separate. Scaffolds may expose lea
 
 For tool-facing output, `sok-report.json` is the structured compatibility projection. Markdown scaffolds and human reports remain the human authoring and compatibility import lane for `sok export-json`; HTML is a rendered public view of validated `human_report` JSON. `internal_context` and `diagnostics` are never public report content.
 
+When reproducibility metadata is needed, artifact-producing commands may also write a private `sok-run/v1` sidecar with `--run-manifest <sok-run.json>`. The run manifest records command metadata, declared permissions, bounded input file hashes, output file hashes, optional executor metadata, and a timestamp-independent semantic digest. Treat it as disposable private run metadata; do not embed run manifests, executor details, or private paths in `sok-report.json` or rendered HTML.
+
 Machine input is opt-in. `sok export-json` may also read typed core sidecars with `--knowledge <sok-knowledge.json>`, `--evidence-package <sok-evidence.json>`, and `--pedagogy <sok-pedagogy.json>`, or typed fenced blocks in the Markdown:
 
 ````markdown

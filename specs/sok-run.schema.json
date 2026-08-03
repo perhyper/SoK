@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sok-run.schema.json",
+  "title": "Structure of Knowledge Run Manifest",
+  "description": "Private run sidecar for command metadata, declared permissions, full file hashes, and a timestamp-independent semantic digest. This document is reproducibility metadata and must not be embedded in public sok-report payloads.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "sok_revision",
+    "skill_revision",
+    "profile_version",
+    "command",
+    "stage",
+    "declared_permissions",
+    "bounded_input_files",
+    "work_order_hashes",
+    "work_result_hashes",
+    "output_files",
+    "semantic_digest",
+    "timestamps"
+  ],
+  "properties": {
+    "schema_version": { "const": "sok-run/v1" },
+    "run_id": {
+      "type": "string",
+      "pattern": "^run-[0-9a-f]{16}$"
+    },
+    "sok_revision": { "$ref": "#/$defs/revision_info" },
+    "skill_revision": { "$ref": "#/$defs/revision_info" },
+    "profile_version": { "$ref": "#/$defs/non_empty_string" },
+    "executor": { "$ref": "#/$defs/executor_metadata" },
+    "command": { "$ref": "#/$defs/command" },
+    "stage": { "type": "string" },
+    "declared_permissions": { "$ref": "#/$defs/declared_permissions" },
+    "bounded_input_files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file_hash" }
+    },
+    "work_order_hashes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/content_hash" }
+    },
+    "work_result_hashes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/content_hash" }
+    },
+    "output_files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file_hash" }
+    },
+    "semantic_digest": { "$ref": "#/$defs/semantic_digest" },
+    "timestamps": { "$ref": "#/$defs/timestamps" }
+  },
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision_info": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "$ref": "#/$defs/non_empty_string" },
+        "version": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "executor_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "executor_id": { "type": "string" },
+        "executor_kind": { "type": "string" },
+        "executor_version": { "type": "string" }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "$ref": "#/$defs/non_empty_string" },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "declared_permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["network", "subprocess", "read_roots", "write_roots"],
+      "properties": {
+        "network": { "type": "boolean" },
+        "subprocess": { "type": "boolean" },
+        "read_roots": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        },
+        "write_roots": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        }
+      }
+    },
+    "file_hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "sha256", "bytes"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/non_empty_string" },
+        "path": { "$ref": "#/$defs/non_empty_string" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "content_hash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label", "sha256"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/non_empty_string" },
+        "label": { "$ref": "#/$defs/non_empty_string" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "semantic_digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "value"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "value": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "finished_at"],
+      "properties": {
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
