@@ -2150,6 +2150,52 @@ fn work_permission_envelopes_default_deny_and_constrain_roots() {
     assert_work_check(&validation, work::validation::CHECK_WORK_PERMISSION);
 }
 
+#[cfg(unix)]
+#[test]
+fn work_permission_envelopes_reject_symlink_escapes() {
+    use std::os::unix::fs::symlink;
+
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let outside_input = outside.path().join("outside-input.json");
+    fs::write(&outside_input, "{}\n").unwrap();
+    let escape = root.path().join("escape");
+    symlink(outside.path(), &escape).unwrap();
+
+    let escaped_input = escape.join("outside-input.json");
+    let escaped_output = escape.join("outside-output.json");
+    let mut order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    order.permissions.read_roots = vec![root.path().display().to_string()];
+    order.permissions.write_roots = vec![root.path().display().to_string()];
+    order.input_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        escaped_input.display().to_string(),
+    )];
+    order.output_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        escaped_output.display().to_string(),
+    )];
+
+    let validation = work::validate_work_order(&order);
+    assert_work_check(&validation, work::validation::CHECK_WORK_PERMISSION);
+    assert!(work::permissions::ensure_read_path(&order.permissions, &escaped_input).is_err());
+    assert!(work::permissions::ensure_write_path(&order.permissions, &escaped_output).is_err());
+
+    let outside_child = outside.path().join("child");
+    fs::create_dir(&outside_child).unwrap();
+    let outside_parent_input = outside.path().join("parent-input.json");
+    fs::write(&outside_parent_input, "{}\n").unwrap();
+    let jump = root.path().join("jump");
+    symlink(&outside_child, &jump).unwrap();
+    let parent_escape_input = jump.join("..").join("parent-input.json");
+    let parent_escape_output = jump.join("..").join("parent-output.json");
+
+    assert!(work::permissions::ensure_read_path(&order.permissions, &parent_escape_input).is_err());
+    assert!(
+        work::permissions::ensure_write_path(&order.permissions, &parent_escape_output).is_err()
+    );
+}
+
 #[test]
 fn work_patch_accepts_valid_patches_and_rejects_invalid_paths_versions_and_dangling_refs() {
     let packages = core_fixture_packages();
@@ -2317,6 +2363,32 @@ fn work_accept_patch_cli_writes_new_validated_output_without_mutating_input() {
         .elements
         .iter()
         .any(|element| element.id == "element-command-string-4444444444"));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+
+        let alias_path = dir.path().join("core-input-alias.json");
+        symlink(&input_path, &alias_path).unwrap();
+        let err = run_cli(vec![
+            "work".to_string(),
+            "accept-patch".to_string(),
+            "--order".to_string(),
+            order_path.display().to_string(),
+            "--result".to_string(),
+            result_path.display().to_string(),
+            "--input".to_string(),
+            input_path.display().to_string(),
+            "--output".to_string(),
+            alias_path.display().to_string(),
+        ])
+        .unwrap_err();
+        assert_contains(
+            &err.to_string(),
+            "--output must be a new file; refusing to mutate --input in place",
+        );
+        assert_eq!(fs::read_to_string(&input_path).unwrap(), input_before);
+    }
 }
 
 #[test]

@@ -71,6 +71,8 @@ The scaffold guides source review, field-element extraction, organizing-form com
 
 Each run is bounded to its Markdown, source manifest, and reviewed evidence. It creates no persistent database or cross-run evidence store.
 
+From a development checkout, run `make build` before using the release-binary paths below. An installed copy can use `$SOK_CLI` instead.
+
 ```bash
 REPORT=/path/to/report.md
 SOURCES=/path/to/sources.csv
@@ -110,7 +112,7 @@ handoff-report    Prepare a scaffold for human-report completion.
 source-template   Create a source manifest template.
 audit-sources     Audit access metadata.
 download-sources  Download explicitly open or user-provided sources.
-ingest last       Normalize source metadata into bounded evidence JSONL.
+ingest last       Normalize source metadata into cataloged, non-supporting evidence candidates in JSONL.
 lint              Check Markdown, sources, and evidence before export.
 export-json       Export bounded inputs to sok-report.json.
 validate-report   Validate evidence, currentness, relations, and references.

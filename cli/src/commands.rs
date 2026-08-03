@@ -1083,10 +1083,13 @@ fn read_stdin() -> Result<String> {
 }
 
 fn ensure_distinct_paths(input: &str, output: &str) -> Result<()> {
-    let input = work::permissions::absolute_normalized(Path::new(input))?;
-    let output = work::permissions::absolute_normalized(Path::new(output))?;
+    let input = work::permissions::resolved_normalized(Path::new(input))?;
+    let output = work::permissions::resolved_normalized(Path::new(output))?;
     if input == output {
         bail!("--output must be a new file; refusing to mutate --input in place");
+    }
+    if fs::symlink_metadata(output).is_ok() {
+        bail!("--output must be a new file; refusing to overwrite an existing path");
     }
     Ok(())
 }
