@@ -1802,6 +1802,147 @@ fn sok_id_migration_schema_declares_reviewable_map_contract() {
 }
 
 #[test]
+fn sok_core_schemas_declare_versioned_package_contracts() {
+    let knowledge = load_repo_json("specs/sok-knowledge.schema.json");
+    let evidence = load_repo_json("specs/sok-evidence.schema.json");
+    let pedagogy = load_repo_json("specs/sok-pedagogy.schema.json");
+    assert_eq!(
+        knowledge["$schema"],
+        json!("https://json-schema.org/draft/2020-12/schema")
+    );
+    assert_eq!(
+        knowledge["properties"]["schema_version"]["const"],
+        json!("sok-knowledge/v1")
+    );
+    assert_eq!(
+        evidence["properties"]["schema_version"]["const"],
+        json!("sok-evidence/v1")
+    );
+    assert_eq!(
+        pedagogy["properties"]["schema_version"]["const"],
+        json!("sok-pedagogy/v1")
+    );
+    assert!(knowledge["$defs"]["knowledge_element"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("semantic_roles"));
+    assert!(evidence["$defs"]["claim"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("evidence_links"));
+    assert!(pedagogy["$defs"]["learning_step"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("prerequisite_ids"));
+
+    let report_schema = load_repo_json("specs/sok-report.schema.json");
+    let public_report_properties = report_schema["$defs"]["public_report"]["properties"]
+        .as_object()
+        .unwrap();
+    for disallowed in ["knowledge", "evidence_package", "pedagogy", "core_packages"] {
+        assert!(
+            !public_report_properties.contains_key(disallowed),
+            "sok-report schema must not embed secondary core package field {disallowed}"
+        );
+    }
+}
+
+#[test]
+fn core_validators_reject_unknown_versions_and_dangling_references() {
+    assert!(
+        serde_json::from_value::<crate::core::knowledge::KnowledgePackage>(json!({
+            "elements": []
+        }))
+        .is_err()
+    );
+
+    let mut packages = core_fixture_packages();
+    let valid = crate::core::validation::validate_core_packages(&packages);
+    assert_eq!(valid.error_count(), 0, "{:?}", valid.diagnostics);
+
+    packages.knowledge.schema_version = "sok-knowledge/v99".to_string();
+    packages.knowledge.elements[0]
+        .source_ids
+        .push("src-missing-source-9999999999".to_string());
+    packages.pedagogy.learning_path[1]
+        .prerequisite_ids
+        .push("element-missing-prerequisite-9999999999".to_string());
+    let validation = crate::core::validation::validate_core_packages(&packages);
+    assert_validation_check(
+        &report::ReportValidation {
+            diagnostics: validation.diagnostics.clone(),
+        },
+        crate::core::validation::CHECK_CORE_VERSION,
+        report::DiagnosticSeverity::Error,
+    );
+    assert_validation_check(
+        &report::ReportValidation {
+            diagnostics: validation.diagnostics.clone(),
+        },
+        crate::core::validation::CHECK_CORE_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut broken_support = core_fixture_packages();
+    broken_support.evidence.claims[0].evidence_links[0]
+        .reviewed_at
+        .clear();
+    let support_validation = crate::core::validation::validate_core_packages(&broken_support);
+    assert_validation_check(
+        &report::ReportValidation {
+            diagnostics: support_validation.diagnostics,
+        },
+        crate::core::validation::CHECK_CORE_SUPPORT,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
+fn core_packages_project_to_sok_report_v2_and_html() {
+    let packages = core_fixture_packages();
+    let validation = crate::core::validation::validate_core_packages(&packages);
+    assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
+
+    let projected = crate::core::projection::project_report_compatibility(
+        &packages,
+        &core_projection_context(),
+    )
+    .unwrap();
+    assert_eq!(projected.metadata.schema_version, "sok-report/v2");
+    assert_eq!(projected.report.field, "Quantum sensing");
+    assert_eq!(projected.report.field_elements.len(), 3);
+    assert!(projected
+        .report
+        .core_ideas
+        .iter()
+        .any(|item| item.label == "Physical quantity"));
+    assert!(projected
+        .report
+        .methods
+        .iter()
+        .any(|item| item.label == "Calibration transfer"));
+    assert!(projected
+        .report
+        .representations
+        .iter()
+        .any(|item| item.label == "Noise model"));
+    assert_eq!(projected.report.literature_ladder.len(), 1);
+    assert_eq!(projected.report.curriculum_path.len(), 2);
+
+    let report_validation =
+        report::validate_report_value(&serde_json::to_value(&projected).unwrap());
+    assert_eq!(
+        report_validation.error_count(),
+        0,
+        "{:?}",
+        report_validation.diagnostics
+    );
+    let html = report::render_html_report(&projected).unwrap();
+    assert_contains(&html, "Quantum sensing");
+    assert_contains(&html, "Calibration transfer");
+}
+
+#[test]
 fn sok_report_fixtures_match_smoke_contract() {
     let final_report = current_human_report_value();
     validate_sok_report_smoke(&final_report).unwrap();
@@ -4923,6 +5064,88 @@ fn current_scaffold_report_document() -> report::ReportDocument {
 
 fn current_scaffold_report_value() -> Value {
     serde_json::to_value(current_scaffold_report_document()).unwrap()
+}
+
+fn core_fixture_packages() -> crate::core::CorePackages {
+    crate::core::CorePackages {
+        knowledge: report::read_json_file(repo_path(
+            "cli/tests/fixtures/core/knowledge-valid.json",
+        ))
+        .unwrap(),
+        evidence: report::read_json_file(repo_path("cli/tests/fixtures/core/evidence-valid.json"))
+            .unwrap(),
+        pedagogy: report::read_json_file(repo_path("cli/tests/fixtures/core/pedagogy-valid.json"))
+            .unwrap(),
+    }
+}
+
+fn core_projection_context() -> report::ReportDocument {
+    report::ReportDocument {
+        metadata: report::ReportMetadata {
+            schema_version: "sok-report/v2".to_string(),
+            generated_at: "2026-07-16T00:00:00Z".to_string(),
+            report_type: report::ReportType::HumanReport,
+            temporal_review: report::TemporalMarker {
+                as_of: "2026-07-16".to_string(),
+                review_after: "2027-01-16".to_string(),
+                temporal_status: report::TemporalStatus::Current,
+                rationale: "Projection fixture context.".to_string(),
+            },
+            generator: Some(report::GeneratorInfo {
+                name: "core projection fixture".to_string(),
+                version: "1".to_string(),
+            }),
+        },
+        report: report::PublicReport {
+            field: "Unset field".to_string(),
+            scope: report::Scope {
+                summary: "Quantum sensing is read as a measurement chain.".to_string(),
+                included: vec!["Core measurement-chain concepts".to_string()],
+                excluded: Vec::new(),
+                assumptions: Vec::new(),
+                interpretive_notes: Vec::new(),
+            },
+            domain_profile: report::DomainProfile {
+                classification: report::DomainClassification::InstrumentBound,
+                rationale: "The fixture follows instrument-mediated measurement.".to_string(),
+                ..report::DomainProfile::default()
+            },
+            presentation: Some(report::ReportPresentation {
+                thesis: "Quantum sensing claims become legible as a measurement chain.".to_string(),
+                organizing_form: "Measurement-chain path".to_string(),
+                rationale: "This follows how a quantity becomes an estimate.".to_string(),
+                alternatives_considered:
+                    "A glossary-only report was rejected because it hides support relations."
+                        .to_string(),
+                sections: vec![report::ReportSection {
+                    id: "section-measurement-chain-1111111111".to_string(),
+                    title: "Measurement Chain".to_string(),
+                    purpose: "Introduce the projected public narrative.".to_string(),
+                    body_markdown:
+                        "A physical quantity is encoded, disturbed, calibrated, and estimated."
+                            .to_string(),
+                    visual_view_ids: Vec::new(),
+                }],
+            }),
+            evidence_standards: report::EvidenceStandards {
+                summary: "Claims require reviewed support links in the evidence package."
+                    .to_string(),
+                claim_policy:
+                    "Reviewed supports links need reviewed_at plus a locator or support note."
+                        .to_string(),
+                source_role_requirements: Vec::new(),
+            },
+            structure_waivers: vec![report::StructureWaiver {
+                scope: report::StructureWaiverScope::Relations,
+                rationale:
+                    "Core projection fixture omits relation graph until canonical relation tests."
+                        .to_string(),
+            }],
+            ..report::PublicReport::default()
+        },
+        internal_context: None,
+        diagnostics: None,
+    }
 }
 
 fn legacy_v1_report_value() -> Value {

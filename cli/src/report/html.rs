@@ -31,6 +31,7 @@ where
 }
 
 pub fn render_html_report(document: &ReportDocument) -> Result<String> {
+    let document = crate::core::projection::project_report_document(document)?;
     if document.metadata.report_type != ReportType::HumanReport {
         bail!("sok render-html requires metadata.report_type to be human_report");
     }
@@ -91,7 +92,7 @@ pub fn render_html_report(document: &ReportDocument) -> Result<String> {
             &source_labels,
         );
     } else {
-        push_reading_guide_section(&mut html, document, !views.is_empty());
+        push_reading_guide_section(&mut html, &document, !views.is_empty());
         if !views.is_empty() {
             push_visual_section(&mut html, &views);
         }

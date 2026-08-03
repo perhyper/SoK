@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sok-pedagogy.schema.json",
+  "title": "Structure of Knowledge Core Pedagogy Package",
+  "description": "Current core pedagogy subset for reading ladders and learning-path prerequisite surfaces.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "reading_ladder", "learning_path"],
+  "properties": {
+    "schema_version": { "const": "sok-pedagogy/v1" },
+    "reading_ladder": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reading_ladder_row" }
+    },
+    "learning_path": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/learning_step" }
+    }
+  },
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stable_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9]*-[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "reading_ladder_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "layer",
+        "start_here",
+        "read_for",
+        "do_not_infer",
+        "source_ids"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "layer": { "$ref": "#/$defs/non_empty_string" },
+        "start_here": { "$ref": "#/$defs/non_empty_string" },
+        "read_for": { "$ref": "#/$defs/non_empty_string" },
+        "do_not_infer": { "$ref": "#/$defs/non_empty_string" },
+        "source_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "learning_step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sequence",
+        "title",
+        "learning_goal",
+        "practice_artifact",
+        "source_ids"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": { "$ref": "#/$defs/non_empty_string" },
+        "learning_goal": { "$ref": "#/$defs/non_empty_string" },
+        "prerequisite_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        },
+        "practice_artifact": { "$ref": "#/$defs/non_empty_string" },
+        "progress_criteria": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        },
+        "source_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        }
+      }
+    }
+  }
+}
+

@@ -2,6 +2,7 @@
 
 mod cli;
 mod commands;
+pub mod core;
 mod downloader;
 mod profiles;
 pub mod report;

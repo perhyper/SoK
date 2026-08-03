@@ -1,0 +1,55 @@
+{
+  "schema_version": "sok-evidence/v1",
+  "sources": [
+    {
+      "id": "src-quantum-sensing-explained-1111111111",
+      "citation": "Quantum Sensing Explained. Fixture source.",
+      "title": "Quantum Sensing Explained",
+      "source_type": "review_article",
+      "identifier": "fixture:quantum-sensing",
+      "url": "https://example.test/quantum-sensing",
+      "date": "2026-01-15",
+      "roles": ["foundation", "method"],
+      "access": {
+        "status": "open_access",
+        "route": "Fixture URL",
+        "budget_estimate": "$0",
+        "license": "CC BY",
+        "metadata_only": false,
+        "notes": "Local fixture metadata."
+      },
+      "why_it_matters": "Explains the measurement chain used by the core projection fixture.",
+      "verification_status": "reviewed",
+      "last_reviewed": "2026-07-16",
+      "notes": "Reviewed from bounded fixture text."
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim-measurement-chain-1111111111",
+      "statement": "Quantum sensing claims become legible as a measurement chain from physical quantity to calibrated estimate.",
+      "claim_type": "structural",
+      "evidence_requirement": "reviewed_source",
+      "evidence_links": [
+        {
+          "evidence_id": "ev-measurement-chain-1111111111",
+          "source_id": "src-quantum-sensing-explained-1111111111",
+          "verification_status": "reviewed",
+          "support_kind": "supports",
+          "locator": "fixture section 1",
+          "support_note": "The fixture source directly describes the measurement-chain framing.",
+          "reviewed_at": "2026-07-16"
+        }
+      ],
+      "confidence": "high",
+      "temporal": {
+        "as_of": "2026-07-16",
+        "review_after": "2027-01-16",
+        "temporal_status": "durable",
+        "rationale": "The fixture claim is structural rather than latest-state dependent."
+      },
+      "notes": "Projection fixture claim."
+    }
+  ]
+}
+

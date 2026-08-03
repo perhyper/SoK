@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sok-knowledge.schema.json",
+  "title": "Structure of Knowledge Core Knowledge Package",
+  "description": "Artifact-independent knowledge package centered on field-native elements. Public sok-report arrays are compatibility projections from these elements.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "elements"],
+  "properties": {
+    "schema_version": { "const": "sok-knowledge/v1" },
+    "field": { "type": "string" },
+    "elements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/knowledge_element" }
+    }
+  },
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stable_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9]*-[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "localized_text": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": { "$ref": "#/$defs/non_empty_string" },
+        "locale": { "type": "string" }
+      }
+    },
+    "semantic_role": {
+      "type": "string",
+      "enum": [
+        "core",
+        "surrounding",
+        "context",
+        "concept",
+        "method",
+        "representation",
+        "object",
+        "practice",
+        "evidence",
+        "frontier",
+        "other"
+      ]
+    },
+    "knowledge_element": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "element_class", "label", "actual_form"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "element_class": {
+          "description": "Open-ended field-native class, not a closed ontology.",
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "label": { "$ref": "#/$defs/localized_text" },
+        "actual_form": { "$ref": "#/$defs/localized_text" },
+        "semantic_roles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/semantic_role" }
+        },
+        "role_note": { "type": "string" },
+        "load_bearing_relations": { "type": "string" },
+        "source_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "unknown"]
+        }
+      }
+    }
+  }
+}
+

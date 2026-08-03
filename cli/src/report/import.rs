@@ -277,7 +277,7 @@ where
         });
     }
 
-    Ok(document)
+    crate::core::projection::project_report_document(&document)
 }
 
 pub(crate) fn parse_markdown_report(markdown: &str) -> ParsedMarkdownReport {

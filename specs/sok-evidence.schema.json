@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sok-evidence.schema.json",
+  "title": "Structure of Knowledge Core Evidence Package",
+  "description": "Core evidence package for source roles, claim support, currentness metadata, and reviewed-support semantics.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "sources", "claims"],
+  "properties": {
+    "schema_version": { "const": "sok-evidence/v1" },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/claim" }
+    }
+  },
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stable_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9]*-[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "source_role": {
+      "type": "string",
+      "enum": [
+        "orientation",
+        "foundation",
+        "method",
+        "representation",
+        "evidence",
+        "synthesis",
+        "frontier",
+        "debate",
+        "standard",
+        "dataset",
+        "infrastructure",
+        "critique",
+        "curriculum",
+        "other"
+      ]
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "route"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "open_access",
+            "free_web",
+            "public_domain",
+            "official_open",
+            "user_provided",
+            "library",
+            "paid_book",
+            "paywalled",
+            "subscription",
+            "restricted",
+            "unknown"
+          ]
+        },
+        "route": { "$ref": "#/$defs/non_empty_string" },
+        "budget_estimate": { "type": "string" },
+        "license": { "type": "string" },
+        "metadata_only": { "type": "boolean" },
+        "notes": { "type": "string" }
+      }
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": ["cataloged", "reviewed", "verified"]
+    },
+    "support_kind": {
+      "type": "string",
+      "enum": ["supports", "qualifies", "contradicts", "background", "example"]
+    },
+    "temporal_marker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of", "temporal_status"],
+      "properties": {
+        "as_of": { "type": "string" },
+        "review_after": { "type": "string" },
+        "temporal_status": {
+          "type": "string",
+          "enum": ["durable", "current", "review_due", "stale", "unknown"]
+        },
+        "rationale": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "citation",
+        "source_type",
+        "roles",
+        "access",
+        "why_it_matters",
+        "verification_status"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "citation": { "$ref": "#/$defs/non_empty_string" },
+        "title": { "type": "string" },
+        "source_type": { "$ref": "#/$defs/non_empty_string" },
+        "identifier": { "type": "string" },
+        "url": { "type": "string" },
+        "date": { "type": "string" },
+        "roles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/source_role" }
+        },
+        "access": { "$ref": "#/$defs/access" },
+        "why_it_matters": { "$ref": "#/$defs/non_empty_string" },
+        "verification_status": { "$ref": "#/$defs/verification_status" },
+        "last_reviewed": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "statement",
+        "claim_type",
+        "evidence_requirement",
+        "evidence_links",
+        "temporal"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "statement": { "$ref": "#/$defs/non_empty_string" },
+        "claim_type": {
+          "type": "string",
+          "enum": [
+            "structural",
+            "currentness",
+            "frontier",
+            "debate",
+            "curricular",
+            "interpretive",
+            "methodological"
+          ]
+        },
+        "evidence_requirement": {
+          "type": "string",
+          "enum": [
+            "none",
+            "cataloged_source",
+            "reviewed_source",
+            "verified_source",
+            "multiple_reviewed_sources"
+          ]
+        },
+        "evidence_links": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidence_link" }
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "unknown"]
+        },
+        "temporal": { "$ref": "#/$defs/temporal_marker" },
+        "notes": { "type": "string" }
+      }
+    },
+    "evidence_link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "verification_status", "support_kind"],
+      "properties": {
+        "evidence_id": { "$ref": "#/$defs/stable_id" },
+        "source_id": { "$ref": "#/$defs/stable_id" },
+        "verification_status": { "$ref": "#/$defs/verification_status" },
+        "support_kind": { "$ref": "#/$defs/support_kind" },
+        "locator": { "type": "string" },
+        "support_note": { "type": "string" },
+        "reviewed_at": { "type": "string" }
+      }
+    }
+  }
+}
+

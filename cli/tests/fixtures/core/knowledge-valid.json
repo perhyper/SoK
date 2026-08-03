@@ -1,0 +1,52 @@
+{
+  "schema_version": "sok-knowledge/v1",
+  "field": "Quantum sensing",
+  "elements": [
+    {
+      "id": "element-physical-quantity-1111111111",
+      "element_class": "Object or phenomenon",
+      "label": {
+        "text": "Physical quantity"
+      },
+      "actual_form": {
+        "text": "A property made observable only through a measurement interaction."
+      },
+      "semantic_roles": ["core", "concept", "object"],
+      "role_note": "core",
+      "load_bearing_relations": "The quantity must be encoded before it can be estimated.",
+      "source_ids": ["src-quantum-sensing-explained-1111111111"],
+      "confidence": "high"
+    },
+    {
+      "id": "element-calibration-transfer-2222222222",
+      "element_class": "Method or operation",
+      "label": {
+        "text": "Calibration transfer"
+      },
+      "actual_form": {
+        "text": "A procedure that carries source traceability into the sensor output."
+      },
+      "semantic_roles": ["core", "method"],
+      "role_note": "core",
+      "load_bearing_relations": "Calibration qualifies the estimated physical quantity.",
+      "source_ids": ["src-quantum-sensing-explained-1111111111"],
+      "confidence": "medium"
+    },
+    {
+      "id": "element-noise-model-3333333333",
+      "element_class": "Representation or model",
+      "label": {
+        "text": "Noise model"
+      },
+      "actual_form": {
+        "text": "A mathematical representation of uncertainty and disturbance sources."
+      },
+      "semantic_roles": ["surrounding", "representation"],
+      "role_note": "surrounding",
+      "load_bearing_relations": "The model explains when an estimate is trustworthy.",
+      "source_ids": ["src-quantum-sensing-explained-1111111111"],
+      "confidence": "medium"
+    }
+  ]
+}
+

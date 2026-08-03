@@ -1,0 +1,36 @@
+{
+  "schema_version": "sok-pedagogy/v1",
+  "reading_ladder": [
+    {
+      "id": "ladder-foundation-1111111111",
+      "layer": "Foundation",
+      "start_here": "Quantum Sensing Explained",
+      "read_for": "How physical quantities become estimated through a measurement chain.",
+      "do_not_infer": "That every sensor uses the same implementation.",
+      "source_ids": ["src-quantum-sensing-explained-1111111111"],
+      "notes": "Small core projection fixture."
+    }
+  ],
+  "learning_path": [
+    {
+      "id": "step-measurement-chain-1111111111",
+      "sequence": 1,
+      "title": "Measurement chain",
+      "learning_goal": "Explain the chain from physical quantity to estimate.",
+      "practice_artifact": "Annotated measurement-chain diagram.",
+      "progress_criteria": ["Identify quantity, encoding, noise, and calibration."],
+      "source_ids": ["src-quantum-sensing-explained-1111111111"]
+    },
+    {
+      "id": "step-calibration-check-2222222222",
+      "sequence": 2,
+      "title": "Calibration check",
+      "learning_goal": "Explain how calibration qualifies the estimate.",
+      "prerequisite_ids": ["element-calibration-transfer-2222222222"],
+      "practice_artifact": "Calibration evidence checklist.",
+      "progress_criteria": ["Name the warrant carried by calibration."],
+      "source_ids": ["src-quantum-sensing-explained-1111111111"]
+    }
+  ]
+}
+
