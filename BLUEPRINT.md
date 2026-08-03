@@ -16,12 +16,16 @@ SoK's scaffold idea is inspired by Jerome Bruner and the structure-of-knowledge 
 - `structure-of-knowledge/references/`: research, output, and collaboration protocols loaded as needed.
 - `cli/src/`: Rust CLI for scaffolds, handoffs, source manifests, evidence ingestion, validation, and rendering.
 - `specs/sok-harness.yaml`: implementation-neutral stage and command contract.
-- `specs/sok-report.schema.json`: JSON-first report contract.
+- `specs/sok-report.schema.json`: public report compatibility contract for `sok-report/v1` and `sok-report/v2`.
+- `specs/sok-knowledge.schema.json`, `specs/sok-evidence.schema.json`, and `specs/sok-pedagogy.schema.json`: typed core sidecar contracts.
+- `specs/sok-run.schema.json` and `specs/sok-work-*.schema.json`: private run provenance and bounded WorkOrder/WorkResult sidecar contracts.
 - `cli/tests/fixtures/`: compact bounded inputs and JSON validation fixtures.
 
 Markdown is an authoring input. `sok-report.json` is the structured source of truth for validation and downstream tooling. HTML is a self-contained public view rendered only from validated `human_report` JSON.
 
 New human-report exports use `sok-report/v2` and preserve reviewed inventory rows in `report.field_elements`. The older `core_ideas`, `methods`, and `representations` arrays are compatibility projections rather than a universal ontology; v1 remains readable for legacy artifacts.
+
+Typed core packages, run manifests, and WorkOrder/WorkResult files are additive sidecars. They can be removed without changing the public report shape; `migrate-ids` provides a reviewable map when non-ASCII IDs need explicit migration.
 
 ## Product Boundaries
 
@@ -42,6 +46,7 @@ New human-report exports use `sok-report/v2` and preserve reviewed inventory row
 6. Ingest bounded source metadata into evidence JSONL when useful.
 7. Lint the selected lane and export `sok-report.json`.
 8. Validate final-report reliability gates and render HTML.
+9. When needed, score saved conformance fixtures with `sok eval conformance` to verify contracts without model or network calls.
 
 ## Distribution
 

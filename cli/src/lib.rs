@@ -4,6 +4,7 @@ mod cli;
 mod commands;
 pub mod core;
 mod downloader;
+pub mod eval;
 mod profiles;
 pub mod report;
 pub mod run_manifest;

@@ -67,6 +67,8 @@ For a narrow answer, use this file and load only the reference that matches the 
 6. Deliver the SoK package.
    - Keep internal scaffold artifacts and human-facing reports separate. Scaffolds may include learner profile, original goal, assumptions, placeholders, and quality notes; final reports must not expose that machinery.
    - Treat `sok-report.json` as the structured source of truth for downstream tooling. Preserve reviewed inventory rows in `report.field_elements`; `core_ideas`, `methods`, and `representations` are compatibility projections, not the field's ontology. Markdown scaffolds and field-specific reports with structured surfaces are bounded inputs; HTML is a rendered public view.
+   - Use typed `sok-knowledge/v1`, `sok-evidence/v1`, and `sok-pedagogy/v1` sidecars only as additive machine inputs. Keep public `sok-report/v1` and `sok-report/v2` compatibility intact; do not embed core packages, run manifests, or work sidecars in the public report.
+   - When private reproducibility data is useful, request `--run-manifest <sok-run.json>`. Treat `sok-run/v1`, `sok-work-order/v1`, and `sok-work-result/v1` as private sidecars that can be removed without changing the public report payload.
    - Provide a narrative report. Add a visualization only when structured relations justify it; select graph views from `relations` and `visual_views`. Mermaid is optional and not required.
    - Structured surfaces support export and validation; they do not define public section order. A surface may keep its canonical heading or use a field-specific heading followed by `<!-- sok:surface report-architecture -->`, `field-elements`, `claims`, `relations`, `literature-ladder`, `curriculum`, or `visual-views`.
    - Treat unknown or empty `sok:` directives and duplicate or conflicting `sok:surface` markers as blocking errors. Directives are standalone control lines, never examples inside fenced code.
@@ -132,6 +134,9 @@ Useful subcommands:
 - `lint`: check scaffold or final Markdown plus source/evidence files before JSON export.
 - `export-json`: convert bounded scaffold or final Markdown plus source/evidence files into `sok-report.json`.
 - `validate-report`: validate `sok-report.json` reliability gates; use `--strict` before rendering or publication.
+- `migrate-ids`: write a deterministic old-to-new ID map for `sok-report/v1` or `sok-report/v2` without rewriting the input.
+- `work`: validate provider-neutral WorkOrder and WorkResult sidecars; accept only proposed patches into a new core output file.
+- `eval`: score saved provider-neutral conformance fixtures without model or network calls.
 - `render-html`: render a validated `human_report` JSON file to self-contained local HTML.
 - `specificity`: make an underspecified domain task concrete enough to execute.
 
@@ -140,4 +145,4 @@ The CLI is not a substitute for research. It provides a stable execution frame s
 Recommended bounded lanes:
 
 - Scaffold lane: create or receive scaffold Markdown, maintain `sources.csv`, optionally run `"$SOK_CLI" ingest last`, run `"$SOK_CLI" lint --stage scaffold`, then `"$SOK_CLI" export-json --stage scaffold`. This JSON may contain `internal_context`; do not present it as a finished report and do not render it to HTML.
-- Final-report lane: complete a field-specific human report Markdown file plus its structured evidence surfaces, review evidence into JSONL entries, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, then `"$SOK_CLI" render-html`. Only this lane produces human-facing HTML. Reviewed or verified evidence with `support_kind: supports`, `reviewed_at`, and a locator or support note can satisfy claims; `qualifies` narrows an already supported claim, `contradicts` records conflict, and `cataloged` source rows remain non-supporting.
+- Final-report lane: complete a field-specific human report Markdown file plus its structured evidence surfaces, review evidence into JSONL entries, run `"$SOK_CLI" lint --stage final`, `"$SOK_CLI" export-json --stage final`, `"$SOK_CLI" validate-report --strict`, then `"$SOK_CLI" render-html`. Optional core sidecars may be supplied to `export-json`; optional run manifests remain private. Only this lane produces human-facing HTML. Reviewed or verified evidence with `support_kind: supports`, `reviewed_at`, and a locator or support note can satisfy claims; `qualifies` narrows an already supported claim, `contradicts` records conflict, and `cataloged` source rows remain non-supporting.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-work-patch.schema.json",
   "title": "Structure of Knowledge Work Patch",
-  "description": "A constrained proposed patch against a declared core package area. Patches are data and never executable commands.",
+  "description": "A constrained proposed patch against a declared core package area. Unknown schema versions are rejected. Patches are data and never executable commands.",
   "type": "object",
   "additionalProperties": false,
   "required": [

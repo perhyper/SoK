@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::downloader::*;
+use crate::eval;
 use crate::report;
 use crate::run_manifest::{self, RunFile, RunManifestSpec, SemanticPayload};
 use crate::scaffold::*;
@@ -661,6 +662,73 @@ pub(crate) fn print_migrate_ids_usage() {
 Reads a sok-report/v1 or sok-report/v2 artifact and writes a deterministic old-to-new ID migration map.
 The input report is never rewritten in place."#
     );
+}
+
+pub(crate) fn run_eval(args: &[String]) -> Result<i32> {
+    let Some(command) = args.first() else {
+        print_eval_usage();
+        return Ok(2);
+    };
+    if matches!(command.as_str(), "-h" | "--help" | "help") {
+        print_eval_usage();
+        return Ok(0);
+    }
+    match command.as_str() {
+        "conformance" => run_eval_conformance(&args[1..]),
+        command => bail!("unknown eval command {command:?}"),
+    }
+}
+
+pub(crate) fn print_eval_usage() {
+    println!(
+        r#"SoK eval commands
+
+Usage:
+  sok eval conformance --fixtures <directory> [--output <sok-conformance-report.json>]
+
+The conformance scorer reads saved provider-neutral fixtures and runs deterministic validators only.
+It does not call model providers, browse the network, or repair artifacts in place."#
+    );
+}
+
+fn run_eval_conformance(args: &[String]) -> Result<i32> {
+    if args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "-h" | "--help" | "help"))
+    {
+        print_eval_usage();
+        return Ok(0);
+    }
+    let flags = parse_flags(args, &[])?;
+    let fixtures = flags.string("fixtures", "");
+    let output = flags.string("output", "");
+    if fixtures.trim().is_empty() {
+        bail!("--fixtures is required");
+    }
+
+    let report = eval::score_conformance_dir(&fixtures)?;
+    if output.trim().is_empty() {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        report::write_json_file(&output, &report)?;
+        println!("Wrote {output}");
+        println!(
+            "Conformance: {} expectation(s) passed, {} failed",
+            report.expectation_passed, report.expectation_failed
+        );
+        println!("Validation pass rate: {}", report.validation_pass_rate);
+        println!("Validation errors: {}", report.validation_error_count);
+        println!("Repairs recorded: {}", report.repair_count);
+        println!(
+            "Human corrections recorded: {}",
+            report.human_correction_count
+        );
+    }
+    Ok(if report.all_expectations_passed() {
+        0
+    } else {
+        1
+    })
 }
 
 pub(crate) fn print_validate_report_usage() {

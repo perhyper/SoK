@@ -54,6 +54,7 @@ fn every_documented_command_supports_immediate_help() {
         "lint",
         "validate-report",
         "migrate-ids",
+        "eval",
         "render-html",
         "specificity",
         "work",
@@ -2453,6 +2454,77 @@ fn run_manifest_semantic_digest_ignores_timestamps() {
     let second = run_manifest::build_run_manifest(second).unwrap();
     assert_ne!(first.timestamps, second.timestamps);
     assert_eq!(first.semantic_digest, second.semantic_digest);
+}
+
+#[test]
+fn conformance_fixtures_score_without_provider_calls() {
+    let fixture_dir = repo_path("cli/tests/fixtures/conformance");
+    let report = crate::eval::score_conformance_dir(&fixture_dir).unwrap();
+
+    assert_eq!(report.schema_version, "sok-conformance-report/v1");
+    assert_eq!(report.suite_id, "sok-harness-hardening-v1");
+    assert!(report.all_expectations_passed(), "{report:#?}");
+    assert!(report.validation_passed > 0);
+    assert!(report.validation_failed > 0);
+    assert_eq!(report.validation_pass_rate, "5/18");
+    assert_eq!(report.repair_count, 3);
+    assert_eq!(report.human_correction_count, 1);
+
+    let contracts = report
+        .cases
+        .iter()
+        .map(|case| case.contract.as_str())
+        .collect::<BTreeSet<_>>();
+    for contract in [
+        "core conformance",
+        "stable-ID uniqueness",
+        "reference closure",
+        "relation validity",
+        "evidence support",
+        "currentness metadata",
+        "public/internal boundary",
+        "multilingual retention",
+        "prerequisite violations",
+        "source-role coverage",
+        "validation pass rate",
+        "unknown report schema versions",
+        "unknown core schema versions",
+        "unknown run schema versions",
+        "unknown work schema versions",
+        "run manifests",
+        "WorkOrder sidecars",
+        "WorkResult capability response",
+    ] {
+        assert!(
+            contracts.contains(contract),
+            "conformance suite should cover {contract}"
+        );
+    }
+
+    let public_boundary = report
+        .cases
+        .iter()
+        .find(|case| case.id == "public-internal-boundary")
+        .unwrap();
+    assert!(!public_boundary.actual_valid);
+    assert_eq!(public_boundary.human_correction.count, 1);
+    assert_eq!(public_boundary.repair_count, 0);
+
+    let output_dir = tempfile::tempdir().unwrap();
+    let output_path = output_dir.path().join("conformance-report.json");
+    let exit = run_cli(vec![
+        "eval".to_string(),
+        "conformance".to_string(),
+        "--fixtures".to_string(),
+        fixture_dir.display().to_string(),
+        "--output".to_string(),
+        output_path.display().to_string(),
+    ])
+    .unwrap();
+    assert_eq!(exit, 0);
+    let saved: crate::eval::ConformanceReport = report::read_json_file(&output_path).unwrap();
+    assert_eq!(saved.expectation_failed, 0);
+    assert_eq!(saved.repair_count, report.repair_count);
 }
 
 #[test]

@@ -34,6 +34,16 @@ Machine input is opt-in. `sok export-json` may also read typed core sidecars wit
 
 Typed machine inputs feed directly into the `sok-knowledge/v1`, `sok-evidence/v1`, and `sok-pedagogy/v1` core validators. They do not depend on localized Markdown table headers. Markdown tables, `sok:surface` markers, and narrative prose remain supported for human-authored inputs. When human and machine lanes provide different values for the same stable ID or package field, the exporter keeps the first value deterministically and emits an `export.machine-input` diagnostic instead of overwriting silently.
 
+## Compatibility, Migration, and Rollback
+
+Public `sok-report/v1` and `sok-report/v2` remain readable. New final human-report exports use `sok-report/v2`; unknown report, core, run, and work schema versions must be rejected by validators rather than guessed.
+
+ASCII stable IDs remain stable. Existing non-ASCII IDs do not need an automatic rewrite; use `sok migrate-ids --input <sok-report.json> --output <id-map.json>` when an explicit, reviewable old-to-new map is needed. Reference rewriting is a separate deliberate step outside the command.
+
+Core packages, run manifests, and work protocol files are additive sidecars. `sok-knowledge/v1`, `sok-evidence/v1`, and `sok-pedagogy/v1` can be supplied to `export-json` or omitted. `sok-run/v1`, `sok-work-order/v1`, and `sok-work-result/v1` are private files for reproducibility and bounded exchange; removing them rolls the workflow back to Markdown/source/evidence inputs without changing public report payloads.
+
+For bounded collaboration, a WorkOrder declares the current SoK task kind, required capabilities, allowed core patch paths, and a default-deny permission envelope. A WorkResult returns a typed refusal, degradation plan, or proposed patches against core packages. Accepting a result writes a new validated core output file and never mutates source inputs in place.
+
 ## Field-First Report Composition
 
 Do not select the table of contents from a universal template or from the field name alone.
@@ -112,7 +122,7 @@ Structured claims:
 | Statement | Claim type | Evidence requirement | Source IDs | Confidence | Temporal status | Notes |
 |---|---|---|---|---|---|---|
 
-`Source IDs`, relation endpoints, prerequisite references, and visual node emphasis may use stable JSON IDs or unambiguous source titles / row labels from the bounded Markdown and manifest. Ambiguous or unresolved references must become diagnostics, not silent guesses. Valid relation endpoint types are `field_element`, `concept`, `method`, `representation`, `claim`, `source`, `curriculum_step`, and `frontier_debate`. Valid relation kinds include `depends_on`, `supports`, `qualifies`, `contradicts`, `precedes`, `introduces`, `uses_method`, `represented_by`, `grounds`, `motivates`, `part_of`, and `maps_to`.
+`Source IDs`, relation endpoints, prerequisite references, and visual node emphasis may use stable JSON IDs or unambiguous source titles / row labels from the bounded Markdown and manifest. Ambiguous or unresolved references must become diagnostics, not silent guesses. Valid relation endpoint types are `field_element`, `concept`, `method`, `representation`, `claim`, `source`, `curriculum_step`, and `frontier_debate`. Canonical relation kinds are `requires_before`, `introduced_by`, `revisits`, `deepens`, `applies`, `assessed_by`, and `remediates`. Legacy labels such as `depends_on`, `supports`, `qualifies`, `contradicts`, `precedes`, `introduces`, `uses_method`, `represented_by`, `grounds`, `motivates`, `part_of`, and `maps_to` are accepted only through explicit compatibility mapping.
 
 ## Structured Visual Views
 

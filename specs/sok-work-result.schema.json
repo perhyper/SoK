@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-work-result.schema.json",
   "title": "Structure of Knowledge WorkResult",
-  "description": "Provider-neutral bounded work response. Human or model output is accepted only as proposed patches, typed refusal, or explicit degradation plan.",
+  "description": "Provider-neutral bounded work response. Human or model output is accepted only as proposed patches, typed refusal, or explicit degradation plan. Unknown schema versions are rejected.",
   "type": "object",
   "additionalProperties": false,
   "required": [

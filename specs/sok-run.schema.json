@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-run.schema.json",
   "title": "Structure of Knowledge Run Manifest",
-  "description": "Private run sidecar for command metadata, declared permissions, full file hashes, and a timestamp-independent semantic digest. This document is reproducibility metadata and must not be embedded in public sok-report payloads.",
+  "description": "Private run sidecar for command metadata, declared permissions, full file hashes, and a timestamp-independent semantic digest. Unknown schema versions are rejected. This document is reproducibility metadata and must not be embedded in public sok-report payloads.",
   "type": "object",
   "additionalProperties": false,
   "required": [

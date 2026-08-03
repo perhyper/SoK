@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-work-order.schema.json",
   "title": "Structure of Knowledge WorkOrder",
-  "description": "Provider-neutral bounded work request for current SoK stages. WorkOrders declare task kind, required capabilities, proposed patch area, bounded file exchange, and a default-deny permission envelope.",
+  "description": "Provider-neutral bounded work request for current SoK stages. WorkOrders declare task kind, required capabilities, proposed patch area, bounded file exchange, and a default-deny permission envelope. Unknown schema versions are rejected.",
   "type": "object",
   "additionalProperties": false,
   "required": [

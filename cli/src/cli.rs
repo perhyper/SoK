@@ -51,6 +51,7 @@ pub fn run_cli(args: Vec<String>) -> Result<i32> {
         "lint" => run_lint(&args[1..]),
         "validate-report" => run_validate_report(&args[1..]),
         "migrate-ids" => run_migrate_ids(&args[1..]).map(|_| 0),
+        "eval" => run_eval(&args[1..]),
         "render-html" => run_render_html(&args[1..]).map(|_| 0),
         "specificity" => run_specificity(&args[1..]).map(|_| 0),
         "work" => run_work(&args[1..]),
@@ -82,6 +83,7 @@ Commands:
   lint              Check Markdown, source, and evidence inputs before JSON export.
   validate-report   Validate sok-report.json reliability gates.
   migrate-ids       Write a deterministic old-to-new stable ID migration map.
+  eval              Score saved provider-neutral conformance fixtures.
   render-html       Render a validated human_report JSON file to self-contained local HTML.
   specificity       Generate a concreteness checklist for an underspecified domain task.
   work              Validate and exchange bounded WorkOrder/WorkResult sidecars.
@@ -104,6 +106,7 @@ pub(crate) fn print_command_usage(command: &str) -> Result<()> {
         "lint" => print_lint_usage(),
         "validate-report" => print_validate_report_usage(),
         "migrate-ids" => print_migrate_ids_usage(),
+        "eval" => print_eval_usage(),
         "render-html" => print_render_html_usage(),
         "specificity" => print_specificity_usage(),
         "work" => print_work_usage(),

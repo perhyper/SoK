@@ -244,6 +244,20 @@ pub(crate) fn validate_schema_level_fields(value: &Value, checks: &mut Vec<Diagn
     require_non_empty_string(metadata, "schema_version", "/metadata", checks);
     require_non_empty_string(metadata, "generated_at", "/metadata", checks);
     require_non_empty_string(metadata, "report_type", "/metadata", checks);
+    if let Some(schema_version) = metadata.get("schema_version").and_then(Value::as_str) {
+        if !matches!(schema_version, "sok-report/v1" | "sok-report/v2") {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_SCHEMA_REQUIRED,
+                    format!(
+                        "/metadata/schema_version {:?} is unsupported; expected sok-report/v1 or sok-report/v2",
+                        schema_version
+                    ),
+                )
+                .with_target("/metadata/schema_version", ""),
+            );
+        }
+    }
     if let Some(temporal) =
         require_object_for_validation(metadata, "temporal_review", "/metadata", checks)
     {
