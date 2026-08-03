@@ -40,6 +40,8 @@ pub struct LearningStep {
     pub learning_goal: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prerequisite_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prerequisite_relation_ids: Vec<String>,
     pub practice_artifact: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub progress_criteria: Vec<String>,
@@ -87,6 +89,7 @@ impl From<&report::CurriculumStep> for LearningStep {
             title: value.title.clone(),
             learning_goal: value.learning_goal.clone(),
             prerequisite_ids: value.prerequisite_ids.clone(),
+            prerequisite_relation_ids: Vec::new(),
             practice_artifact: value.practice_artifact.clone(),
             progress_criteria: value.progress_criteria.clone(),
             source_ids: value.source_ids.clone(),

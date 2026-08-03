@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-knowledge.schema.json",
   "title": "Structure of Knowledge Core Knowledge Package",
-  "description": "Artifact-independent knowledge package centered on field-native elements. Public sok-report arrays are compatibility projections from these elements.",
+  "description": "Artifact-independent knowledge package centered on field-native elements and canonical typed relations. Public sok-report arrays are compatibility projections from these elements and relation IDs.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "elements"],
@@ -12,6 +12,11 @@
     "elements": {
       "type": "array",
       "items": { "$ref": "#/$defs/knowledge_element" }
+    },
+    "relations": {
+      "description": "Canonical typed relation graph. Field-element summaries, curriculum prerequisites, and visual edges are projections of these relation IDs.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/relation" }
     }
   },
   "$defs": {
@@ -65,7 +70,15 @@
           "items": { "$ref": "#/$defs/semantic_role" }
         },
         "role_note": { "type": "string" },
-        "load_bearing_relations": { "type": "string" },
+        "relation_ids": {
+          "description": "Relation IDs that touch this element. Public load-bearing relation prose is derived from these relations.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        },
+        "load_bearing_relations": {
+          "description": "Legacy compatibility summary retained for v1/v2 reads. New projections derive this text from relation_ids.",
+          "type": "string"
+        },
         "source_ids": {
           "type": "array",
           "items": { "$ref": "#/$defs/stable_id" }
@@ -75,7 +88,56 @@
           "enum": ["high", "medium", "low", "unknown"]
         }
       }
+    },
+    "relation_kind": {
+      "type": "string",
+      "enum": [
+        "requires_before",
+        "introduced_by",
+        "revisits",
+        "deepens",
+        "applies",
+        "assessed_by",
+        "remediates"
+      ]
+    },
+    "relation_endpoint_type": {
+      "type": "string",
+      "enum": [
+        "field_element",
+        "concept",
+        "claim",
+        "source",
+        "curriculum_step",
+        "frontier_debate",
+        "method",
+        "representation"
+      ]
+    },
+    "relation_endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_type", "id"],
+      "properties": {
+        "entity_type": { "$ref": "#/$defs/relation_endpoint_type" },
+        "id": { "$ref": "#/$defs/stable_id" }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "from", "to"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stable_id" },
+        "kind": { "$ref": "#/$defs/relation_kind" },
+        "from": { "$ref": "#/$defs/relation_endpoint" },
+        "to": { "$ref": "#/$defs/relation_endpoint" },
+        "description": { "type": "string" },
+        "source_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        }
+      }
     }
   }
 }
-

@@ -2,12 +2,13 @@
 
 use crate::report;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub mod evidence;
 pub mod knowledge;
 pub mod pedagogy;
 pub mod projection;
+pub mod relations;
 pub mod validation;
 
 pub const KNOWLEDGE_SCHEMA_VERSION: &str = "sok-knowledge/v1";

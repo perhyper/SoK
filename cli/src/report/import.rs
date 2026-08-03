@@ -166,13 +166,14 @@ where
         &frontier_debates,
     );
     entity_index.add_field_elements(&field_elements);
-    apply_curriculum_prerequisites(
+    let mut relations = build_relations(&parsed, &entity_index, &source_lookup, &mut diagnostics);
+    relations.extend(apply_curriculum_prerequisites(
         &parsed,
         &mut curriculum_path,
         &entity_index,
         &mut diagnostics,
-    );
-    let relations = build_relations(&parsed, &entity_index, &source_lookup, &mut diagnostics);
+    ));
+    let relations = deduplicate_relations(relations);
     let visual_views = build_visual_views(&parsed, &relations, &entity_index, &mut diagnostics);
     warn_if_unpreserved_visual_sections(&parsed, &visual_views, &mut diagnostics);
 
@@ -1672,6 +1673,7 @@ pub(crate) fn build_field_elements(
                     "Structural role",
                 ],
             ),
+            relation_ids: Vec::new(),
             load_bearing_relations: lookup_cell_any(
                 row,
                 &[
@@ -2001,7 +2003,7 @@ pub(crate) fn apply_curriculum_prerequisites(
     steps: &mut [CurriculumStep],
     entity_index: &ExportEntityIndex,
     diagnostics: &mut Vec<DiagnosticCheck>,
-) {
+) -> Vec<Relation> {
     let mut refs_by_step_id = BTreeMap::new();
     for row in &parsed.curriculum_rows {
         let title = curriculum_row_title(row);
@@ -2024,6 +2026,7 @@ pub(crate) fn apply_curriculum_prerequisites(
         refs_by_step_id.insert(content_id("step", &[&title]), split_ref_list(&raw_refs));
     }
 
+    let mut prerequisite_relations = Vec::new();
     for (step_index, step) in steps.iter_mut().enumerate() {
         let Some(refs) = refs_by_step_id.get(&step.id) else {
             continue;
@@ -2047,7 +2050,34 @@ pub(crate) fn apply_curriculum_prerequisites(
                             ),
                         );
                     } else {
-                        prerequisite_ids.insert(entity.id);
+                        let prerequisite_endpoint = RelationEndpoint {
+                            entity_type: entity.entity_type,
+                            id: entity.id,
+                        };
+                        prerequisite_ids.insert(prerequisite_endpoint.id.clone());
+                        prerequisite_relations.push(Relation {
+                            id: content_id(
+                                "rel",
+                                &[
+                                    relation_kind_label(RelationKind::RequiresBefore),
+                                    entity_type_label(prerequisite_endpoint.entity_type),
+                                    &prerequisite_endpoint.id,
+                                    entity_type_label(EntityType::CurriculumStep),
+                                    &step.id,
+                                ],
+                            ),
+                            kind: RelationKind::RequiresBefore,
+                            from: prerequisite_endpoint,
+                            to: RelationEndpoint {
+                                entity_type: EntityType::CurriculumStep,
+                                id: step.id.clone(),
+                            },
+                            description: format!(
+                                "{} is listed as a prerequisite for {} in the curriculum surface.",
+                                reference, step.title
+                            ),
+                            source_ids: step.source_ids.clone(),
+                        });
                     }
                 }
                 ExportReferenceResolution::Missing => diagnostics.push(
@@ -2082,6 +2112,7 @@ pub(crate) fn apply_curriculum_prerequisites(
         }
         step.prerequisite_ids = prerequisite_ids.into_iter().collect();
     }
+    prerequisite_relations
 }
 
 pub(crate) fn build_frontier_debates(

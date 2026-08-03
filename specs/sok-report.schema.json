@@ -133,7 +133,7 @@
           "$ref": "#/$defs/report_presentation"
         },
         "field_elements": {
-          "description": "Field-native elements preserved from the reviewed inventory before compatibility projection into core_ideas, methods, and representations. Free-form classes keep cases, instruments, institutions, datasets, practices, disputes, and other domain-specific forms intact.",
+          "description": "Field-native elements preserved from the reviewed inventory before compatibility projection into core_ideas, methods, and representations. relation_ids point to canonical semantic relations; load_bearing_relations is a derived human-readable compatibility summary.",
           "type": "array",
           "items": { "$ref": "#/$defs/field_element" }
         },
@@ -164,12 +164,12 @@
           "items": { "$ref": "#/$defs/claim" }
         },
         "relations": {
-          "description": "Explicit semantic relations exported from structured relation rows. Relations are not inferred from Mermaid arrows, visual proximity, or node ordering.",
+          "description": "Canonical typed semantic relations exported from structured relation rows and explicit prerequisite surfaces. Relations are not inferred from Mermaid arrows, visual proximity, or node ordering. Legacy v1/v2 relation kinds are accepted by readers through explicit compatibility mapping.",
           "type": "array",
           "items": { "$ref": "#/$defs/relation" }
         },
         "curriculum_path": {
-          "description": "Optional curriculum sequence exported from a curriculum surface or compatible canonical heading. prerequisite_ids carry explicit references resolved from Prerequisite IDs or Prerequisites columns.",
+          "description": "Optional curriculum sequence exported from a curriculum surface or compatible canonical heading. prerequisite_ids are compatibility projections of canonical requires_before relation IDs.",
           "type": "array",
           "items": { "$ref": "#/$defs/curriculum_step" }
         },
@@ -309,7 +309,14 @@
         "label": { "$ref": "#/$defs/non_empty_string" },
         "actual_form": { "$ref": "#/$defs/non_empty_string" },
         "role": { "type": "string" },
-        "load_bearing_relations": { "type": "string" },
+        "relation_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        },
+        "load_bearing_relations": {
+          "description": "Derived human-readable summary of relation_ids for compatibility with v1/v2 reports.",
+          "type": "string"
+        },
         "source_ids": {
           "type": "array",
           "items": { "$ref": "#/$defs/stable_id" }
@@ -553,7 +560,7 @@
       }
     },
     "relation": {
-      "description": "Explicit semantic relation between public report entities. field_element endpoints preserve field-native types; compatibility endpoint types remain available for concepts, methods, representations, claims, sources, curriculum steps, and frontier/debate items.",
+      "description": "Canonical typed semantic relation between public report entities. field_element endpoints preserve field-native types; compatibility endpoint types remain available for concepts, methods, representations, claims, sources, curriculum steps, and frontier/debate items.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind", "from", "to"],
@@ -562,18 +569,13 @@
         "kind": {
           "type": "string",
           "enum": [
-            "depends_on",
-            "supports",
-            "qualifies",
-            "contradicts",
-            "precedes",
-            "introduces",
-            "uses_method",
-            "represented_by",
-            "grounds",
-            "motivates",
-            "part_of",
-            "maps_to"
+            "requires_before",
+            "introduced_by",
+            "revisits",
+            "deepens",
+            "applies",
+            "assessed_by",
+            "remediates"
           ]
         },
         "from": { "$ref": "#/$defs/relation_endpoint" },
@@ -627,7 +629,7 @@
         "title": { "$ref": "#/$defs/non_empty_string" },
         "learning_goal": { "$ref": "#/$defs/non_empty_string" },
         "prerequisite_ids": {
-          "description": "Explicit prerequisite references resolved from curriculum-surface Prerequisite IDs or Prerequisites columns. IDs may point to curriculum steps or other public report entities.",
+          "description": "Compatibility projection of canonical requires_before relations. IDs may point to curriculum steps or other public report entities.",
           "type": "array",
           "items": { "$ref": "#/$defs/stable_id" }
         },

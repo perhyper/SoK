@@ -4,6 +4,8 @@ pub const CHECK_CORE_VERSION: &str = "core.version";
 pub const CHECK_CORE_REQUIRED: &str = "core.required";
 pub const CHECK_CORE_REFERENCE: &str = "core.reference";
 pub const CHECK_CORE_SUPPORT: &str = "core.support";
+pub const CHECK_CORE_RELATION: &str = "core.relation";
+pub const CHECK_CORE_PREREQUISITE: &str = "core.prerequisite";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreValidation {
@@ -73,15 +75,37 @@ pub fn validate_core_packages(packages: &CorePackages) -> CoreValidation {
         .map(|step| step.id.as_str())
         .collect::<BTreeSet<_>>();
     let compatibility_ids = projection::compatibility_projection_ids(&packages.knowledge);
+    let relation_ids = packages
+        .knowledge
+        .relations
+        .iter()
+        .map(|relation| relation.id.as_str())
+        .collect::<BTreeSet<_>>();
 
-    validate_knowledge_package(&packages.knowledge, &source_ids, &mut checks);
+    validate_knowledge_package(
+        &packages.knowledge,
+        &source_ids,
+        &relation_ids,
+        &packages.knowledge.relations,
+        &mut checks,
+    );
     validate_evidence_package(&packages.evidence, &source_ids, &claim_ids, &mut checks);
+    validate_relation_graph(
+        &packages.knowledge.relations,
+        &source_ids,
+        &claim_ids,
+        &element_ids,
+        &learning_step_ids,
+        &compatibility_ids,
+        &mut checks,
+    );
     validate_pedagogy_package(
         &packages.pedagogy,
         &source_ids,
         &element_ids,
         &learning_step_ids,
         &compatibility_ids,
+        &packages.knowledge.relations,
         &mut checks,
     );
 
@@ -121,8 +145,14 @@ fn validate_versions(packages: &CorePackages, checks: &mut Vec<report::Diagnosti
 fn validate_knowledge_package(
     package: &knowledge::KnowledgePackage,
     source_ids: &BTreeSet<&str>,
+    relation_ids: &BTreeSet<&str>,
+    relations: &[relations::Relation],
     checks: &mut Vec<report::DiagnosticCheck>,
 ) {
+    let relation_lookup = relations
+        .iter()
+        .map(|relation| (relation.id.as_str(), relation))
+        .collect::<BTreeMap<_, _>>();
     let mut element_ids = BTreeSet::new();
     for (index, element) in package.elements.iter().enumerate() {
         let path = format!("/knowledge/elements/{index}");
@@ -157,6 +187,139 @@ fn validate_knowledge_package(
                 );
             }
         }
+        for relation_id in &element.relation_ids {
+            if !relation_ids.contains(relation_id.as_str()) {
+                checks.push(
+                    report::DiagnosticCheck::error(
+                        CHECK_CORE_REFERENCE,
+                        format!(
+                            "knowledge element {} references missing relation {}",
+                            element.id, relation_id
+                        ),
+                    )
+                    .with_target(format!("{path}/relation_ids"), &element.id),
+                );
+            } else if relation_lookup
+                .get(relation_id.as_str())
+                .map(|relation| relation.from.id != element.id && relation.to.id != element.id)
+                .unwrap_or(false)
+            {
+                checks.push(
+                    report::DiagnosticCheck::error(
+                        CHECK_CORE_RELATION,
+                        format!(
+                            "knowledge element {} relation_id {} does not touch the element",
+                            element.id, relation_id
+                        ),
+                    )
+                    .with_target(format!("{path}/relation_ids"), &element.id),
+                );
+            }
+        }
+    }
+}
+
+fn validate_relation_graph(
+    relations: &[relations::Relation],
+    source_ids: &BTreeSet<&str>,
+    claim_ids: &BTreeSet<&str>,
+    element_ids: &BTreeSet<&str>,
+    learning_step_ids: &BTreeSet<&str>,
+    compatibility_ids: &BTreeSet<String>,
+    checks: &mut Vec<report::DiagnosticCheck>,
+) {
+    let mut seen_ids = BTreeSet::new();
+    let mut seen_semantics = BTreeSet::new();
+    for (index, relation) in relations.iter().enumerate() {
+        let path = format!("/knowledge/relations/{index}");
+        validate_stable_id(&relation.id, &format!("{path}/id"), checks);
+        if !seen_ids.insert(relation.id.as_str()) {
+            checks.push(
+                report::DiagnosticCheck::error(
+                    CHECK_CORE_RELATION,
+                    format!("duplicate relation id {}", relation.id),
+                )
+                .with_target(format!("{path}/id"), &relation.id),
+            );
+        }
+        let semantic_key = relation_semantic_key(relation);
+        if !seen_semantics.insert(semantic_key) {
+            checks.push(
+                report::DiagnosticCheck::error(
+                    CHECK_CORE_RELATION,
+                    format!(
+                        "duplicate semantic relation {} {}:{} -> {}:{}",
+                        relations::relation_kind_label(relation.kind),
+                        relations::endpoint_type_label(relation.from.entity_type),
+                        relation.from.id,
+                        relations::endpoint_type_label(relation.to.entity_type),
+                        relation.to.id
+                    ),
+                )
+                .with_target(&path, &relation.id),
+            );
+        }
+        for source_id in &relation.source_ids {
+            if !source_ids.contains(source_id.as_str()) {
+                checks.push(
+                    report::DiagnosticCheck::error(
+                        CHECK_CORE_REFERENCE,
+                        format!(
+                            "relation {} references missing source {}",
+                            relation.id, source_id
+                        ),
+                    )
+                    .with_target(format!("{path}/source_ids"), &relation.id),
+                );
+            }
+        }
+        for (endpoint_name, endpoint) in [("from", &relation.from), ("to", &relation.to)] {
+            if !core_endpoint_exists(
+                endpoint,
+                source_ids,
+                claim_ids,
+                element_ids,
+                learning_step_ids,
+                compatibility_ids,
+            ) {
+                checks.push(
+                    report::DiagnosticCheck::error(
+                        CHECK_CORE_REFERENCE,
+                        format!(
+                            "relation {} {} endpoint references missing {}:{}",
+                            relation.id,
+                            endpoint_name,
+                            relations::endpoint_type_label(endpoint.entity_type),
+                            endpoint.id
+                        ),
+                    )
+                    .with_target(format!("{path}/{endpoint_name}"), &relation.id),
+                );
+            }
+        }
+        if relation.from == relation.to {
+            checks.push(
+                report::DiagnosticCheck::error(
+                    CHECK_CORE_RELATION,
+                    format!(
+                        "relation {} is a self-loop: {}",
+                        relation.id,
+                        core_endpoint_key(&relation.from)
+                    ),
+                )
+                .with_target(&path, &relation.id),
+            );
+        }
+    }
+
+    if let Some(cycle) = hard_prerequisite_cycle(relations) {
+        checks.push(
+            report::DiagnosticCheck::error(
+                CHECK_CORE_PREREQUISITE,
+                format!("hard prerequisite cycle: {}", cycle.join(" -> ")),
+            )
+            .with_target("/knowledge/relations", ""),
+        );
     }
 }
 
@@ -268,6 +431,7 @@ fn validate_pedagogy_package(
     element_ids: &BTreeSet<&str>,
     learning_step_ids: &BTreeSet<&str>,
     compatibility_ids: &BTreeSet<String>,
+    relations: &[relations::Relation],
     checks: &mut Vec<report::DiagnosticCheck>,
 ) {
     let mut ladder_ids = BTreeSet::new();
@@ -344,7 +508,218 @@ fn validate_pedagogy_package(
                 );
             }
         }
+        validate_learning_step_prerequisite_relations(step, index, relations, checks);
     }
+}
+
+fn validate_learning_step_prerequisite_relations(
+    step: &pedagogy::LearningStep,
+    step_index: usize,
+    relations: &[relations::Relation],
+    checks: &mut Vec<report::DiagnosticCheck>,
+) {
+    let relation_lookup = relations
+        .iter()
+        .map(|relation| (relation.id.as_str(), relation))
+        .collect::<BTreeMap<_, _>>();
+    let expected_relation_ids = relations
+        .iter()
+        .filter(|relation| {
+            relations::is_hard_prerequisite(relation.kind)
+                && relation.to.entity_type == relations::RelationEndpointType::CurriculumStep
+                && relation.to.id == step.id
+                && step.prerequisite_ids.contains(&relation.from.id)
+        })
+        .map(|relation| relation.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let declared_relation_ids = step
+        .prerequisite_relation_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+
+    for relation_id in &step.prerequisite_relation_ids {
+        let Some(relation) = relation_lookup.get(relation_id.as_str()) else {
+            checks.push(
+                report::DiagnosticCheck::error(
+                    CHECK_CORE_REFERENCE,
+                    format!(
+                        "learning step {} references missing prerequisite relation {}",
+                        step.id, relation_id
+                    ),
+                )
+                .with_target(
+                    format!("/pedagogy/learning_path/{step_index}/prerequisite_relation_ids"),
+                    &step.id,
+                ),
+            );
+            continue;
+        };
+        if !relations::is_hard_prerequisite(relation.kind)
+            || relation.to.entity_type != relations::RelationEndpointType::CurriculumStep
+            || relation.to.id != step.id
+            || !step.prerequisite_ids.contains(&relation.from.id)
+        {
+            checks.push(
+                report::DiagnosticCheck::error(
+                    CHECK_CORE_PREREQUISITE,
+                    format!(
+                        "learning step {} prerequisite relation {} does not match prerequisite_ids",
+                        step.id, relation_id
+                    ),
+                )
+                .with_target(
+                    format!("/pedagogy/learning_path/{step_index}/prerequisite_relation_ids"),
+                    &step.id,
+                ),
+            );
+        }
+    }
+
+    for prerequisite_id in &step.prerequisite_ids {
+        let has_relation = expected_relation_ids.iter().any(|relation_id| {
+            relation_lookup
+                .get(*relation_id)
+                .map(|relation| relation.from.id == *prerequisite_id)
+                .unwrap_or(false)
+        });
+        if !has_relation {
+            checks.push(
+                report::DiagnosticCheck::error(
+                    CHECK_CORE_PREREQUISITE,
+                    format!(
+                        "learning step {} prerequisite {} has no canonical requires_before relation",
+                        step.id, prerequisite_id
+                    ),
+                )
+                .with_target(
+                    format!("/pedagogy/learning_path/{step_index}/prerequisite_ids"),
+                    &step.id,
+                ),
+            );
+        }
+    }
+
+    if !declared_relation_ids.is_empty() && declared_relation_ids != expected_relation_ids {
+        checks.push(
+            report::DiagnosticCheck::error(
+                CHECK_CORE_PREREQUISITE,
+                format!(
+                    "learning step {} prerequisite_relation_ids disagree with canonical graph",
+                    step.id
+                ),
+            )
+            .with_target(
+                format!("/pedagogy/learning_path/{step_index}/prerequisite_relation_ids"),
+                &step.id,
+            ),
+        );
+    }
+}
+
+fn relation_semantic_key(relation: &relations::Relation) -> String {
+    format!(
+        "{}|{}:{}|{}:{}",
+        relations::relation_kind_label(relation.kind),
+        relations::endpoint_type_label(relation.from.entity_type),
+        relation.from.id,
+        relations::endpoint_type_label(relation.to.entity_type),
+        relation.to.id
+    )
+}
+
+fn core_endpoint_exists(
+    endpoint: &relations::RelationEndpoint,
+    source_ids: &BTreeSet<&str>,
+    claim_ids: &BTreeSet<&str>,
+    element_ids: &BTreeSet<&str>,
+    learning_step_ids: &BTreeSet<&str>,
+    compatibility_ids: &BTreeSet<String>,
+) -> bool {
+    match endpoint.entity_type {
+        relations::RelationEndpointType::FieldElement => element_ids.contains(endpoint.id.as_str()),
+        relations::RelationEndpointType::Concept
+        | relations::RelationEndpointType::Method
+        | relations::RelationEndpointType::Representation => {
+            compatibility_ids.contains(&endpoint.id)
+        }
+        relations::RelationEndpointType::Claim => claim_ids.contains(endpoint.id.as_str()),
+        relations::RelationEndpointType::Source => source_ids.contains(endpoint.id.as_str()),
+        relations::RelationEndpointType::CurriculumStep => {
+            learning_step_ids.contains(endpoint.id.as_str())
+        }
+        relations::RelationEndpointType::FrontierDebate => true,
+    }
+}
+
+fn core_endpoint_key(endpoint: &relations::RelationEndpoint) -> String {
+    format!(
+        "{}:{}",
+        relations::endpoint_type_label(endpoint.entity_type),
+        endpoint.id
+    )
+}
+
+fn hard_prerequisite_cycle(relations: &[relations::Relation]) -> Option<Vec<String>> {
+    let mut graph = BTreeMap::<String, BTreeSet<String>>::new();
+    for relation in relations {
+        if !relations::is_hard_prerequisite(relation.kind) || relation.from == relation.to {
+            continue;
+        }
+        let from = core_endpoint_key(&relation.from);
+        let to = core_endpoint_key(&relation.to);
+        graph.entry(from.clone()).or_default().insert(to.clone());
+        graph.entry(to).or_default();
+    }
+
+    let mut visited = BTreeSet::new();
+    let mut stack = Vec::<String>::new();
+    let mut in_stack = BTreeSet::new();
+    for node in graph.keys() {
+        if visited.contains(node) {
+            continue;
+        }
+        if let Some(cycle) =
+            hard_prerequisite_cycle_from(node, &graph, &mut visited, &mut stack, &mut in_stack)
+        {
+            return Some(cycle);
+        }
+    }
+    None
+}
+
+fn hard_prerequisite_cycle_from(
+    node: &str,
+    graph: &BTreeMap<String, BTreeSet<String>>,
+    visited: &mut BTreeSet<String>,
+    stack: &mut Vec<String>,
+    in_stack: &mut BTreeSet<String>,
+) -> Option<Vec<String>> {
+    visited.insert(node.to_string());
+    stack.push(node.to_string());
+    in_stack.insert(node.to_string());
+
+    if let Some(next_nodes) = graph.get(node) {
+        for next in next_nodes {
+            if !visited.contains(next.as_str()) {
+                if let Some(cycle) =
+                    hard_prerequisite_cycle_from(next, graph, visited, stack, in_stack)
+                {
+                    return Some(cycle);
+                }
+            } else if in_stack.contains(next.as_str()) {
+                if let Some(position) = stack.iter().position(|item| item == next) {
+                    let mut cycle = stack[position..].to_vec();
+                    cycle.push(next.clone());
+                    return Some(cycle);
+                }
+            }
+        }
+    }
+
+    in_stack.remove(node);
+    stack.pop();
+    None
 }
 
 fn validate_source_refs(

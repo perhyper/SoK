@@ -27,10 +27,10 @@
       "title": "Calibration check",
       "learning_goal": "Explain how calibration qualifies the estimate.",
       "prerequisite_ids": ["element-calibration-transfer-2222222222"],
+      "prerequisite_relation_ids": ["rel-calibration-before-check-3333333333"],
       "practice_artifact": "Calibration evidence checklist.",
       "progress_criteria": ["Name the warrant carried by calibration."],
       "source_ids": ["src-quantum-sensing-explained-1111111111"]
     }
   ]
 }
-

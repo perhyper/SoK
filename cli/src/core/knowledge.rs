@@ -7,6 +7,8 @@ pub struct KnowledgePackage {
     pub field: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub elements: Vec<KnowledgeElement>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relations: Vec<relations::Relation>,
 }
 
 impl Default for KnowledgePackage {
@@ -15,6 +17,7 @@ impl Default for KnowledgePackage {
             schema_version: default_knowledge_schema_version(),
             field: String::new(),
             elements: Vec::new(),
+            relations: Vec::new(),
         }
     }
 }
@@ -29,6 +32,8 @@ pub struct KnowledgeElement {
     pub semantic_roles: Vec<SemanticRole>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub role_note: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relation_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub load_bearing_relations: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

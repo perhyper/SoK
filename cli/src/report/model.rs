@@ -1,5 +1,6 @@
 use super::validation::sort_diagnostics;
 use super::*;
+pub use crate::core::relations::RelationKind;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReportDocument {
@@ -156,6 +157,8 @@ pub struct FieldElement {
     pub label: String,
     pub actual_form: String,
     pub role: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relation_ids: Vec<String>,
     pub load_bearing_relations: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source_ids: Vec<String>,
@@ -376,7 +379,7 @@ pub enum SupportKind {
     Example,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 pub struct Relation {
     pub id: String,
     pub kind: RelationKind,
@@ -388,22 +391,42 @@ pub struct Relation {
     pub source_ids: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum RelationKind {
-    DependsOn,
-    #[default]
-    Supports,
-    Qualifies,
-    Contradicts,
-    Precedes,
-    Introduces,
-    UsesMethod,
-    RepresentedBy,
-    Grounds,
-    Motivates,
-    PartOf,
-    MapsTo,
+impl<'de> Deserialize<'de> for Relation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct RelationWire {
+            id: String,
+            kind: String,
+            from: RelationEndpoint,
+            to: RelationEndpoint,
+            #[serde(default)]
+            description: String,
+            #[serde(default)]
+            source_ids: Vec<String>,
+        }
+
+        let wire = RelationWire::deserialize(deserializer)?;
+        let mapping =
+            crate::core::relations::relation_kind_mapping(&wire.kind).ok_or_else(|| {
+                serde::de::Error::custom(format!("unknown relation kind {:?}", wire.kind))
+            })?;
+        let (from, to) = if mapping.reverse_endpoints {
+            (wire.to, wire.from)
+        } else {
+            (wire.from, wire.to)
+        };
+        Ok(Self {
+            id: wire.id,
+            kind: mapping.kind,
+            from,
+            to,
+            description: wire.description,
+            source_ids: wire.source_ids,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

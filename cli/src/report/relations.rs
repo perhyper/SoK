@@ -16,7 +16,7 @@ pub(crate) fn build_relations(
     let mut seen_ids = BTreeSet::new();
     for (index, row) in parsed.relation_rows.iter().enumerate() {
         let kind_text = lookup_cell_any(row, &["Relation kind", "Kind", "Type"]);
-        let Some(kind) = parse_relation_kind_input(&kind_text) else {
+        let Some(kind_mapping) = parse_relation_kind_mapping_input(&kind_text) else {
             diagnostics.push(
                 DiagnosticCheck::error(
                     CHECK_EXPORT_MISSING_PUBLIC_FIELD,
@@ -58,6 +58,12 @@ pub(crate) fn build_relations(
             diagnostics,
         ) else {
             continue;
+        };
+        let kind = kind_mapping.kind;
+        let (from, to) = if kind_mapping.reverse_endpoints {
+            (to, from)
+        } else {
+            (from, to)
         };
 
         let explicit_id = lookup_cell_any(row, &["Relation ID", "Relation id", "ID"]);
@@ -115,6 +121,64 @@ pub(crate) fn build_relations(
         });
     }
     relations
+}
+
+pub(crate) fn deduplicate_relations(relations: Vec<Relation>) -> Vec<Relation> {
+    let mut by_semantic_key = BTreeMap::<RelationSemanticKey, Relation>::new();
+    for mut relation in relations {
+        relation.source_ids = sorted_unique(relation.source_ids);
+        let key = RelationSemanticKey::from(&relation);
+        by_semantic_key
+            .entry(key)
+            .and_modify(|existing| merge_relation(existing, &relation))
+            .or_insert(relation);
+    }
+    by_semantic_key.into_values().collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct RelationSemanticKey {
+    kind: RelationKind,
+    from_type: EntityType,
+    from_id: String,
+    to_type: EntityType,
+    to_id: String,
+}
+
+impl From<&Relation> for RelationSemanticKey {
+    fn from(relation: &Relation) -> Self {
+        Self {
+            kind: relation.kind,
+            from_type: relation.from.entity_type,
+            from_id: relation.from.id.clone(),
+            to_type: relation.to.entity_type,
+            to_id: relation.to.id.clone(),
+        }
+    }
+}
+
+fn merge_relation(existing: &mut Relation, duplicate: &Relation) {
+    if duplicate.id < existing.id {
+        existing.id = duplicate.id.clone();
+    }
+    if !duplicate.description.trim().is_empty()
+        && (existing.description.trim().is_empty() || duplicate.description < existing.description)
+    {
+        existing.description = duplicate.description.clone();
+    }
+    existing
+        .source_ids
+        .extend(duplicate.source_ids.iter().cloned());
+    existing.source_ids = sorted_unique(std::mem::take(&mut existing.source_ids));
+}
+
+fn sorted_unique(values: Vec<String>) -> Vec<String> {
+    values
+        .into_iter()
+        .filter(|value| !value.trim().is_empty())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 pub(crate) fn resolve_relation_endpoint_from_row(
@@ -533,44 +597,17 @@ pub(crate) fn parse_entity_type_input(raw: &str) -> Option<EntityType> {
 }
 
 pub(crate) fn parse_relation_kind_input(raw: &str) -> Option<RelationKind> {
-    match normalize_access_status_label(raw).as_str() {
-        "depends_on" | "depends" | "requires" | "prerequisite" | "prerequisite_for" => {
-            Some(RelationKind::DependsOn)
-        }
-        "supports" | "support" | "supported_by" => Some(RelationKind::Supports),
-        "qualifies" | "qualify" | "limits" | "conditions" => Some(RelationKind::Qualifies),
-        "contradicts" | "contradict" | "conflicts" => Some(RelationKind::Contradicts),
-        "precedes" | "precedes_in_curriculum" | "before" | "prior_to" => {
-            Some(RelationKind::Precedes)
-        }
-        "introduces" | "introduce" => Some(RelationKind::Introduces),
-        "uses_method" | "uses" | "uses_method_or_warrant" => Some(RelationKind::UsesMethod),
-        "represented_by" | "represented" | "has_representation" => {
-            Some(RelationKind::RepresentedBy)
-        }
-        "grounds" | "grounded_by" => Some(RelationKind::Grounds),
-        "motivates" | "motivation" => Some(RelationKind::Motivates),
-        "part_of" | "contains" | "component_of" => Some(RelationKind::PartOf),
-        "maps_to" | "maps" | "corresponds_to" => Some(RelationKind::MapsTo),
-        _ => None,
-    }
+    parse_relation_kind_mapping_input(raw).map(|mapping| mapping.kind)
+}
+
+pub(crate) fn parse_relation_kind_mapping_input(
+    raw: &str,
+) -> Option<crate::core::relations::RelationKindMapping> {
+    crate::core::relations::relation_kind_mapping(raw)
 }
 
 pub(crate) fn relation_kind_label(kind: RelationKind) -> &'static str {
-    match kind {
-        RelationKind::DependsOn => "depends_on",
-        RelationKind::Supports => "supports",
-        RelationKind::Qualifies => "qualifies",
-        RelationKind::Contradicts => "contradicts",
-        RelationKind::Precedes => "precedes",
-        RelationKind::Introduces => "introduces",
-        RelationKind::UsesMethod => "uses_method",
-        RelationKind::RepresentedBy => "represented_by",
-        RelationKind::Grounds => "grounds",
-        RelationKind::Motivates => "motivates",
-        RelationKind::PartOf => "part_of",
-        RelationKind::MapsTo => "maps_to",
-    }
+    crate::core::relations::relation_kind_label(kind)
 }
 
 pub(crate) fn parse_visual_view_kind_input(raw: &str) -> VisualViewKind {
@@ -617,11 +654,22 @@ pub(crate) fn validate_relation_consistency(
             index,
             checks,
         );
-        if matches!(
-            relation.kind,
-            RelationKind::DependsOn | RelationKind::Precedes
-        ) && (relation.from.entity_type == EntityType::CurriculumStep
-            || relation.to.entity_type == EntityType::CurriculumStep)
+        if relation.from == relation.to {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_RELATION_ENDPOINT,
+                    format!(
+                        "relation {} is a self-loop: {}",
+                        relation.id,
+                        report_endpoint_key(&relation.from)
+                    ),
+                )
+                .with_target(format!("/report/relations/{relation_index}"), &relation.id),
+            );
+        }
+        if crate::core::relations::is_hard_prerequisite(relation.kind)
+            && (relation.from.entity_type == EntityType::CurriculumStep
+                || relation.to.entity_type == EntityType::CurriculumStep)
             && (!index.has_entity(relation.from.entity_type, &relation.from.id)
                 || !index.has_entity(relation.to.entity_type, &relation.to.id))
         {
@@ -637,6 +685,194 @@ pub(crate) fn validate_relation_consistency(
             );
         }
     }
+    validate_field_element_relation_projection(report, checks);
+    validate_curriculum_relation_projection(report, checks);
+    if let Some(cycle) = hard_prerequisite_cycle(&report.relations) {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_CURRICULUM_REFERENCE,
+                format!("hard prerequisite cycle: {}", cycle.join(" -> ")),
+            )
+            .with_target("/report/relations", ""),
+        );
+    }
+}
+
+fn validate_field_element_relation_projection(
+    report: &PublicReport,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    let relation_lookup = report
+        .relations
+        .iter()
+        .map(|relation| (relation.id.as_str(), relation))
+        .collect::<BTreeMap<_, _>>();
+    for (element_index, element) in report.field_elements.iter().enumerate() {
+        for relation_id in &element.relation_ids {
+            let Some(relation) = relation_lookup.get(relation_id.as_str()) else {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_RELATION_ENDPOINT,
+                        format!(
+                            "field element {} references missing relation {}",
+                            element.id, relation_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/field_elements/{element_index}/relation_ids"),
+                        &element.id,
+                    ),
+                );
+                continue;
+            };
+            let touches_element = [(&relation.from), (&relation.to)]
+                .into_iter()
+                .any(|endpoint| {
+                    endpoint.entity_type == EntityType::FieldElement && endpoint.id == element.id
+                });
+            if !touches_element {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_RELATION_ENDPOINT,
+                        format!(
+                            "field element {} relation_id {} does not touch the field element",
+                            element.id, relation_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/field_elements/{element_index}/relation_ids"),
+                        &element.id,
+                    ),
+                );
+            }
+        }
+    }
+}
+
+fn validate_curriculum_relation_projection(
+    report: &PublicReport,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    let hard_relations = report
+        .relations
+        .iter()
+        .filter(|relation| crate::core::relations::is_hard_prerequisite(relation.kind))
+        .collect::<Vec<_>>();
+    let curriculum_steps = report
+        .curriculum_path
+        .iter()
+        .map(|step| (step.id.as_str(), step))
+        .collect::<BTreeMap<_, _>>();
+
+    for (step_index, step) in report.curriculum_path.iter().enumerate() {
+        for prerequisite_id in &step.prerequisite_ids {
+            let has_relation = hard_relations.iter().any(|relation| {
+                relation.to.entity_type == EntityType::CurriculumStep
+                    && relation.to.id == step.id
+                    && relation.from.id == *prerequisite_id
+            });
+            if !has_relation {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_CURRICULUM_REFERENCE,
+                        format!(
+                            "curriculum step {} prerequisite {} has no canonical requires_before relation",
+                            step.id, prerequisite_id
+                        ),
+                    )
+                    .with_target(
+                        format!("/report/curriculum_path/{step_index}/prerequisite_ids"),
+                        &step.id,
+                    ),
+                );
+            }
+        }
+    }
+
+    for relation in hard_relations {
+        if relation.to.entity_type != EntityType::CurriculumStep {
+            continue;
+        }
+        let Some(step) = curriculum_steps.get(relation.to.id.as_str()) else {
+            continue;
+        };
+        if !step.prerequisite_ids.contains(&relation.from.id) {
+            checks.push(
+                DiagnosticCheck::error(
+                    CHECK_VALIDATE_CURRICULUM_REFERENCE,
+                    format!(
+                        "canonical requires_before relation {} is not projected in curriculum step {} prerequisite_ids",
+                        relation.id, step.id
+                    ),
+                )
+                .with_target("/report/curriculum_path", &step.id),
+            );
+        }
+    }
+}
+
+fn hard_prerequisite_cycle(relations: &[Relation]) -> Option<Vec<String>> {
+    let mut graph = BTreeMap::<String, BTreeSet<String>>::new();
+    for relation in relations {
+        if !crate::core::relations::is_hard_prerequisite(relation.kind)
+            || relation.from == relation.to
+        {
+            continue;
+        }
+        let from = report_endpoint_key(&relation.from);
+        let to = report_endpoint_key(&relation.to);
+        graph.entry(from.clone()).or_default().insert(to.clone());
+        graph.entry(to).or_default();
+    }
+
+    let mut visited = BTreeSet::new();
+    let mut stack = Vec::<String>::new();
+    let mut in_stack = BTreeSet::new();
+    for node in graph.keys() {
+        if visited.contains(node) {
+            continue;
+        }
+        if let Some(cycle) =
+            hard_prerequisite_cycle_from(node, &graph, &mut visited, &mut stack, &mut in_stack)
+        {
+            return Some(cycle);
+        }
+    }
+    None
+}
+
+fn hard_prerequisite_cycle_from(
+    node: &str,
+    graph: &BTreeMap<String, BTreeSet<String>>,
+    visited: &mut BTreeSet<String>,
+    stack: &mut Vec<String>,
+    in_stack: &mut BTreeSet<String>,
+) -> Option<Vec<String>> {
+    visited.insert(node.to_string());
+    stack.push(node.to_string());
+    in_stack.insert(node.to_string());
+
+    if let Some(next_nodes) = graph.get(node) {
+        for next in next_nodes {
+            if !visited.contains(next.as_str()) {
+                if let Some(cycle) =
+                    hard_prerequisite_cycle_from(next, graph, visited, stack, in_stack)
+                {
+                    return Some(cycle);
+                }
+            } else if in_stack.contains(next.as_str()) {
+                if let Some(position) = stack.iter().position(|item| item == next) {
+                    let mut cycle = stack[position..].to_vec();
+                    cycle.push(next.clone());
+                    return Some(cycle);
+                }
+            }
+        }
+    }
+
+    in_stack.remove(node);
+    stack.pop();
+    None
 }
 
 pub(crate) fn validate_relation_endpoint_consistency(
@@ -872,6 +1108,38 @@ pub(crate) fn validate_visual_references(
                         .with_target(format!("{edge_path}/relation_id"), &view.id),
                     );
                 }
+                if let Some(edge_kind) = parse_relation_kind_input(&edge.kind) {
+                    if edge_kind != relation.kind {
+                        edge_is_valid = false;
+                        checks.push(
+                            DiagnosticCheck::error(
+                                CHECK_VALIDATE_VISUAL_REFERENCE,
+                                format!(
+                                    "visual view {} edge {} -> {} kind {} disagrees with relation {} kind {}",
+                                    view.id,
+                                    edge.from,
+                                    edge.to,
+                                    edge.kind,
+                                    edge.relation_id,
+                                    relation_kind_label(relation.kind)
+                                ),
+                            )
+                            .with_target(format!("{edge_path}/kind"), &view.id),
+                        );
+                    }
+                } else {
+                    edge_is_valid = false;
+                    checks.push(
+                        DiagnosticCheck::error(
+                            CHECK_VALIDATE_VISUAL_REFERENCE,
+                            format!(
+                                "visual view {} edge {} -> {} has unsupported relation kind {}",
+                                view.id, edge.from, edge.to, edge.kind
+                            ),
+                        )
+                        .with_target(format!("{edge_path}/kind"), &view.id),
+                    );
+                }
             } else {
                 edge_is_valid = false;
             }
@@ -900,10 +1168,8 @@ pub(crate) fn visual_relation_matches_nodes(
     from_node: &VisualViewNode,
     to_node: &VisualViewNode,
 ) -> bool {
-    (visual_endpoint_matches_node(&relation.from, from_node)
-        && visual_endpoint_matches_node(&relation.to, to_node))
-        || (visual_endpoint_matches_node(&relation.from, to_node)
-            && visual_endpoint_matches_node(&relation.to, from_node))
+    visual_endpoint_matches_node(&relation.from, from_node)
+        && visual_endpoint_matches_node(&relation.to, to_node)
 }
 
 pub(crate) fn visual_endpoint_matches_node(
@@ -911,4 +1177,12 @@ pub(crate) fn visual_endpoint_matches_node(
     node: &VisualViewNode,
 ) -> bool {
     endpoint.entity_type == node.entity_type && endpoint.id == node.ref_id
+}
+
+fn report_endpoint_key(endpoint: &RelationEndpoint) -> String {
+    format!(
+        "{}:{}",
+        entity_type_label(endpoint.entity_type),
+        endpoint.id
+    )
 }

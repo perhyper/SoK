@@ -70,6 +70,12 @@
         "title": { "$ref": "#/$defs/non_empty_string" },
         "learning_goal": { "$ref": "#/$defs/non_empty_string" },
         "prerequisite_ids": {
+          "description": "Compatibility projection of canonical requires_before relations.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        },
+        "prerequisite_relation_ids": {
+          "description": "Canonical requires_before relation IDs that project to prerequisite_ids.",
           "type": "array",
           "items": { "$ref": "#/$defs/stable_id" }
         },
@@ -86,4 +92,3 @@
     }
   }
 }
-

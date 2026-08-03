@@ -13,6 +13,7 @@
       },
       "semantic_roles": ["core", "concept", "object"],
       "role_note": "core",
+      "relation_ids": ["rel-quantity-before-calibration-1111111111"],
       "load_bearing_relations": "The quantity must be encoded before it can be estimated.",
       "source_ids": ["src-quantum-sensing-explained-1111111111"],
       "confidence": "high"
@@ -28,6 +29,11 @@
       },
       "semantic_roles": ["core", "method"],
       "role_note": "core",
+      "relation_ids": [
+        "rel-quantity-before-calibration-1111111111",
+        "rel-calibration-deepens-noise-model-2222222222",
+        "rel-calibration-before-check-3333333333"
+      ],
       "load_bearing_relations": "Calibration qualifies the estimated physical quantity.",
       "source_ids": ["src-quantum-sensing-explained-1111111111"],
       "confidence": "medium"
@@ -43,10 +49,54 @@
       },
       "semantic_roles": ["surrounding", "representation"],
       "role_note": "surrounding",
+      "relation_ids": ["rel-calibration-deepens-noise-model-2222222222"],
       "load_bearing_relations": "The model explains when an estimate is trustworthy.",
       "source_ids": ["src-quantum-sensing-explained-1111111111"],
       "confidence": "medium"
     }
+  ],
+  "relations": [
+    {
+      "id": "rel-quantity-before-calibration-1111111111",
+      "kind": "requires_before",
+      "from": {
+        "entity_type": "field_element",
+        "id": "element-physical-quantity-1111111111"
+      },
+      "to": {
+        "entity_type": "field_element",
+        "id": "element-calibration-transfer-2222222222"
+      },
+      "description": "Physical quantity framing is needed before calibration can qualify an estimate.",
+      "source_ids": ["src-quantum-sensing-explained-1111111111"]
+    },
+    {
+      "id": "rel-calibration-deepens-noise-model-2222222222",
+      "kind": "deepens",
+      "from": {
+        "entity_type": "field_element",
+        "id": "element-calibration-transfer-2222222222"
+      },
+      "to": {
+        "entity_type": "field_element",
+        "id": "element-noise-model-3333333333"
+      },
+      "description": "Calibration deepens the noise model by identifying transferable uncertainty.",
+      "source_ids": ["src-quantum-sensing-explained-1111111111"]
+    },
+    {
+      "id": "rel-calibration-before-check-3333333333",
+      "kind": "requires_before",
+      "from": {
+        "entity_type": "field_element",
+        "id": "element-calibration-transfer-2222222222"
+      },
+      "to": {
+        "entity_type": "curriculum_step",
+        "id": "step-calibration-check-2222222222"
+      },
+      "description": "Calibration transfer is prerequisite knowledge for the calibration check step.",
+      "source_ids": ["src-quantum-sensing-explained-1111111111"]
+    }
   ]
 }
-
