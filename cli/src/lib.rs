@@ -9,6 +9,7 @@ pub mod report;
 pub mod run_manifest;
 mod scaffold;
 mod sources;
+pub mod work;
 
 pub use cli::{print_usage, run_cli, version_string};
 pub use downloader::{

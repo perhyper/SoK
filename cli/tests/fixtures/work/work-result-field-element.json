@@ -1,0 +1,34 @@
+{
+  "schema_version": "sok-work-result/v1",
+  "work_order_id": "work-order-fixture-1111111111",
+  "result_id": "work-result-fixture-1111111111",
+  "task_kind": "field_element_extraction",
+  "status": "patch_proposal",
+  "offered_capabilities": ["basic_completion", "structured_output"],
+  "capability_response": {
+    "status": "accepted"
+  },
+  "patches": [
+    {
+      "schema_version": "sok-work-patch/v1",
+      "patch_id": "patch-fixture-element-1111111111",
+      "target_package": "knowledge",
+      "op": "add",
+      "path": "/knowledge/elements/-",
+      "value": {
+        "id": "element-work-fixture-4444444444",
+        "element_class": "Context cue",
+        "label": {
+          "text": "Fixture work patch"
+        },
+        "actual_form": {
+          "text": "A proposed element carried as patch data."
+        },
+        "semantic_roles": ["context"],
+        "role_note": "fixture",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"],
+        "confidence": "low"
+      }
+    }
+  ]
+}

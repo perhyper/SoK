@@ -56,6 +56,7 @@ fn every_documented_command_supports_immediate_help() {
         "migrate-ids",
         "render-html",
         "specificity",
+        "work",
     ] {
         assert_eq!(
             run_cli(vec![command.to_string(), "--help".to_string()]).unwrap(),
@@ -1925,6 +1926,457 @@ fn sok_run_schema_declares_private_manifest_contract() {
             "public report metadata must not expose private run field {disallowed}"
         );
     }
+}
+
+#[test]
+fn sok_work_schemas_declare_provider_neutral_protocol_contracts() {
+    let order = load_repo_json("specs/sok-work-order.schema.json");
+    let result = load_repo_json("specs/sok-work-result.schema.json");
+    let patch = load_repo_json("specs/sok-work-patch.schema.json");
+    assert_eq!(
+        order["properties"]["schema_version"]["const"],
+        json!("sok-work-order/v1")
+    );
+    assert_eq!(
+        result["properties"]["schema_version"]["const"],
+        json!("sok-work-result/v1")
+    );
+    assert_eq!(
+        patch["properties"]["schema_version"]["const"],
+        json!("sok-work-patch/v1")
+    );
+
+    for task_kind in supported_work_task_kind_labels() {
+        assert!(json_array_contains(
+            &order["$defs"]["task_kind"]["enum"],
+            task_kind
+        ));
+        assert!(json_array_contains(
+            &result["$defs"]["task_kind"]["enum"],
+            task_kind
+        ));
+    }
+    for capability in [
+        "basic_completion",
+        "structured_output",
+        "tool_capable",
+        "long_context_agent",
+    ] {
+        assert!(json_array_contains(
+            &order["$defs"]["capability"]["enum"],
+            capability
+        ));
+        assert!(json_array_contains(
+            &result["$defs"]["capability"]["enum"],
+            capability
+        ));
+    }
+}
+
+#[test]
+fn work_order_validators_cover_supported_task_kinds_and_reject_unknowns() {
+    for task_kind in supported_work_task_kinds() {
+        let order = test_work_order(task_kind);
+        let validation = work::validate_work_order(&order);
+        assert!(
+            validation.valid,
+            "{task_kind:?}: {:?}",
+            validation.diagnostics
+        );
+    }
+
+    let mut unknown_version = test_work_order(work::WorkTaskKind::Framing);
+    unknown_version.schema_version = "sok-work-order/v99".to_string();
+    let validation = work::validate_work_order(&unknown_version);
+    assert_work_check(&validation, work::validation::CHECK_WORK_VERSION);
+
+    let unsupported_task_kind = json!({
+        "schema_version": "sok-work-order/v1",
+        "work_order_id": "work-order-1111111111",
+        "task_kind": "book_generation",
+        "objective": "Out of scope task.",
+        "allowed_patch_paths": ["/knowledge/elements"]
+    });
+    assert!(serde_json::from_value::<work::WorkOrder>(unsupported_task_kind).is_err());
+}
+
+#[test]
+fn work_result_rejects_unknown_versions_and_unsupported_task_kinds() {
+    let order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    let mut result = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-1111111111")],
+    );
+    let validation = work::validate_work_result(&order, &result);
+    assert!(validation.valid, "{:?}", validation.diagnostics);
+
+    result.schema_version = "sok-work-result/v99".to_string();
+    let validation = work::validate_work_result(&order, &result);
+    assert_work_check(&validation, work::validation::CHECK_WORK_VERSION);
+
+    let unsupported_task_kind = json!({
+        "schema_version": "sok-work-result/v1",
+        "work_order_id": order.work_order_id,
+        "result_id": "work-result-1111111111",
+        "task_kind": "book_generation",
+        "status": "refusal",
+        "capability_response": {
+            "status": "refusal",
+            "missing_capabilities": ["basic_completion"],
+            "rationale": "unsupported"
+        }
+    });
+    assert!(serde_json::from_value::<work::WorkResult>(unsupported_task_kind).is_err());
+}
+
+#[test]
+fn work_protocol_fixtures_validate_and_apply_against_core_packages() {
+    let order: work::WorkOrder = report::read_json_file(repo_path(
+        "cli/tests/fixtures/work/work-order-field-element.json",
+    ))
+    .unwrap();
+    let result: work::WorkResult = report::read_json_file(repo_path(
+        "cli/tests/fixtures/work/work-result-field-element.json",
+    ))
+    .unwrap();
+    assert!(work::validate_work_order(&order).valid);
+    assert!(work::validate_work_result(&order, &result).valid);
+
+    let patched =
+        work::accept_work_result_patches(&order, &result, &core_fixture_packages()).unwrap();
+    assert!(patched
+        .knowledge
+        .elements
+        .iter()
+        .any(|element| element.id == "element-work-fixture-4444444444"));
+}
+
+#[test]
+fn work_capability_negotiation_validates_match_refusal_and_degradation() {
+    let mut order = test_work_order(work::WorkTaskKind::ReportProjection);
+    order.required_capabilities = vec![
+        work::WorkCapability::BasicCompletion,
+        work::WorkCapability::StructuredOutput,
+        work::WorkCapability::LongContextAgent,
+    ];
+    let offered = vec![
+        work::WorkCapability::BasicCompletion,
+        work::WorkCapability::StructuredOutput,
+    ];
+
+    let missing = work::missing_capabilities(&order.required_capabilities, &offered);
+    assert_eq!(missing, vec![work::WorkCapability::LongContextAgent]);
+
+    let refusal = work::negotiate_capabilities(
+        &order.required_capabilities,
+        &offered,
+        work::NegotiationMode::Refusal,
+    );
+    assert_eq!(refusal.status, work::CapabilityResolutionStatus::Refusal);
+    let refusal_result = work::WorkResult {
+        schema_version: "sok-work-result/v1".to_string(),
+        work_order_id: order.work_order_id.clone(),
+        result_id: "work-result-refusal-1111111111".to_string(),
+        task_kind: order.task_kind,
+        status: work::WorkResultStatus::Refusal,
+        offered_capabilities: offered.clone(),
+        capability_response: refusal,
+        patches: Vec::new(),
+        notes: String::new(),
+    };
+    assert!(work::validate_work_result(&order, &refusal_result).valid);
+
+    let degradation = work::negotiate_capabilities(
+        &order.required_capabilities,
+        &offered,
+        work::NegotiationMode::DegradationPlan,
+    );
+    assert_eq!(
+        degradation.status,
+        work::CapabilityResolutionStatus::DegradationPlan
+    );
+    assert!(!degradation.degradation_plan.is_empty());
+    let degradation_result = work::WorkResult {
+        schema_version: "sok-work-result/v1".to_string(),
+        work_order_id: order.work_order_id.clone(),
+        result_id: "work-result-degradation-1111111111".to_string(),
+        task_kind: order.task_kind,
+        status: work::WorkResultStatus::DegradationPlan,
+        offered_capabilities: offered.clone(),
+        capability_response: degradation,
+        patches: Vec::new(),
+        notes: String::new(),
+    };
+    assert!(work::validate_work_result(&order, &degradation_result).valid);
+
+    let mut bad = refusal_result.clone();
+    bad.status = work::WorkResultStatus::PatchProposal;
+    bad.capability_response = work::CapabilityResponse::accepted();
+    bad.patches = vec![valid_element_patch("patch-element-2222222222")];
+    let validation = work::validate_work_result(&order, &bad);
+    assert_work_check(&validation, work::validation::CHECK_WORK_CAPABILITY);
+}
+
+#[test]
+fn work_permission_envelopes_default_deny_and_constrain_roots() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("input.json");
+    let output = dir.path().join("output.json");
+    let mut order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    order.input_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        input.display().to_string(),
+    )];
+    order.output_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        output.display().to_string(),
+    )];
+
+    let validation = work::validate_work_order(&order);
+    assert_work_check(&validation, work::validation::CHECK_WORK_PERMISSION);
+
+    order.permissions.read_roots = vec![dir.path().display().to_string()];
+    order.permissions.write_roots = vec![dir.path().display().to_string()];
+    let validation = work::validate_work_order(&order);
+    assert!(validation.valid, "{:?}", validation.diagnostics);
+
+    let outside = dir.path().join("..").join("outside.json");
+    order.output_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        outside.display().to_string(),
+    )];
+    let validation = work::validate_work_order(&order);
+    assert_work_check(&validation, work::validation::CHECK_WORK_PERMISSION);
+}
+
+#[test]
+fn work_patch_accepts_valid_patches_and_rejects_invalid_paths_versions_and_dangling_refs() {
+    let packages = core_fixture_packages();
+    let order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    let result = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-1111111111")],
+    );
+    let patched = work::accept_work_result_patches(&order, &result, &packages).unwrap();
+    assert!(patched
+        .knowledge
+        .elements
+        .iter()
+        .any(|element| element.id == "element-command-string-4444444444"));
+    assert!(!packages
+        .knowledge
+        .elements
+        .iter()
+        .any(|element| element.id == "element-command-string-4444444444"));
+
+    let mut unknown_patch_version = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-version-1111111111")],
+    );
+    unknown_patch_version.patches[0].schema_version = "sok-work-patch/v99".to_string();
+    let validation = work::validate_work_result(&order, &unknown_patch_version);
+    assert_work_check(&validation, work::validation::CHECK_WORK_VERSION);
+
+    let undeclared = work::WorkPatch::add(
+        "patch-claim-1111111111",
+        work::CorePackageArea::Evidence,
+        "/evidence/claims/-",
+        json!({
+            "id": "claim-undeclared-1111111111",
+            "statement": "This should not be accepted through a field-element order.",
+            "claim_type": "structural",
+            "evidence_requirement": "reviewed_source",
+            "temporal": {
+                "as_of": "2026-07-16",
+                "review_after": "2027-01-16",
+                "temporal_status": "durable",
+                "rationale": "Fixture."
+            }
+        }),
+    );
+    let undeclared_result = test_work_result(&order, vec![undeclared]);
+    let validation = work::validate_work_result(&order, &undeclared_result);
+    assert_work_check(&validation, work::validation::CHECK_WORK_PATCH);
+
+    let mut unsupported_operation = valid_element_patch("patch-operation-1111111111");
+    unsupported_operation.op = work::PatchOperation::Replace;
+    unsupported_operation.path = "/knowledge/elements".to_string();
+    let validation = work::validate_work_result(
+        &order,
+        &test_work_result(&order, vec![unsupported_operation]),
+    );
+    assert_work_check(&validation, work::validation::CHECK_WORK_PATCH);
+
+    let mut bad_shape = valid_element_patch("patch-shape-1111111111");
+    bad_shape.value = json!({
+        "id": "element-command-string-4444444444"
+    });
+    let validation = work::validate_work_result(&order, &test_work_result(&order, vec![bad_shape]));
+    assert_work_check(&validation, work::validation::CHECK_WORK_PATCH);
+
+    let relation_order = test_work_order(work::WorkTaskKind::RelationProposals);
+    let dangling_relation = work::WorkPatch::add(
+        "patch-relation-dangling-1111111111",
+        work::CorePackageArea::Knowledge,
+        "/knowledge/relations/-",
+        json!({
+            "id": "rel-dangling-1111111111",
+            "kind": "requires_before",
+            "from": {
+                "entity_type": "field_element",
+                "id": "element-missing-9999999999"
+            },
+            "to": {
+                "entity_type": "field_element",
+                "id": "element-calibration-transfer-2222222222"
+            }
+        }),
+    );
+    let dangling_result = test_work_result(&relation_order, vec![dangling_relation]);
+    assert_contains(
+        &work::accept_work_result_patches(&relation_order, &dangling_result, &packages)
+            .unwrap_err()
+            .to_string(),
+        "patched core packages failed validation",
+    );
+
+    let legacy_relation_kind = work::WorkPatch::add(
+        "patch-relation-legacy-1111111111",
+        work::CorePackageArea::Knowledge,
+        "/knowledge/relations/-",
+        json!({
+            "id": "rel-legacy-kind-1111111111",
+            "kind": "depends_on",
+            "from": {
+                "entity_type": "field_element",
+                "id": "element-calibration-transfer-2222222222"
+            },
+            "to": {
+                "entity_type": "field_element",
+                "id": "element-noise-model-3333333333"
+            }
+        }),
+    );
+    let validation = work::validate_work_result(
+        &relation_order,
+        &test_work_result(&relation_order, vec![legacy_relation_kind]),
+    );
+    assert_work_check(&validation, work::validation::CHECK_WORK_PATCH);
+}
+
+#[test]
+fn work_accept_patch_cli_writes_new_validated_output_without_mutating_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let input_path = dir.path().join("core-input.json");
+    let output_path = dir.path().join("core-output.json");
+    let order_path = dir.path().join("order.json");
+    let result_path = dir.path().join("result.json");
+    let packages = core_fixture_packages();
+    report::write_json_file(&input_path, &packages).unwrap();
+    let input_before = fs::read_to_string(&input_path).unwrap();
+
+    let mut order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    order.permissions.read_roots = vec![dir.path().display().to_string()];
+    order.permissions.write_roots = vec![dir.path().display().to_string()];
+    order.input_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        input_path.display().to_string(),
+    )];
+    order.output_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        output_path.display().to_string(),
+    )];
+    let result = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-3333333333")],
+    );
+    report::write_json_file(&order_path, &order).unwrap();
+    report::write_json_file(&result_path, &result).unwrap();
+
+    assert_eq!(
+        run_cli(vec![
+            "work".to_string(),
+            "accept-patch".to_string(),
+            "--order".to_string(),
+            order_path.display().to_string(),
+            "--result".to_string(),
+            result_path.display().to_string(),
+            "--input".to_string(),
+            input_path.display().to_string(),
+            "--output".to_string(),
+            output_path.display().to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+    assert_eq!(fs::read_to_string(&input_path).unwrap(), input_before);
+    let patched: crate::core::CorePackages = report::read_json_file(&output_path).unwrap();
+    assert!(patched
+        .knowledge
+        .elements
+        .iter()
+        .any(|element| element.id == "element-command-string-4444444444"));
+}
+
+#[test]
+fn work_jsonl_batch_validation_reports_each_line_without_provider_calls() {
+    let order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    let mut bad_order = order.clone();
+    bad_order.schema_version = "sok-work-order/v99".to_string();
+    let input = format!(
+        "{}\n{}\n",
+        serde_json::to_string(&order).unwrap(),
+        serde_json::to_string(&bad_order).unwrap()
+    );
+    let (output, all_valid) = work::validate_work_order_jsonl(&input).unwrap();
+    assert!(!all_valid);
+    let rows = output
+        .lines()
+        .map(|line| serde_json::from_str::<work::WorkJsonlValidationLine>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].valid);
+    assert!(!rows[1].valid);
+    assert_eq!(rows[1].line, 2);
+
+    let good_result = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-5555555555")],
+    );
+    let mut bad_result = good_result.clone();
+    bad_result.capability_response = work::CapabilityResponse::accepted();
+    bad_result.offered_capabilities.clear();
+    let input = format!(
+        "{}\n{}\n",
+        serde_json::to_string(&good_result).unwrap(),
+        serde_json::to_string(&bad_result).unwrap()
+    );
+    let (output, all_valid) = work::validate_work_result_jsonl(&order, &input).unwrap();
+    assert!(!all_valid);
+    let rows = output
+        .lines()
+        .map(|line| serde_json::from_str::<work::WorkJsonlValidationLine>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].valid);
+    assert!(!rows[1].valid);
+}
+
+#[test]
+fn work_patch_shell_like_strings_remain_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let sentinel = dir.path().join("shell-sentinel");
+    let packages = core_fixture_packages();
+    let order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    let mut patch = valid_element_patch("patch-element-shell-1111111111");
+    patch.value["actual_form"]["text"] = json!(format!("sh -c 'touch {}'", sentinel.display()));
+    let result = test_work_result(&order, vec![patch]);
+    let patched = work::accept_work_result_patches(&order, &result, &packages).unwrap();
+    assert!(patched.knowledge.elements.iter().any(|element| element
+        .actual_form
+        .text
+        .contains(&sentinel.display().to_string())));
+    assert!(!sentinel.exists());
 }
 
 #[test]
@@ -5792,6 +6244,73 @@ fn current_scaffold_report_value() -> Value {
     serde_json::to_value(current_scaffold_report_document()).unwrap()
 }
 
+fn supported_work_task_kinds() -> Vec<work::WorkTaskKind> {
+    vec![
+        work::WorkTaskKind::Framing,
+        work::WorkTaskKind::SourceRoleClassification,
+        work::WorkTaskKind::FieldElementExtraction,
+        work::WorkTaskKind::ClaimProposals,
+        work::WorkTaskKind::RelationProposals,
+        work::WorkTaskKind::CurriculumPrerequisiteProposals,
+        work::WorkTaskKind::ArchitectureComparison,
+        work::WorkTaskKind::ConsistencyCritique,
+        work::WorkTaskKind::ReportProjection,
+    ]
+}
+
+fn supported_work_task_kind_labels() -> Vec<&'static str> {
+    supported_work_task_kinds()
+        .into_iter()
+        .map(work::work_task_kind_label)
+        .collect()
+}
+
+fn test_work_order(task_kind: work::WorkTaskKind) -> work::WorkOrder {
+    let mut order = work::WorkOrder::new(
+        "work-order-1111111111",
+        task_kind,
+        "Propose bounded SoK core patches.",
+    );
+    order.required_capabilities = vec![
+        work::WorkCapability::BasicCompletion,
+        work::WorkCapability::StructuredOutput,
+    ];
+    order
+}
+
+fn test_work_result(order: &work::WorkOrder, patches: Vec<work::WorkPatch>) -> work::WorkResult {
+    work::WorkResult::patch_proposal(
+        order.work_order_id.clone(),
+        "work-result-1111111111",
+        order.task_kind,
+        order.required_capabilities.clone(),
+        patches,
+    )
+}
+
+fn valid_element_patch(patch_id: &str) -> work::WorkPatch {
+    let element = crate::core::knowledge::KnowledgeElement {
+        id: "element-command-string-4444444444".to_string(),
+        element_class: "Context cue".to_string(),
+        label: crate::core::knowledge::LocalizedText::plain("Command-like source phrase"),
+        actual_form: crate::core::knowledge::LocalizedText::plain(
+            "A shell-like phrase remains evidence text only.",
+        ),
+        semantic_roles: vec![crate::core::knowledge::SemanticRole::Context],
+        role_note: "untrusted source text".to_string(),
+        relation_ids: Vec::new(),
+        load_bearing_relations: String::new(),
+        source_ids: vec!["src-quantum-sensing-explained-1111111111".to_string()],
+        confidence: Some(crate::core::knowledge::Confidence::Low),
+    };
+    work::WorkPatch::add(
+        patch_id,
+        work::CorePackageArea::Knowledge,
+        "/knowledge/elements/-",
+        serde_json::to_value(element).unwrap(),
+    )
+}
+
 fn core_fixture_packages() -> crate::core::CorePackages {
     crate::core::CorePackages {
         knowledge: report::read_json_file(repo_path(
@@ -6486,6 +7005,16 @@ fn assert_validation_check(
             .iter()
             .any(|check| check.check_id == check_id && check.severity == severity),
         "expected validation diagnostics to include {severity:?} {check_id}; got {:?}",
+        validation.diagnostics.checks
+    );
+}
+
+fn assert_work_check(validation: &work::WorkValidationReport, check_id: &str) {
+    assert!(
+        validation.diagnostics.checks.iter().any(|check| {
+            check.check_id == check_id && check.severity == report::DiagnosticSeverity::Error
+        }),
+        "expected work validation diagnostics to include error {check_id}; got {:?}",
         validation.diagnostics.checks
     );
 }

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sok-work-patch.schema.json",
+  "title": "Structure of Knowledge Work Patch",
+  "description": "A constrained proposed patch against a declared core package area. Patches are data and never executable commands.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "patch_id",
+    "target_package",
+    "op",
+    "path"
+  ],
+  "properties": {
+    "schema_version": { "const": "sok-work-patch/v1" },
+    "patch_id": { "$ref": "#/$defs/stable_id" },
+    "target_package": {
+      "type": "string",
+      "enum": ["knowledge", "evidence", "pedagogy"]
+    },
+    "op": {
+      "type": "string",
+      "enum": ["add", "replace", "remove"]
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^/(knowledge|evidence|pedagogy)(/.*)?$"
+    },
+    "value": true,
+    "rationale": { "type": "string" }
+  },
+  "$defs": {
+    "stable_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9]*-[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    }
+  }
+}

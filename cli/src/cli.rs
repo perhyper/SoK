@@ -53,6 +53,7 @@ pub fn run_cli(args: Vec<String>) -> Result<i32> {
         "migrate-ids" => run_migrate_ids(&args[1..]).map(|_| 0),
         "render-html" => run_render_html(&args[1..]).map(|_| 0),
         "specificity" => run_specificity(&args[1..]).map(|_| 0),
+        "work" => run_work(&args[1..]),
         command => bail!("unknown command {command:?}"),
     }
 }
@@ -83,6 +84,7 @@ Commands:
   migrate-ids       Write a deterministic old-to-new stable ID migration map.
   render-html       Render a validated human_report JSON file to self-contained local HTML.
   specificity       Generate a concreteness checklist for an underspecified domain task.
+  work              Validate and exchange bounded WorkOrder/WorkResult sidecars.
 
 Run "sok <command> -h" for command options."#
     );
@@ -104,6 +106,7 @@ pub(crate) fn print_command_usage(command: &str) -> Result<()> {
         "migrate-ids" => print_migrate_ids_usage(),
         "render-html" => print_render_html_usage(),
         "specificity" => print_specificity_usage(),
+        "work" => print_work_usage(),
         command => bail!("unknown command {command:?}"),
     }
     Ok(())
