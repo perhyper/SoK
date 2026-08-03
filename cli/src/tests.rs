@@ -1,5 +1,9 @@
 use super::*;
+use crate::commands::{ingest_last_manifest, run_download_sources};
+use crate::sources::sorted_open_access_statuses;
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
