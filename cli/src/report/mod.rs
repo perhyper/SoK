@@ -22,7 +22,10 @@ mod relations;
 mod validation;
 
 pub use html::{render_html_report, render_html_report_file};
-pub use ids::{content_id, content_id_map, normalize_id_text};
+pub use ids::{
+    build_id_migration, content_id, content_id_identity, content_id_map, normalize_alias_text,
+    normalize_id_text, normalize_identity_text, IdIdentity, IdMigrationDocument, IdMigrationEntry,
+};
 pub use import::{
     export_markdown_report, read_json_file, read_jsonl_file, write_json_file, write_jsonl_file,
 };

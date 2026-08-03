@@ -132,13 +132,18 @@ where
     let source_lookup = SourceLookup::new(&sources);
     let scope = build_scope(&parsed, &mut diagnostics);
     let domain_profile = build_domain_profile(&parsed, stage, &mut diagnostics);
-    let field_elements = build_field_elements(&parsed, &source_lookup);
+    let field_elements = build_field_elements(&parsed, &source_lookup, &mut diagnostics);
     let (core_ideas, methods, representations) = build_knowledge_items(&field_elements, &parsed);
     let evidence_standards = build_evidence_standards(&parsed);
     let literature_ladder = build_literature_ladder(&parsed, &source_lookup, &mut diagnostics);
-    let mut curriculum_path = build_curriculum_path(&parsed, &source_lookup);
-    let (frontier_debates, frontier_claims) =
-        build_frontier_debates(&parsed, &source_lookup, &as_of, &review_after);
+    let mut curriculum_path = build_curriculum_path(&parsed, &source_lookup, &mut diagnostics);
+    let (frontier_debates, frontier_claims) = build_frontier_debates(
+        &parsed,
+        &source_lookup,
+        &as_of,
+        &review_after,
+        &mut diagnostics,
+    );
     let mut claim_seeds = build_claim_seeds(&parsed);
     claim_seeds.extend(frontier_claims);
     let claims = build_claims(
@@ -808,24 +813,24 @@ pub(crate) fn lint_claim_evidence_support(
     let mut seeds = build_claim_seeds(parsed);
     let lint_as_of = "1970-01-01";
     let lint_review_after = review_after_date(lint_as_of);
-    let (_, frontier_claims) =
-        build_frontier_debates(parsed, &source_lookup, lint_as_of, &lint_review_after);
+    let (_, frontier_claims) = build_frontier_debates(
+        parsed,
+        &source_lookup,
+        lint_as_of,
+        &lint_review_after,
+        checks,
+    );
     seeds.extend(frontier_claims);
 
     for seed in seeds {
         let claim_id = content_id("claim", &[&seed.statement]);
-        let intended_source_ids = source_lookup.resolve_ref_list(&seed.source_refs);
+        let intended_source_ids = source_lookup.resolve_ref_list_with_diagnostics(
+            &seed.source_refs,
+            "/report/claims/source_ids",
+            &claim_id,
+            checks,
+        );
         if intended_source_ids.is_empty() && !seed.source_refs.is_empty() {
-            checks.push(
-                DiagnosticCheck::warning(
-                    CHECK_VALIDATE_EVIDENCE_SOURCE,
-                    format!(
-                        "claim {} references source text that does not match the source manifest",
-                        claim_id
-                    ),
-                )
-                .with_target("/report/claims", &claim_id),
-            );
             continue;
         }
 
@@ -1622,65 +1627,71 @@ pub(crate) fn domain_classifications_from_text(raw: &str) -> Vec<DomainClassific
 pub(crate) fn build_field_elements(
     parsed: &ParsedMarkdownReport,
     source_lookup: &SourceLookup,
+    diagnostics: &mut Vec<DiagnosticCheck>,
 ) -> Vec<FieldElement> {
-    parsed
-        .deep_structure_rows
-        .iter()
-        .filter(|row| is_usable_deep_structure_row(row))
-        .map(|row| {
-            let label = lookup_cell_any(row, &["Observed element", "Element", "Name", "Title"]);
-            let explicit_id =
-                clean_inline_markdown(&lookup_cell_any(row, &["Element ID", "Element Id", "ID"]));
-            let fallback_actual_form = deep_structure_description(row);
-            let actual_form = first_non_empty([
-                lookup_cell_any(
-                    row,
-                    &[
-                        "Actual form in this field",
-                        "In this field",
-                        "SoK extraction",
-                        "First-pass scholarly representation",
-                        "Research-grade representation",
-                        "Why it matters",
-                    ],
-                )
-                .as_str(),
-                fallback_actual_form.as_str(),
-            ]);
-            FieldElement {
-                id: if explicit_id.trim().is_empty() {
-                    content_id("element", &[&label])
-                } else {
-                    explicit_id
-                },
-                element_class: lookup_cell_any(row, &["Element class", "Class", "Element type"]),
-                label,
-                actual_form,
-                role: lookup_cell_any(
-                    row,
-                    &[
-                        "Role",
-                        "Role: core / surrounding / context",
-                        "Structural role",
-                    ],
-                ),
-                load_bearing_relations: lookup_cell_any(
-                    row,
-                    &[
-                        "Load-bearing relations",
-                        "Load bearing relations",
-                        "Key relations",
-                        "Relations",
-                    ],
-                ),
-                source_ids: source_lookup.resolve_refs(&lookup_cell_any(
-                    row,
-                    &["Source IDs", "Sources", "Key sources", "Readings"],
-                )),
-                confidence: parse_claim_confidence(&lookup_cell_any(row, &["Confidence"])),
-            }
-        })
-        .collect()
+    let mut elements = Vec::new();
+    for (index, row) in parsed.deep_structure_rows.iter().enumerate() {
+        if !is_usable_deep_structure_row(row) {
+            continue;
+        }
+        let label = lookup_cell_any(row, &["Observed element", "Element", "Name", "Title"]);
+        let explicit_id =
+            clean_inline_markdown(&lookup_cell_any(row, &["Element ID", "Element Id", "ID"]));
+        let id = if explicit_id.trim().is_empty() {
+            content_id("element", &[&label])
+        } else {
+            explicit_id
+        };
+        let fallback_actual_form = deep_structure_description(row);
+        let actual_form = first_non_empty([
+            lookup_cell_any(
+                row,
+                &[
+                    "Actual form in this field",
+                    "In this field",
+                    "SoK extraction",
+                    "First-pass scholarly representation",
+                    "Research-grade representation",
+                    "Why it matters",
+                ],
+            )
+            .as_str(),
+            fallback_actual_form.as_str(),
+        ]);
+        let source_refs =
+            lookup_cell_any(row, &["Source IDs", "Sources", "Key sources", "Readings"]);
+        elements.push(FieldElement {
+            id: id.clone(),
+            element_class: lookup_cell_any(row, &["Element class", "Class", "Element type"]),
+            label,
+            actual_form,
+            role: lookup_cell_any(
+                row,
+                &[
+                    "Role",
+                    "Role: core / surrounding / context",
+                    "Structural role",
+                ],
+            ),
+            load_bearing_relations: lookup_cell_any(
+                row,
+                &[
+                    "Load-bearing relations",
+                    "Load bearing relations",
+                    "Key relations",
+                    "Relations",
+                ],
+            ),
+            source_ids: source_lookup.resolve_refs_with_diagnostics(
+                &source_refs,
+                format!("/report/field_elements/{index}/source_ids"),
+                &id,
+                diagnostics,
+            ),
+            confidence: parse_claim_confidence(&lookup_cell_any(row, &["Confidence"])),
+        });
+    }
+    elements
 }
 
 pub(crate) fn build_knowledge_items(
@@ -1934,20 +1945,12 @@ pub(crate) fn build_literature_ladder(
             .as_str(),
             start_here.as_str(),
         ]);
-        let source_ids = source_lookup.resolve_refs(&source_refs);
-        if source_ids.is_empty() {
-            diagnostics.push(
-                DiagnosticCheck::warning(
-                    CHECK_EXPORT_UNRESOLVED_REFERENCE,
-                    format!(
-                        "Literature Ladder row {} could not resolve source reference(s) {:?}",
-                        index + 1,
-                        source_refs
-                    ),
-                )
-                .with_target(format!("/report/literature_ladder/{index}/source_ids"), &id),
-            );
-        }
+        let source_ids = source_lookup.resolve_refs_with_diagnostics(
+            &source_refs,
+            format!("/report/literature_ladder/{index}/source_ids"),
+            &id,
+            diagnostics,
+        );
 
         rows.push(LiteratureLadderRow {
             id,
@@ -1980,6 +1983,7 @@ pub(crate) fn parse_source_requirement(raw: &str) -> SourceRoleRequirementKind {
 pub(crate) fn build_curriculum_path(
     parsed: &ParsedMarkdownReport,
     source_lookup: &SourceLookup,
+    diagnostics: &mut Vec<DiagnosticCheck>,
 ) -> Vec<CurriculumStep> {
     let mut steps = Vec::new();
     for (index, row) in parsed.curriculum_rows.iter().enumerate() {
@@ -2001,12 +2005,16 @@ pub(crate) fn build_curriculum_path(
             row,
             &["Progress criteria", "Criteria", "Assessment"],
         ));
-        let source_ids = source_lookup.resolve_refs(&lookup_cell_any(
-            row,
-            &["Readings", "Sources", "Source IDs"],
-        ));
+        let source_refs = lookup_cell_any(row, &["Readings", "Sources", "Source IDs"]);
+        let id = content_id("step", &[&title]);
+        let source_ids = source_lookup.resolve_refs_with_diagnostics(
+            &source_refs,
+            format!("/report/curriculum_path/{index}/source_ids"),
+            &id,
+            diagnostics,
+        );
         steps.push(CurriculumStep {
-            id: content_id("step", &[&title]),
+            id,
             sequence: (index + 1) as u32,
             title,
             learning_goal,
@@ -2096,7 +2104,7 @@ pub(crate) fn apply_curriculum_prerequisites(
                     ),
                 ),
                 ExportReferenceResolution::Ambiguous(candidates) => diagnostics.push(
-                    DiagnosticCheck::warning(
+                    DiagnosticCheck::error(
                         CHECK_EXPORT_AMBIGUOUS_REFERENCE,
                         format!(
                             "curriculum step {} prerequisite reference {:?} is ambiguous: {}",
@@ -2121,6 +2129,7 @@ pub(crate) fn build_frontier_debates(
     source_lookup: &SourceLookup,
     as_of: &str,
     review_after: &str,
+    diagnostics: &mut Vec<DiagnosticCheck>,
 ) -> (Vec<FrontierDebateItem>, Vec<ClaimSeed>) {
     let mut items = Vec::new();
     let mut claims = Vec::new();
@@ -2134,7 +2143,7 @@ pub(crate) fn build_frontier_debates(
         if title.is_empty() || is_placeholder_text(&title) {
             continue;
         }
-        seen_titles.insert(normalize_id_text(&title));
+        seen_titles.insert(normalize_alias_text(&title));
         let summary = first_non_empty([
             lookup_cell_any(row, &["Current state"]).as_str(),
             lookup_cell_any(row, &["Current or frontier issue"]).as_str(),
@@ -2150,7 +2159,13 @@ pub(crate) fn build_frontier_debates(
             "This item marks a frontier, debate, or open problem boundary.",
         ]);
         let source_refs = lookup_cell_any(row, &["Key sources", "Sources", "Source IDs"]);
-        let source_ids = source_lookup.resolve_refs(&source_refs);
+        let id = content_id("frontier", &[&title]);
+        let source_ids = source_lookup.resolve_refs_with_diagnostics(
+            &source_refs,
+            format!("/report/frontier_debates/{}/source_ids", items.len()),
+            &id,
+            diagnostics,
+        );
         let claim_statement = format!("{title}: {summary}");
         let claim_id = content_id("claim", &[&claim_statement]);
         claims.push(ClaimSeed {
@@ -2167,7 +2182,7 @@ pub(crate) fn build_frontier_debates(
             temporal_status: Some(TemporalStatus::Current),
         });
         items.push(FrontierDebateItem {
-            id: content_id("frontier", &[&title]),
+            id,
             kind: if normalize_id_text(&title).contains("debate") {
                 FrontierDebateKind::Debate
             } else if normalize_id_text(&title).contains("problem") {
@@ -2209,7 +2224,7 @@ pub(crate) fn build_frontier_debates(
         let title = lookup_cell_any(row, &["Observed element", "Element", "Name", "Title"]);
         if title.is_empty()
             || is_placeholder_text(&title)
-            || !seen_titles.insert(normalize_id_text(&title))
+            || !seen_titles.insert(normalize_alias_text(&title))
         {
             continue;
         }
@@ -2232,7 +2247,13 @@ pub(crate) fn build_frontier_debates(
             "This field element marks a frontier, debate, or open-problem boundary.",
         ]);
         let source_refs = lookup_cell_any(row, &["Source IDs", "Sources", "Key sources"]);
-        let source_ids = source_lookup.resolve_refs(&source_refs);
+        let id = content_id("frontier", &[&title]);
+        let source_ids = source_lookup.resolve_refs_with_diagnostics(
+            &source_refs,
+            format!("/report/frontier_debates/{}/source_ids", items.len()),
+            &id,
+            diagnostics,
+        );
         let kind = if element_class.contains("debate")
             || element_class.contains("dispute")
             || element_class.contains("controversy")
@@ -2259,7 +2280,7 @@ pub(crate) fn build_frontier_debates(
             temporal_status: Some(TemporalStatus::Current),
         });
         items.push(FrontierDebateItem {
-            id: content_id("frontier", &[&title]),
+            id,
             kind,
             title,
             summary,
@@ -2322,7 +2343,12 @@ pub(crate) fn build_claims(
     let mut claims = Vec::new();
     for seed in seeds {
         let id = content_id("claim", &[&seed.statement]);
-        let intended_source_ids = source_lookup.resolve_ref_list(&seed.source_refs);
+        let intended_source_ids = source_lookup.resolve_ref_list_with_diagnostics(
+            &seed.source_refs,
+            "/report/claims/source_ids",
+            &id,
+            diagnostics,
+        );
         let mut evidence_links = Vec::new();
         let mut saw_cataloged_only = false;
         let mut saw_satisfying_evidence = false;
@@ -2623,11 +2649,12 @@ pub(crate) fn apply_visual_node_emphasis(
         ],
     ));
     for reference in emphasis_refs {
-        let normalized_reference = normalize_id_text(&reference);
+        let normalized_reference = normalize_alias_text(&reference);
         let matching_existing_nodes = nodes_by_entity_id
             .iter()
             .filter(|(_, node)| {
-                node.ref_id == reference || normalize_id_text(&node.label) == normalized_reference
+                node.ref_id == reference
+                    || normalize_alias_text(&node.label) == normalized_reference
             })
             .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
@@ -2663,7 +2690,7 @@ pub(crate) fn apply_visual_node_emphasis(
                 .with_target(format!("/report/visual_views/{row_index}/nodes"), ""),
             ),
             ExportReferenceResolution::Ambiguous(candidates) => diagnostics.push(
-                DiagnosticCheck::warning(
+                DiagnosticCheck::error(
                     CHECK_EXPORT_AMBIGUOUS_REFERENCE,
                     format!(
                         "Visual Views row {} node emphasis reference {:?} is ambiguous: {}",
@@ -2940,12 +2967,20 @@ pub(crate) fn parsed_has_section(parsed: &ParsedMarkdownReport, section: Canonic
 
 #[derive(Debug)]
 pub(crate) struct SourceLookup {
-    aliases: BTreeMap<String, String>,
+    aliases: BTreeMap<String, BTreeSet<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SourceReferenceResolution {
+    Resolved(String),
+    Missing,
+    Ambiguous(Vec<String>),
 }
 
 impl SourceLookup {
     fn new(sources: &[ReportSource]) -> Self {
-        let mut aliases = BTreeMap::new();
+        let aliases = BTreeMap::new();
+        let mut lookup = Self { aliases };
         for (index, source) in sources.iter().enumerate() {
             for alias in [
                 source.id.as_str(),
@@ -2954,38 +2989,101 @@ impl SourceLookup {
                 source.identifier.as_str(),
                 source.url.as_str(),
             ] {
-                let normalized = normalize_id_text(alias);
-                if !normalized.is_empty() {
-                    aliases.insert(normalized, source.id.clone());
-                }
+                lookup.insert_alias(alias, &source.id);
             }
-            aliases.insert(format!("s{}", index + 1), source.id.clone());
+            lookup.insert_alias(&format!("S{}", index + 1), &source.id);
         }
-        Self { aliases }
+        lookup
     }
 
-    pub(crate) fn resolve_refs(&self, refs: &str) -> Vec<String> {
-        self.resolve_ref_list(&split_ref_list(refs))
+    fn insert_alias(&mut self, alias: &str, source_id: &str) {
+        let normalized = normalize_alias_text(alias);
+        if normalized.is_empty() {
+            return;
+        }
+        self.aliases
+            .entry(normalized)
+            .or_default()
+            .insert(source_id.to_string());
     }
 
-    pub(crate) fn resolve_ref_list(&self, refs: &[String]) -> Vec<String> {
+    pub(crate) fn resolve_refs_with_diagnostics(
+        &self,
+        refs: &str,
+        path: impl Into<String>,
+        entity_id: &str,
+        diagnostics: &mut Vec<DiagnosticCheck>,
+    ) -> Vec<String> {
+        self.resolve_ref_list_with_diagnostics(&split_ref_list(refs), path, entity_id, diagnostics)
+    }
+
+    pub(crate) fn resolve_ref_list_with_diagnostics(
+        &self,
+        refs: &[String],
+        path: impl Into<String>,
+        entity_id: &str,
+        diagnostics: &mut Vec<DiagnosticCheck>,
+    ) -> Vec<String> {
+        let path = path.into();
         let mut ids = BTreeSet::new();
         for reference in refs {
-            let normalized = normalize_id_text(reference);
-            if normalized.is_empty() {
-                continue;
-            }
-            if let Some(id) = self.aliases.get(&normalized) {
-                ids.insert(id.clone());
-                continue;
-            }
-            for (alias, id) in &self.aliases {
-                if alias.contains(&normalized) || normalized.contains(alias) {
-                    ids.insert(id.clone());
+            match self.resolve_one(reference) {
+                SourceReferenceResolution::Resolved(id) => {
+                    ids.insert(id);
                 }
+                SourceReferenceResolution::Missing => diagnostics.push(
+                    DiagnosticCheck::warning(
+                        CHECK_EXPORT_UNRESOLVED_REFERENCE,
+                        format!("could not resolve source reference {:?}", reference),
+                    )
+                    .with_target(path.clone(), entity_id),
+                ),
+                SourceReferenceResolution::Ambiguous(candidates) => diagnostics.push(
+                    DiagnosticCheck::error(
+                        CHECK_EXPORT_AMBIGUOUS_REFERENCE,
+                        format!(
+                            "source reference {:?} is ambiguous: {}",
+                            reference,
+                            candidates.join(", ")
+                        ),
+                    )
+                    .with_target(path.clone(), entity_id),
+                ),
             }
         }
         ids.into_iter().collect()
+    }
+
+    pub(crate) fn resolve_one(&self, reference: &str) -> SourceReferenceResolution {
+        let normalized = normalize_alias_text(reference);
+        if normalized.is_empty() {
+            return SourceReferenceResolution::Missing;
+        }
+        if let Some(candidates) = self.aliases.get(&normalized) {
+            return source_candidate_resolution(candidates);
+        }
+
+        let mut candidates = BTreeSet::new();
+        for (alias, ids) in &self.aliases {
+            if alias.contains(&normalized) || normalized.contains(alias) {
+                candidates.extend(ids.iter().cloned());
+            }
+        }
+        source_candidate_resolution(&candidates)
+    }
+}
+
+fn source_candidate_resolution(candidates: &BTreeSet<String>) -> SourceReferenceResolution {
+    match candidates.len() {
+        0 => SourceReferenceResolution::Missing,
+        1 => SourceReferenceResolution::Resolved(
+            candidates
+                .iter()
+                .next()
+                .expect("candidate set has exactly one item")
+                .clone(),
+        ),
+        _ => SourceReferenceResolution::Ambiguous(candidates.iter().cloned().collect()),
     }
 }
 pub(crate) fn split_ref_list(raw: &str) -> Vec<String> {

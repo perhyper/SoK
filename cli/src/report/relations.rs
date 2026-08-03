@@ -18,7 +18,7 @@ pub(crate) fn build_relations(
         let kind_text = lookup_cell_any(row, &["Relation kind", "Kind", "Type"]);
         let Some(kind) = parse_relation_kind_input(&kind_text) else {
             diagnostics.push(
-                DiagnosticCheck::warning(
+                DiagnosticCheck::error(
                     CHECK_EXPORT_MISSING_PUBLIC_FIELD,
                     format!(
                         "Relations row {} has unsupported or missing relation kind {:?}",
@@ -98,19 +98,12 @@ pub(crate) fn build_relations(
                 "Source references",
             ],
         );
-        let source_ids = source_lookup.resolve_refs(&source_refs);
-        if !source_refs.trim().is_empty() && source_ids.is_empty() {
-            diagnostics.push(
-                DiagnosticCheck::warning(
-                    CHECK_EXPORT_UNRESOLVED_REFERENCE,
-                    format!(
-                        "relation {} could not resolve source reference(s) {:?}",
-                        id, source_refs
-                    ),
-                )
-                .with_target(format!("/report/relations/{index}/source_ids"), &id),
-            );
-        }
+        let source_ids = source_lookup.resolve_refs_with_diagnostics(
+            &source_refs,
+            format!("/report/relations/{index}/source_ids"),
+            &id,
+            diagnostics,
+        );
 
         relations.push(Relation {
             id,
@@ -368,7 +361,7 @@ impl ExportEntityIndex {
     }
 
     fn insert_alias(&mut self, entity_type: EntityType, id: &str, alias: &str) {
-        let normalized = normalize_id_text(alias);
+        let normalized = normalize_alias_text(alias);
         if normalized.is_empty() {
             return;
         }
@@ -399,7 +392,7 @@ impl ExportEntityIndex {
             }
             return ExportReferenceResolution::Missing;
         }
-        let normalized = normalize_id_text(reference);
+        let normalized = normalize_alias_text(reference);
         let Some(candidates) = self
             .aliases_by_type
             .get(&entity_type)
@@ -418,7 +411,7 @@ impl ExportEntityIndex {
         if let Some(entity) = self.by_exact_id.get(reference) {
             return ExportReferenceResolution::Resolved(entity.clone());
         }
-        let normalized = normalize_id_text(reference);
+        let normalized = normalize_alias_text(reference);
         let Some(candidates) = self.aliases_all.get(&normalized) else {
             return ExportReferenceResolution::Missing;
         };
@@ -436,7 +429,7 @@ impl ExportEntityIndex {
         if let Some(entity) = self.by_exact_id.get(reference) {
             return ExportReferenceResolution::Resolved(entity.clone());
         }
-        let normalized = normalize_id_text(reference);
+        let normalized = normalize_alias_text(reference);
         let Some(candidates) = self.aliases_all.get(&normalized) else {
             return ExportReferenceResolution::Missing;
         };
@@ -476,7 +469,7 @@ impl ExportEntityIndex {
                 .collect::<Vec<_>>();
             if field_elements.len() == 1 {
                 let field_element = field_elements[0];
-                let field_label = normalize_id_text(&field_element.label);
+                let field_label = normalize_alias_text(&field_element.label);
                 let only_derived_projections = candidates
                     .iter()
                     .filter_map(|id| self.by_exact_id.get(id))
@@ -485,7 +478,7 @@ impl ExportEntityIndex {
                         matches!(
                             entity.entity_type,
                             EntityType::Concept | EntityType::Method | EntityType::Representation
-                        ) && normalize_id_text(&entity.label) == field_label
+                        ) && normalize_alias_text(&entity.label) == field_label
                     });
                 if only_derived_projections {
                     return ExportReferenceResolution::Resolved(field_element.clone());

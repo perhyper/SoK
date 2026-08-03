@@ -458,6 +458,51 @@ pub(crate) fn run_validate_report(args: &[String]) -> Result<i32> {
     }
 }
 
+pub(crate) fn run_migrate_ids(args: &[String]) -> Result<()> {
+    if args
+        .iter()
+        .any(|arg| matches!(arg.as_str(), "-h" | "--help" | "help"))
+    {
+        print_migrate_ids_usage();
+        return Ok(());
+    }
+
+    let flags = parse_flags(args, &[])?;
+    let input = flags.string("input", "");
+    let output = flags.string("output", "");
+    if input.is_empty() {
+        bail!("--input is required");
+    }
+    if output.is_empty() {
+        bail!("--output is required");
+    }
+
+    let document: report::ReportDocument = report::read_json_file(&input)?;
+    if !matches!(
+        document.metadata.schema_version.as_str(),
+        "sok-report/v1" | "sok-report/v2"
+    ) {
+        bail!(
+            "migrate-ids supports sok-report/v1 and sok-report/v2, got {:?}",
+            document.metadata.schema_version
+        );
+    }
+    let migration = report::build_id_migration(&document);
+    report::write_json_file(&output, &migration)?;
+    println!("Wrote {output}");
+    Ok(())
+}
+
+pub(crate) fn print_migrate_ids_usage() {
+    println!(
+        r#"Usage:
+  sok migrate-ids --input <sok-report.json> --output <id-map.json>
+
+Reads a sok-report/v1 or sok-report/v2 artifact and writes a deterministic old-to-new ID migration map.
+The input report is never rewritten in place."#
+    );
+}
+
 pub(crate) fn print_validate_report_usage() {
     println!(
         r#"Usage:

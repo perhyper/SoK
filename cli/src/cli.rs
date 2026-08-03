@@ -50,6 +50,7 @@ pub fn run_cli(args: Vec<String>) -> Result<i32> {
         "export-json" => run_export_json(&args[1..]).map(|_| 0),
         "lint" => run_lint(&args[1..]),
         "validate-report" => run_validate_report(&args[1..]),
+        "migrate-ids" => run_migrate_ids(&args[1..]).map(|_| 0),
         "render-html" => run_render_html(&args[1..]).map(|_| 0),
         "specificity" => run_specificity(&args[1..]).map(|_| 0),
         command => bail!("unknown command {command:?}"),
@@ -79,6 +80,7 @@ Commands:
   export-json       Convert bounded Markdown plus source/evidence files to sok-report.json.
   lint              Check Markdown, source, and evidence inputs before JSON export.
   validate-report   Validate sok-report.json reliability gates.
+  migrate-ids       Write a deterministic old-to-new stable ID migration map.
   render-html       Render a validated human_report JSON file to self-contained local HTML.
   specificity       Generate a concreteness checklist for an underspecified domain task.
 
@@ -99,6 +101,7 @@ pub(crate) fn print_command_usage(command: &str) -> Result<()> {
         "export-json" => print_export_json_usage(),
         "lint" => print_lint_usage(),
         "validate-report" => print_validate_report_usage(),
+        "migrate-ids" => print_migrate_ids_usage(),
         "render-html" => print_render_html_usage(),
         "specificity" => print_specificity_usage(),
         command => bail!("unknown command {command:?}"),

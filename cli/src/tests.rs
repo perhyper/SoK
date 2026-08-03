@@ -53,6 +53,7 @@ fn every_documented_command_supports_immediate_help() {
         "export-json",
         "lint",
         "validate-report",
+        "migrate-ids",
         "render-html",
         "specificity",
     ] {
@@ -1207,6 +1208,141 @@ This summary has no structured visual view to attach to.
 }
 
 #[test]
+fn export_json_resolves_unicode_aliases_without_losing_ascii_safe_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("unicode-report.md");
+    let sources_path = dir.path().join("sources.csv");
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+양자 센싱 입문,review_article,doi:10.0000/ko,https://example.test/ko,2025-01-01,open_access,Official URL,$0,CC BY,foundation,한국어 source alias resolution fixture.,Use in module 1,Reviewed metadata.\n",
+    )
+    .unwrap();
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: 양자 센싱
+
+## Report Architecture
+
+| Item | Decision |
+|---|---|
+| Executive thesis | 양자 센싱은 신호 모델과 추정기의 관계로 설명된다. |
+| Chosen organizing form | A relation-centered path. |
+| Architecture rationale | The report follows the relation under test. |
+| Rejected alternatives and why | A glossary-only form would hide the relation. |
+
+## Domain Decomposition
+
+양자 센싱은 신호 모델과 추정기를 함께 다룬다.
+
+## Field Element Inventory
+
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Concept | 신호 모델 | 관측 신호를 수학적으로 표현한다. | core | 추정기가 이 모델을 사용한다. | 양자 센싱 입문 | high |
+| Method | 추정기 | 신호 모델에서 파라미터를 추정한다. | surrounding | 신호 모델을 적용한다. | 양자 센싱 입문 | high |
+
+## Relations
+
+| Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale |
+|---|---|---|---|---|---|---|
+| rel-korean-reference-1111111111 | uses_method | field_element | 추정기 | field_element | 신호 모델 | Korean labels should resolve through Unicode-aware aliases. |
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Final,
+    )
+    .unwrap();
+
+    let source_id = &exported.report.sources[0].id;
+    assert!(validate_stable_id(source_id).is_ok());
+    assert!(exported
+        .report
+        .field_elements
+        .iter()
+        .all(|element| element.source_ids == vec![source_id.clone()]));
+    let signal_model = exported
+        .report
+        .field_elements
+        .iter()
+        .find(|element| element.label == "신호 모델")
+        .unwrap();
+    assert!(signal_model.id.starts_with("element-item-"));
+    validate_stable_id(&signal_model.id).unwrap();
+    let relation = exported.report.relations.first().unwrap();
+    assert_eq!(relation.to.id, signal_model.id);
+    assert!(exported
+        .diagnostics
+        .as_ref()
+        .map(|diagnostics| diagnostics.checks.iter().all(|check| {
+            check.check_id != report::CHECK_EXPORT_UNRESOLVED_REFERENCE
+                && check.check_id != report::CHECK_EXPORT_AMBIGUOUS_REFERENCE
+        }))
+        .unwrap_or(true));
+}
+
+#[test]
+fn export_json_reports_ambiguous_and_dangling_unicode_source_aliases() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("ambiguous-source-report.md");
+    let sources_path = dir.path().join("sources.csv");
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+공통 제목,review_article,doi:10.0000/a,https://example.test/a,2025-01-01,open_access,Official URL,$0,CC BY,foundation,First duplicate alias.,Use in module 1,Reviewed metadata.\n\
+공통 제목,review_article,doi:10.0000/b,https://example.test/b,2025-01-02,open_access,Official URL,$0,CC BY,foundation,Second duplicate alias.,Use in module 1,Reviewed metadata.\n",
+    )
+    .unwrap();
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: 중복 alias
+
+## Field Element Inventory
+
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Concept | 공통 개념 | 중복 source alias와 dangling alias를 검사한다. | core | source resolution must not guess. | 공통 제목; 없는 자료 | high |
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Scaffold,
+    )
+    .unwrap();
+    let diagnostics = exported.diagnostics.as_ref().unwrap();
+    let ambiguous = diagnostics
+        .checks
+        .iter()
+        .find(|check| check.check_id == report::CHECK_EXPORT_AMBIGUOUS_REFERENCE)
+        .unwrap();
+    assert_eq!(ambiguous.severity, report::DiagnosticSeverity::Error);
+    assert_contains(&ambiguous.message, "공통 제목");
+    assert_contains(&ambiguous.message, "src-");
+    let dangling = diagnostics
+        .checks
+        .iter()
+        .find(|check| check.check_id == report::CHECK_EXPORT_UNRESOLVED_REFERENCE)
+        .unwrap();
+    assert_contains(&dangling.message, "없는 자료");
+    assert!(exported.report.field_elements[0].source_ids.is_empty());
+    let validation = report::validate_report_value(&serde_json::to_value(&exported).unwrap());
+    assert_validation_check(
+        &validation,
+        report::CHECK_EXPORT_AMBIGUOUS_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
 fn reviewed_or_verified_evidence_needs_usable_support_metadata() {
     let reviewed = report::EvidenceEntry {
         evidence_id: "ev-example-reviewed-1111111111".to_string(),
@@ -1279,11 +1415,20 @@ fn content_ids_are_content_derived_and_order_independent() {
     let first = report::content_id("claim", &["  Persistent   Homology! "]);
     let second = report::content_id("claim", &["persistent homology"]);
     assert_eq!(first, second);
+    assert_eq!(first, "claim-persistent-homology-c48a3a31c5");
     assert!(first.starts_with("claim-persistent-homology-"));
 
     let left = report::content_id_map("src", ["Alpha Source", "Beta Source"]);
     let right = report::content_id_map("src", ["Beta Source", "Alpha Source"]);
     assert_eq!(left, right);
+    assert_eq!(
+        left.get("alpha source").map(String::as_str),
+        Some("src-alpha-source-5a23ba1b22")
+    );
+    assert_eq!(
+        left.get("beta source").map(String::as_str),
+        Some("src-beta-source-f7c3e018ea")
+    );
 
     let source_a = Source {
         title: "Alpha Source".to_string(),
@@ -1298,6 +1443,33 @@ fn content_ids_are_content_derived_and_order_independent() {
     let ids_forward = report_source_ids_by_title(&[source_a.clone(), source_b.clone()]);
     let ids_reverse = report_source_ids_by_title(&[source_b, source_a]);
     assert_eq!(ids_forward, ids_reverse);
+}
+
+#[test]
+fn content_ids_are_unicode_safe_and_identity_hashes_use_normalized_utf8() {
+    let korean = report::content_id_identity("element", &["양자 센싱"]);
+    let korean_nfd = report::content_id("element", &["양자 센싱"]);
+    assert_eq!(korean.stable_id, korean_nfd);
+    assert_eq!(korean.display_slug, "item");
+    assert_eq!(korean.normalized_identity, "양자 센싱");
+    validate_stable_id(&korean.stable_id).unwrap();
+
+    let composed = report::content_id("concept", &["가"]);
+    let decomposed = report::content_id("concept", &["가"]);
+    assert_eq!(composed, decomposed);
+
+    let greek_upper = report::content_id("concept", &["Μέθοδος"]);
+    let greek_lower = report::content_id("concept", &["μέθοδος"]);
+    assert_eq!(greek_upper, greek_lower);
+
+    let korean_concept = report::content_id("concept", &["양자 센싱"]);
+    let cjk = report::content_id("concept", &["量子センシング"]);
+    let greek = report::content_id("concept", &["μέθοδος"]);
+    let mixed = report::content_id("concept", &["Graph 그래프"]);
+    let ids = BTreeSet::from([korean_concept, cjk, greek, mixed]);
+    assert_eq!(ids.len(), 4);
+    assert!(ids.iter().all(|id| validate_stable_id(id).is_ok()));
+    assert!(ids.iter().any(|id| id.starts_with("concept-graph-")));
 }
 
 #[test]
@@ -1489,6 +1661,29 @@ fn sok_report_schema_declares_json_first_contract() {
     assert!(!json_array_contains(
         &defs["visual_view"]["properties"]["kind"]["enum"],
         "custom"
+    ));
+}
+
+#[test]
+fn sok_id_migration_schema_declares_reviewable_map_contract() {
+    let schema = load_repo_json("specs/sok-id-migration.schema.json");
+    assert_eq!(
+        schema["$schema"],
+        json!("https://json-schema.org/draft/2020-12/schema")
+    );
+    assert!(json_array_contains(&schema["required"], "schema_version"));
+    assert!(json_array_contains(
+        &schema["required"],
+        "source_schema_version"
+    ));
+    assert!(json_array_contains(&schema["required"], "mappings"));
+    assert_eq!(
+        schema["properties"]["schema_version"]["const"],
+        json!("sok-id-migration/v1")
+    );
+    assert!(json_array_contains(
+        &schema["$defs"]["mapping"]["required"],
+        "normalized_identity"
     ));
 }
 
@@ -1699,6 +1894,72 @@ fn validate_report_fixture_passes_without_diagnostics() {
     ])
     .unwrap();
     assert_eq!(exit_code, 0);
+}
+
+#[test]
+fn migrate_ids_writes_ordered_maps_for_v1_and_v2_without_mutating_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let v2_input = dir.path().join("unicode-v2-report.json");
+    let v2_output = dir.path().join("unicode-v2-id-map.json");
+    let mut v2 = current_human_report_value();
+    v2["report"]["field_elements"][0]["id"] = json!("element-item-4a33eacd5f");
+    v2["report"]["field_elements"][0]["label"] = json!("양자 센싱");
+    report::write_json_file(&v2_input, &v2).unwrap();
+    let before = fs::read_to_string(&v2_input).unwrap();
+
+    let exit = run_cli(vec![
+        "migrate-ids".to_string(),
+        "--input".to_string(),
+        v2_input.display().to_string(),
+        "--output".to_string(),
+        v2_output.display().to_string(),
+    ])
+    .unwrap();
+    assert_eq!(exit, 0);
+    assert_eq!(fs::read_to_string(&v2_input).unwrap(), before);
+
+    let migration: report::IdMigrationDocument = report::read_json_file(&v2_output).unwrap();
+    assert_eq!(migration.schema_version, "sok-id-migration/v1");
+    assert_eq!(migration.source_schema_version, "sok-report/v2");
+    let keys = migration
+        .mappings
+        .iter()
+        .map(|entry| {
+            (
+                entry.old_id.clone(),
+                entry.entity_type.clone(),
+                entry.path.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut sorted = keys.clone();
+    sorted.sort();
+    assert_eq!(keys, sorted);
+    let unicode_entry = migration
+        .mappings
+        .iter()
+        .find(|entry| entry.old_id == "element-item-4a33eacd5f")
+        .unwrap();
+    assert!(unicode_entry.changed);
+    assert_ne!(unicode_entry.old_id, unicode_entry.new_id);
+    assert!(unicode_entry.new_id.starts_with("element-item-"));
+    assert_eq!(unicode_entry.normalized_identity, "양자 센싱");
+    validate_stable_id(&unicode_entry.new_id).unwrap();
+
+    let v1_input = dir.path().join("legacy-v1-report.json");
+    let v1_output = dir.path().join("legacy-v1-id-map.json");
+    report::write_json_file(&v1_input, &legacy_v1_report_value()).unwrap();
+    let exit = run_cli(vec![
+        "migrate-ids".to_string(),
+        "--input".to_string(),
+        v1_input.display().to_string(),
+        "--output".to_string(),
+        v1_output.display().to_string(),
+    ])
+    .unwrap();
+    assert_eq!(exit, 0);
+    let legacy_migration: report::IdMigrationDocument = report::read_json_file(&v1_output).unwrap();
+    assert_eq!(legacy_migration.source_schema_version, "sok-report/v1");
 }
 
 #[test]

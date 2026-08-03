@@ -18,7 +18,7 @@ impl EvidenceEntry {
                 input_path: input_path.display().to_string(),
                 input_kind: input_kind_for_path(input_path),
                 row_number: Some(row_number),
-                row_hash: short_hash(&normalize_id_text(&source_key), 16),
+                row_hash: short_hash(&normalize_identity_text(&source_key), 16),
             },
             verification_status: VerificationStatus::Cataloged,
             support_kind: SupportKind::Background,
@@ -137,7 +137,7 @@ pub fn normalize_report_sources(sources: &[Source]) -> Vec<ReportSource> {
         .iter()
         .zip(keys.iter())
         .map(|(source, key)| {
-            let normalized = normalize_id_text(key);
+            let normalized = normalize_identity_text(key);
             let id = id_map
                 .get(&normalized)
                 .cloned()

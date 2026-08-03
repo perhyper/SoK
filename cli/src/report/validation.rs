@@ -875,7 +875,7 @@ impl ReportIdIndex {
                     );
                 }
             }
-            let normalized_label = normalize_id_text(&item.label);
+            let normalized_label = normalize_alias_text(&item.label);
             if !normalized_label.is_empty() {
                 if let Some(existing_id) =
                     field_element_labels.insert(normalized_label, item.id.clone())
