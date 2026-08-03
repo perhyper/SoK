@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-pedagogy.schema.json",
   "title": "Structure of Knowledge Core Pedagogy Package",
-  "description": "Current core pedagogy subset for reading ladders and learning-path prerequisite surfaces.",
+  "description": "Current core pedagogy subset for reading ladders and learning-path prerequisite surfaces. This package is accepted as a typed machine-lane sidecar or fenced sok-json block.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "reading_ladder", "learning_path"],

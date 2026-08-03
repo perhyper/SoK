@@ -1,6 +1,7 @@
 use super::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct EvidencePackage {
     pub schema_version: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -20,6 +21,7 @@ impl Default for EvidencePackage {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct EvidenceSource {
     pub id: String,
     pub citation: String,
@@ -43,6 +45,7 @@ pub struct EvidenceSource {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct EvidenceClaim {
     pub id: String,
     pub statement: String,

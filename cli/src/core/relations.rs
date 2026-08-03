@@ -22,6 +22,7 @@ pub struct RelationKindMapping {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Relation {
     pub id: String,
     pub kind: RelationKind,
@@ -34,6 +35,7 @@ pub struct Relation {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(deny_unknown_fields)]
 pub struct RelationEndpoint {
     pub entity_type: RelationEndpointType,
     pub id: String,

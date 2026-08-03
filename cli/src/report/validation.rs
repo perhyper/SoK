@@ -21,6 +21,7 @@ pub const CHECK_EXPORT_UNKNOWN_EVIDENCE_SOURCE: &str = "export.unknown-evidence-
 pub const CHECK_EXPORT_CLAIM_NEEDS_EVIDENCE: &str = "export.claim-needs-evidence";
 pub const CHECK_EXPORT_UNRESOLVED_REFERENCE: &str = "export.unresolved-reference";
 pub const CHECK_EXPORT_AMBIGUOUS_REFERENCE: &str = "export.ambiguous-reference";
+pub const CHECK_EXPORT_MACHINE_INPUT: &str = "export.machine-input";
 pub const CHECK_VALIDATE_SCHEMA_JSON: &str = "validate.schema.json";
 pub const CHECK_VALIDATE_SCHEMA_REQUIRED: &str = "validate.schema.required";
 pub const CHECK_VALIDATE_SCHEMA_DESERIALIZE: &str = "validate.schema.deserialize";

@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use reqwest::blocking::Client;
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::downloader::*;
@@ -271,6 +271,9 @@ pub(crate) fn run_export_json(args: &[String]) -> Result<()> {
     let scaffold_path = flags.string("scaffold", "");
     let sources = flags.string("sources", "");
     let evidence = flags.string("evidence", "");
+    let knowledge = flags.string("knowledge", "");
+    let evidence_package = flags.string("evidence-package", "");
+    let pedagogy = flags.string("pedagogy", "");
     let output = flags.string("output", "");
 
     let stage = parse_export_stage(&stage)?;
@@ -293,11 +296,17 @@ pub(crate) fn run_export_json(args: &[String]) -> Result<()> {
     } else {
         Some(evidence.as_str())
     };
-    let document = report::export_markdown_report(
+    let machine_inputs = report::MachineInputPaths {
+        knowledge: (!knowledge.is_empty()).then(|| PathBuf::from(&knowledge)),
+        evidence_package: (!evidence_package.is_empty()).then(|| PathBuf::from(&evidence_package)),
+        pedagogy: (!pedagogy.is_empty()).then(|| PathBuf::from(&pedagogy)),
+    };
+    let document = report::export_markdown_report_with_machine_inputs(
         report_input.as_str(),
         sources.as_str(),
         evidence_input,
         stage,
+        machine_inputs,
     )?;
     report::write_json_file(&output, &document)?;
     println!("Wrote {output}");
@@ -331,6 +340,7 @@ pub(crate) fn print_export_json_usage() {
   sok export-json --stage scaffold|final --scaffold <report.md> --sources <sources.csv|sources.tsv|sources.json> --output <sok-report.json> [--evidence <evidence.jsonl>]
 
 The --scaffold flag is a path alias for --report.
+Machine lane sidecars are optional: --knowledge <sok-knowledge.json>, --evidence-package <sok-evidence.json>, and --pedagogy <sok-pedagogy.json>.
 The stage is always explicit; filenames and headings do not select the public/internal contract.
 Public H2 sections are preserved in order. Canonical headings or sok:surface markers identify machine-verifiable tables."#
     );

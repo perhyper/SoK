@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-knowledge.schema.json",
   "title": "Structure of Knowledge Core Knowledge Package",
-  "description": "Artifact-independent knowledge package centered on field-native elements and canonical typed relations. Public sok-report arrays are compatibility projections from these elements and relation IDs.",
+  "description": "Artifact-independent knowledge package centered on field-native elements and canonical typed relations. Public sok-report arrays are compatibility projections from these elements and relation IDs. This package is accepted as a typed machine-lane sidecar or fenced sok-json block.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "elements"],

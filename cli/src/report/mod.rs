@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod html;
 mod ids;
@@ -27,7 +27,8 @@ pub use ids::{
     normalize_id_text, normalize_identity_text, IdIdentity, IdMigrationDocument, IdMigrationEntry,
 };
 pub use import::{
-    export_markdown_report, read_json_file, read_jsonl_file, write_json_file, write_jsonl_file,
+    export_markdown_report, export_markdown_report_with_machine_inputs, read_json_file,
+    read_jsonl_file, write_json_file, write_jsonl_file, MachineInputPaths,
 };
 pub use model::*;
 pub use provenance::{
@@ -39,7 +40,7 @@ pub use validation::{
     lint_markdown_report, validate_report_file, validate_report_value,
     CHECK_EVIDENCE_CATALOGED_ONLY, CHECK_EXPORT_AMBIGUOUS_REFERENCE,
     CHECK_EXPORT_AMBIGUOUS_SECTION, CHECK_EXPORT_CLAIM_NEEDS_EVIDENCE,
-    CHECK_EXPORT_INTERNAL_SECTION_IN_FINAL, CHECK_EXPORT_MISSING_FIELD,
+    CHECK_EXPORT_INTERNAL_SECTION_IN_FINAL, CHECK_EXPORT_MACHINE_INPUT, CHECK_EXPORT_MISSING_FIELD,
     CHECK_EXPORT_MISSING_PUBLIC_FIELD, CHECK_EXPORT_REPORT_ARCHITECTURE,
     CHECK_EXPORT_UNKNOWN_DIRECTIVE, CHECK_EXPORT_UNKNOWN_EVIDENCE_SOURCE,
     CHECK_EXPORT_UNKNOWN_SURFACE_MARKER, CHECK_EXPORT_UNRESOLVED_REFERENCE,

@@ -1,6 +1,7 @@
 use super::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct PedagogyPackage {
     pub schema_version: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -20,6 +21,7 @@ impl Default for PedagogyPackage {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct ReadingLadderRow {
     pub id: String,
     pub layer: String,
@@ -33,6 +35,7 @@ pub struct ReadingLadderRow {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct LearningStep {
     pub id: String,
     pub sequence: u32,

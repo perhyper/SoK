@@ -136,7 +136,7 @@ agent_cli:
     download-sources: Download only sources with default-allowed access statuses by default.
     ingest last: Normalize this run's source manifest into cataloged evidence JSONL without creating a persistent ledger.
     lint: Stage-aware pre-export check for Markdown, source manifests, and optional evidence ledgers.
-    export-json: Convert bounded scaffold or final Markdown plus source/evidence files into sok-report.json.
+    export-json: Convert bounded scaffold or final Markdown plus source/evidence files into sok-report.json, with optional typed core sidecars for the machine lane.
     validate-report: Validate sok-report.json schema, public/internal boundary, evidence, currentness, source-role, and relation gates.
     render-html: Render a validated human_report JSON file into self-contained local HTML.
     specificity: Generate a concreteness checklist for underspecified domain tasks.

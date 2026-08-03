@@ -17,7 +17,20 @@ For delegated agent work, also produce an agent packet when useful: `agent-brief
 
 Keep agent scaffolds and human-reader reports separate. Scaffolds may expose learner profile, original goal, candidate lenses, assumptions, placeholders, rejected organizing forms, and quality-gate notes. Human-reader reports should hide that machinery, surface only interpretation-relevant scope notes, and replace scaffold placeholders with researched sources or remove them. Use `sok scaffold` for the discovery canvas and `sok handoff-report` when passing it to a next agent for report completion.
 
-For tool-facing output, `sok-report.json` is the structured source of truth. Markdown scaffolds and human reports are bounded inputs to `sok export-json`; HTML is a rendered public view of validated `human_report` JSON. `internal_context` and `diagnostics` are never public report content.
+For tool-facing output, `sok-report.json` is the structured compatibility projection. Markdown scaffolds and human reports remain the human authoring and compatibility import lane for `sok export-json`; HTML is a rendered public view of validated `human_report` JSON. `internal_context` and `diagnostics` are never public report content.
+
+Machine input is opt-in. `sok export-json` may also read typed core sidecars with `--knowledge <sok-knowledge.json>`, `--evidence-package <sok-evidence.json>`, and `--pedagogy <sok-pedagogy.json>`, or typed fenced blocks in the Markdown:
+
+````markdown
+```sok-json sok-knowledge/v1
+{
+  "schema_version": "sok-knowledge/v1",
+  "elements": []
+}
+```
+````
+
+Typed machine inputs feed directly into the `sok-knowledge/v1`, `sok-evidence/v1`, and `sok-pedagogy/v1` core validators. They do not depend on localized Markdown table headers. Markdown tables, `sok:surface` markers, and narrative prose remain supported for human-authored inputs. When human and machine lanes provide different values for the same stable ID or package field, the exporter keeps the first value deterministically and emits an `export.machine-input` diagnostic instead of overwriting silently.
 
 ## Field-First Report Composition
 

@@ -1,6 +1,7 @@
 use super::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct KnowledgePackage {
     pub schema_version: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -23,6 +24,7 @@ impl Default for KnowledgePackage {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct KnowledgeElement {
     pub id: String,
     pub element_class: String,
@@ -43,6 +45,7 @@ pub struct KnowledgeElement {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct LocalizedText {
     pub text: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]

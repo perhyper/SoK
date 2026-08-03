@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-evidence.schema.json",
   "title": "Structure of Knowledge Core Evidence Package",
-  "description": "Core evidence package for source roles, claim support, currentness metadata, and reviewed-support semantics.",
+  "description": "Core evidence package for source roles, claim support, currentness metadata, and reviewed-support semantics. This package is accepted as a typed machine-lane sidecar or fenced sok-json block.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "sources", "claims"],
@@ -190,4 +190,3 @@
     }
   }
 }
-
