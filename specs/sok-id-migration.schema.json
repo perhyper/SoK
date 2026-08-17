@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sok-id-migration.schema.json",
+  "title": "SoK Stable ID Migration Map",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_schema_version", "mappings"],
+  "properties": {
+    "schema_version": { "const": "sok-id-migration/v1" },
+    "source_schema_version": {
+      "type": "string",
+      "enum": ["sok-report/v1", "sok-report/v2"]
+    },
+    "mappings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/mapping" }
+    }
+  },
+  "$defs": {
+    "stable_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9]*-[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "entity_type",
+        "old_id",
+        "new_id",
+        "changed",
+        "display_slug",
+        "identity_hash",
+        "normalized_identity"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "entity_type": {
+          "type": "string",
+          "enum": [
+            "claim",
+            "concept",
+            "curriculum_step",
+            "evidence",
+            "field_element",
+            "frontier_debate",
+            "literature_ladder",
+            "method",
+            "relation",
+            "report_section",
+            "representation",
+            "source",
+            "visual_node",
+            "visual_view"
+          ]
+        },
+        "old_id": { "$ref": "#/$defs/stable_id" },
+        "new_id": { "$ref": "#/$defs/stable_id" },
+        "changed": { "type": "boolean" },
+        "display_slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+        },
+        "identity_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "normalized_identity": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

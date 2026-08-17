@@ -1,0 +1,336 @@
+{
+  "schema_version": "sok-conformance-suite/v1",
+  "suite_id": "sok-harness-hardening-v1",
+  "cases": [
+    {
+      "id": "core-conformance-valid",
+      "contract": "core conformance",
+      "kind": "core_packages",
+      "input": {
+        "path": "core-packages-valid.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "core-unknown-version-rejected",
+      "contract": "unknown core schema versions",
+      "kind": "core_packages",
+      "input": {
+        "path": "core-packages-valid.json"
+      },
+      "mutations": [
+        {
+          "target": "knowledge",
+          "op": "set",
+          "path": "/schema_version",
+          "value": "sok-knowledge/v99"
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["core.version"]
+      }
+    },
+    {
+      "id": "reference-closure-missing-source",
+      "contract": "reference closure",
+      "kind": "core_packages",
+      "input": {
+        "path": "core-packages-valid.json"
+      },
+      "mutations": [
+        {
+          "target": "knowledge",
+          "op": "set",
+          "path": "/elements/0/source_ids",
+          "value": [
+            "src-quantum-sensing-explained-1111111111",
+            "src-missing-source-9999999999"
+          ]
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["core.reference"]
+      },
+      "repair_count": 1
+    },
+    {
+      "id": "relation-validity-self-loop",
+      "contract": "relation validity",
+      "kind": "core_packages",
+      "input": {
+        "path": "core-packages-valid.json"
+      },
+      "mutations": [
+        {
+          "target": "knowledge",
+          "op": "set",
+          "path": "/relations/0/to",
+          "value": {
+            "entity_type": "field_element",
+            "id": "element-physical-quantity-1111111111"
+          }
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["core.relation"]
+      }
+    },
+    {
+      "id": "evidence-support-reviewed-metadata",
+      "contract": "evidence support",
+      "kind": "core_packages",
+      "input": {
+        "path": "core-packages-valid.json"
+      },
+      "mutations": [
+        {
+          "target": "evidence",
+          "op": "remove",
+          "path": "/claims/0/evidence_links/0/reviewed_at"
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["core.support"]
+      },
+      "repair_count": 1
+    },
+    {
+      "id": "prerequisite-violation",
+      "contract": "prerequisite violations",
+      "kind": "core_packages",
+      "input": {
+        "path": "core-packages-valid.json"
+      },
+      "mutations": [
+        {
+          "target": "pedagogy",
+          "op": "set",
+          "path": "/learning_path/1/prerequisite_ids",
+          "value": ["element-noise-model-3333333333"]
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["core.prerequisite"]
+      }
+    },
+    {
+      "id": "report-validation-pass",
+      "contract": "validation pass rate",
+      "kind": "report",
+      "input": {
+        "path": "report-valid.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "currentness-metadata-required",
+      "contract": "currentness metadata",
+      "kind": "report",
+      "input": {
+        "path": "report-valid.json"
+      },
+      "mutations": [
+        {
+          "op": "remove",
+          "path": "/report/claims/0/temporal/review_after"
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["validate.currentness.metadata"]
+      }
+    },
+    {
+      "id": "report-unknown-version-rejected",
+      "contract": "unknown report schema versions",
+      "kind": "report",
+      "input": {
+        "path": "report-valid.json"
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/metadata/schema_version",
+          "value": "sok-report/v99"
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["validate.schema.required"]
+      }
+    },
+    {
+      "id": "public-internal-boundary",
+      "contract": "public/internal boundary",
+      "kind": "report",
+      "input": {
+        "path": "report-valid.json"
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/report/presentation/sections/0/body_markdown",
+          "value": "SENTINEL_INTERNAL raw learner profile should stay outside the public report."
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["validate.public-boundary"]
+      },
+      "human_correction": {
+        "status": "applied",
+        "count": 1,
+        "notes": "A human removed internal scaffold wording from the public report."
+      }
+    },
+    {
+      "id": "source-role-coverage-required",
+      "contract": "source-role coverage",
+      "kind": "report",
+      "input": {
+        "path": "report-valid.json"
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/report/evidence_standards/source_role_requirements/0/minimum_sources",
+          "value": 2
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["validate.source-role.required"]
+      }
+    },
+    {
+      "id": "stable-id-uniqueness",
+      "contract": "stable-ID uniqueness",
+      "kind": "id_inventory",
+      "input": {
+        "ids": [
+          "element-physical-quantity-1111111111",
+          "element-physical-quantity-1111111111"
+        ]
+      },
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["eval.id.duplicate"]
+      },
+      "repair_count": 1
+    },
+    {
+      "id": "multilingual-retention",
+      "contract": "multilingual retention",
+      "kind": "id_inventory",
+      "input": {
+        "identity_checks": [
+          {
+            "prefix": "element",
+            "parts": ["양자 센싱"],
+            "expected_normalized_identity": "양자 센싱",
+            "require_non_ascii_retention": true
+          },
+          {
+            "prefix": "element",
+            "parts": ["τοπολογία"],
+            "expected_normalized_identity": "τοπολογία",
+            "require_non_ascii_retention": true
+          }
+        ]
+      },
+      "expect": {
+        "valid": true,
+        "forbidden_check_ids": ["eval.multilingual.retention", "eval.id.format"]
+      }
+    },
+    {
+      "id": "run-manifest-valid",
+      "contract": "run manifests",
+      "kind": "run_manifest",
+      "input": {
+        "path": "run-manifest-valid.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "run-unknown-version-rejected",
+      "contract": "unknown run schema versions",
+      "kind": "run_manifest",
+      "input": {
+        "path": "run-manifest-valid.json"
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/schema_version",
+          "value": "sok-run/v99"
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["run.version"]
+      }
+    },
+    {
+      "id": "work-order-valid",
+      "contract": "WorkOrder sidecars",
+      "kind": "work_order",
+      "input": {
+        "path": "work-order-valid.json"
+      },
+      "expect": {
+        "valid": true
+      }
+    },
+    {
+      "id": "work-unknown-version-rejected",
+      "contract": "unknown work schema versions",
+      "kind": "work_order",
+      "input": {
+        "path": "work-order-valid.json"
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/schema_version",
+          "value": "sok-work-order/v99"
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["work.version"]
+      }
+    },
+    {
+      "id": "work-result-capability-mismatch",
+      "contract": "WorkResult capability response",
+      "kind": "work_result",
+      "input": {
+        "order": "work-order-valid.json",
+        "result": "work-result-valid.json"
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/offered_capabilities",
+          "value": ["basic_completion"]
+        }
+      ],
+      "expect": {
+        "valid": false,
+        "required_check_ids": ["work.capability"]
+      }
+    }
+  ]
+}

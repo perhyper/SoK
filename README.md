@@ -71,6 +71,8 @@ The scaffold guides source review, field-element extraction, organizing-form com
 
 Each run is bounded to its Markdown, source manifest, and reviewed evidence. It creates no persistent database or cross-run evidence store.
 
+From a development checkout, run `make build` before using the release-binary paths below. An installed copy can use `$SOK_CLI` instead.
+
 ```bash
 REPORT=/path/to/report.md
 SOURCES=/path/to/sources.csv
@@ -92,6 +94,14 @@ Public `##` sections are preserved in their authored order. Structured tables ca
 
 `sok-report.json` is the structured source of truth: `field_elements` preserves field-native classes, while HTML is a self-contained public view rendered only from validated `human_report` JSON.
 
+## Compatibility and Sidecars
+
+SoK continues to read public `sok-report/v1` and `sok-report/v2` artifacts. New human-report exports use `sok-report/v2`; the public report payload does not embed private run manifests, WorkOrder/WorkResult exchanges, executor metadata, or local paths.
+
+ASCII stable IDs remain stable. For older non-ASCII IDs, run `sok migrate-ids --input <sok-report.json> --output <id-map.json>` to write a reviewable old-to-new map; the command never rewrites the source report in place.
+
+Typed `sok-knowledge/v1`, `sok-evidence/v1`, and `sok-pedagogy/v1` core sidecars are additive machine inputs for `export-json`. Private `sok-run/v1` manifests and provider-neutral `sok-work-order/v1` / `sok-work-result/v1` files are sidecars for reproducibility and bounded work exchange. Removing these sidecars rolls back to the Markdown-to-report workflow without changing public report payloads.
+
 ## CLI
 
 ```text
@@ -102,12 +112,15 @@ handoff-report    Prepare a scaffold for human-report completion.
 source-template   Create a source manifest template.
 audit-sources     Audit access metadata.
 download-sources  Download explicitly open or user-provided sources.
-ingest last       Normalize source metadata into bounded evidence JSONL.
+ingest last       Normalize source metadata into cataloged, non-supporting evidence candidates in JSONL.
 lint              Check Markdown, sources, and evidence before export.
 export-json       Export bounded inputs to sok-report.json.
 validate-report   Validate evidence, currentness, relations, and references.
+migrate-ids       Write a deterministic stable-ID migration map.
+eval              Score saved provider-neutral conformance fixtures.
 render-html       Render validated human_report JSON to local HTML.
 specificity       Make an underspecified domain task executable.
+work              Validate and exchange bounded WorkOrder/WorkResult sidecars.
 ```
 
 Run `sok <command> --help` for flags.

@@ -1,0 +1,215 @@
+{
+  "metadata": {
+    "schema_version": "sok-report/v2",
+    "generated_at": "2026-07-16T00:00:00Z",
+    "report_type": "human_report",
+    "temporal_review": {
+      "as_of": "2026-07-16",
+      "review_after": "2027-01-16",
+      "temporal_status": "current",
+      "rationale": "Conformance fixture review window."
+    },
+    "generator": {
+      "name": "sok conformance fixture",
+      "version": "1"
+    }
+  },
+  "report": {
+    "field": "Quantum sensing",
+    "scope": {
+      "summary": "Quantum sensing is represented as a compact measurement-chain fixture.",
+      "included": ["Measurement-chain elements and one currentness claim"],
+      "excluded": []
+    },
+    "domain_profile": {
+      "classification": "instrument_bound",
+      "rationale": "The field is mediated by instruments and calibration practices."
+    },
+    "presentation": {
+      "thesis": "Quantum sensing claims become legible as a measurement chain.",
+      "organizing_form": "Measurement-chain path",
+      "rationale": "The path follows how a physical quantity becomes a reviewed estimate.",
+      "alternatives_considered": "A glossary-only report was rejected because it hides relation and evidence support.",
+      "sections": [
+        {
+          "id": "section-measurement-chain-1111111111",
+          "title": "Measurement Chain",
+          "purpose": "Introduce the public narrative used by conformance scoring.",
+          "body_markdown": "A physical quantity is encoded, calibrated, and estimated under a reviewed warrant."
+        }
+      ]
+    },
+    "literature_ladder": [
+      {
+        "id": "ladder-foundation-1111111111",
+        "layer": "Foundation",
+        "start_here": "Quantum Sensing Explained",
+        "read_for": "How physical quantities become estimated through a measurement chain.",
+        "do_not_infer": "That every sensor uses the same implementation.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"],
+        "notes": "Conformance fixture row."
+      }
+    ],
+    "field_elements": [
+      {
+        "id": "element-physical-quantity-1111111111",
+        "element_class": "Object or phenomenon",
+        "label": "Physical quantity",
+        "actual_form": "A property made observable only through a measurement interaction.",
+        "role": "core",
+        "relation_ids": ["rel-quantity-before-calibration-1111111111"],
+        "load_bearing_relations": "The quantity must be encoded before it can be estimated.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"],
+        "confidence": "high"
+      },
+      {
+        "id": "element-calibration-transfer-2222222222",
+        "element_class": "Method or operation",
+        "label": "Calibration transfer",
+        "actual_form": "A procedure that carries source traceability into the sensor output.",
+        "role": "core",
+        "relation_ids": [
+          "rel-quantity-before-calibration-1111111111",
+          "rel-calibration-before-check-3333333333"
+        ],
+        "load_bearing_relations": "Calibration qualifies the estimated physical quantity.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"],
+        "confidence": "medium"
+      }
+    ],
+    "core_ideas": [
+      {
+        "id": "idea-physical-quantity-1111111111",
+        "label": "Physical quantity",
+        "description": "The target quantity becomes legible through encoding and estimation.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      }
+    ],
+    "methods": [
+      {
+        "id": "method-calibration-transfer-2222222222",
+        "label": "Calibration transfer",
+        "description": "Calibration carries traceability into the reported result.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      }
+    ],
+    "representations": [],
+    "evidence_standards": {
+      "summary": "Claims require reviewed support links in the fixture.",
+      "claim_policy": "Reviewed supports links need reviewed_at plus a locator or support note.",
+      "source_role_requirements": [
+        {
+          "role": "foundation",
+          "requirement": "required",
+          "minimum_sources": 1,
+          "rationale": "The fixture requires one foundation source."
+        }
+      ]
+    },
+    "sources": [
+      {
+        "id": "src-quantum-sensing-explained-1111111111",
+        "citation": "Quantum Sensing Explained. Fixture source.",
+        "title": "Quantum Sensing Explained",
+        "source_type": "review_article",
+        "identifier": "fixture:quantum-sensing",
+        "url": "https://example.test/quantum-sensing",
+        "date": "2026-01-15",
+        "roles": ["foundation", "method"],
+        "access": {
+          "status": "open_access",
+          "route": "Fixture URL",
+          "budget_estimate": "$0",
+          "license": "CC BY",
+          "metadata_only": false,
+          "notes": "Local fixture metadata."
+        },
+        "why_it_matters": "Explains the measurement chain used by the conformance fixture.",
+        "verification_status": "reviewed",
+        "last_reviewed": "2026-07-16",
+        "notes": "Reviewed from bounded fixture text."
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim-current-measurement-chain-1111111111",
+        "statement": "As of 2026-07-16, this fixture treats quantum sensing as a measurement-chain report contract.",
+        "claim_type": "currentness",
+        "evidence_requirement": "reviewed_source",
+        "evidence_links": [
+          {
+            "evidence_id": "ev-current-measurement-chain-1111111111",
+            "source_id": "src-quantum-sensing-explained-1111111111",
+            "verification_status": "reviewed",
+            "support_kind": "supports",
+            "locator": "fixture section 1",
+            "support_note": "The fixture source directly describes the measurement-chain framing.",
+            "reviewed_at": "2026-07-16"
+          }
+        ],
+        "confidence": "high",
+        "temporal": {
+          "as_of": "2026-07-16",
+          "review_after": "2027-01-16",
+          "temporal_status": "current",
+          "rationale": "The claim is explicitly dated for conformance scoring."
+        },
+        "notes": "Conformance currentness fixture."
+      }
+    ],
+    "relations": [
+      {
+        "id": "rel-quantity-before-calibration-1111111111",
+        "kind": "requires_before",
+        "from": {
+          "entity_type": "field_element",
+          "id": "element-physical-quantity-1111111111"
+        },
+        "to": {
+          "entity_type": "field_element",
+          "id": "element-calibration-transfer-2222222222"
+        },
+        "description": "Physical quantity framing is needed before calibration can qualify an estimate.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      },
+      {
+        "id": "rel-calibration-before-check-3333333333",
+        "kind": "requires_before",
+        "from": {
+          "entity_type": "field_element",
+          "id": "element-calibration-transfer-2222222222"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-calibration-check-2222222222"
+        },
+        "description": "Calibration transfer is prerequisite knowledge for the calibration check step.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      }
+    ],
+    "curriculum_path": [
+      {
+        "id": "step-measurement-chain-1111111111",
+        "sequence": 1,
+        "title": "Measurement chain",
+        "learning_goal": "Explain the chain from physical quantity to estimate.",
+        "practice_artifact": "Annotated measurement-chain diagram.",
+        "progress_criteria": ["Identify quantity, encoding, calibration, and estimate."],
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      },
+      {
+        "id": "step-calibration-check-2222222222",
+        "sequence": 2,
+        "title": "Calibration check",
+        "learning_goal": "Explain how calibration qualifies the estimate.",
+        "prerequisite_ids": ["element-calibration-transfer-2222222222"],
+        "practice_artifact": "Calibration evidence checklist.",
+        "progress_criteria": ["Name the warrant carried by calibration."],
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      }
+    ],
+    "frontier_debates": [],
+    "visual_views": [],
+    "structure_waivers": []
+  }
+}

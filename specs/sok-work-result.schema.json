@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sok-work-result.schema.json",
+  "title": "Structure of Knowledge WorkResult",
+  "description": "Provider-neutral bounded work response. Human or model output is accepted only as proposed patches, typed refusal, or explicit degradation plan. Unknown schema versions are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_order_id",
+    "result_id",
+    "task_kind",
+    "status",
+    "capability_response"
+  ],
+  "properties": {
+    "schema_version": { "const": "sok-work-result/v1" },
+    "work_order_id": { "$ref": "#/$defs/stable_id" },
+    "result_id": { "$ref": "#/$defs/stable_id" },
+    "task_kind": { "$ref": "#/$defs/task_kind" },
+    "status": {
+      "type": "string",
+      "enum": ["patch_proposal", "refusal", "degradation_plan"]
+    },
+    "offered_capabilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capability" }
+    },
+    "capability_response": { "$ref": "#/$defs/capability_response" },
+    "patches": {
+      "type": "array",
+      "items": { "$ref": "sok-work-patch.schema.json" }
+    },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "stable_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9]*-[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "task_kind": {
+      "type": "string",
+      "enum": [
+        "framing",
+        "source_role_classification",
+        "field_element_extraction",
+        "claim_proposals",
+        "relation_proposals",
+        "curriculum_prerequisite_proposals",
+        "architecture_comparison",
+        "consistency_critique",
+        "report_projection"
+      ]
+    },
+    "capability": {
+      "type": "string",
+      "enum": [
+        "basic_completion",
+        "structured_output",
+        "tool_capable",
+        "long_context_agent"
+      ]
+    },
+    "capability_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["accepted", "refusal", "degradation_plan"]
+        },
+        "missing_capabilities": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/capability" }
+        },
+        "degradation_plan": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "rationale": { "type": "string" }
+      }
+    }
+  }
+}

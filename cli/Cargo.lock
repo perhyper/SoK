@@ -984,12 +984,14 @@ dependencies = [
  "chrono",
  "csv",
  "hex",
+ "icu_normalizer",
  "pulldown-cmark",
  "reqwest",
  "serde",
  "serde_json",
  "sha2",
  "tempfile",
+ "unicase",
  "url",
 ]
 

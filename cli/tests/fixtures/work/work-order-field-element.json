@@ -1,0 +1,12 @@
+{
+  "schema_version": "sok-work-order/v1",
+  "work_order_id": "work-order-fixture-1111111111",
+  "task_kind": "field_element_extraction",
+  "objective": "Propose one bounded field-element extraction patch.",
+  "required_capabilities": ["basic_completion", "structured_output"],
+  "allowed_patch_paths": ["/knowledge/elements"],
+  "permissions": {
+    "network": false,
+    "subprocess": false
+  }
+}

@@ -1,0 +1,658 @@
+{
+  "schema_version": "sok-discovery-profiles/v1",
+  "fallback_profile_id": "open",
+  "inference_order": [
+    "infrastructure",
+    "interpretive",
+    "formal"
+  ],
+  "domain_classification_terms": [
+    {
+      "classification": "formal",
+      "terms": [
+        { "term": "formal", "locale": "en" },
+        { "term": "형식", "locale": "ko" }
+      ]
+    },
+    {
+      "classification": "well_structured",
+      "terms": [
+        { "term": "well structured", "locale": "en" },
+        { "term": "잘 구조화", "locale": "ko" }
+      ]
+    },
+    {
+      "classification": "ill_structured",
+      "terms": [
+        { "term": "ill structured", "locale": "en" },
+        { "term": "비구조", "locale": "ko" },
+        { "term": "논쟁적", "locale": "ko" }
+      ]
+    },
+    {
+      "classification": "professional_practice",
+      "terms": [
+        { "term": "professional practice", "locale": "en" },
+        { "term": "전문 실무", "locale": "ko" }
+      ]
+    },
+    {
+      "classification": "instrument_bound",
+      "terms": [
+        { "term": "instrument bound", "locale": "en" },
+        { "term": "도구 의존", "locale": "ko" },
+        { "term": "장비 의존", "locale": "ko" }
+      ]
+    },
+    {
+      "classification": "infrastructure_bound",
+      "terms": [
+        { "term": "infrastructure bound", "locale": "en" },
+        { "term": "infrastructure-bound", "locale": "en" },
+        { "term": "인프라 의존", "locale": "ko" },
+        { "term": "기반시설 의존", "locale": "ko" }
+      ]
+    },
+    {
+      "classification": "emerging",
+      "terms": [
+        { "term": "emerging", "locale": "en" },
+        { "term": "신흥", "locale": "ko" }
+      ]
+    },
+    {
+      "classification": "interdisciplinary",
+      "terms": [
+        { "term": "interdisciplinary", "locale": "en" },
+        { "term": "학제", "locale": "ko" }
+      ]
+    },
+    {
+      "classification": "mixed",
+      "terms": [
+        { "term": "mixed", "locale": "en" },
+        { "term": "혼합", "locale": "ko" }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "profile_id": "formal",
+      "profile_version": "1.0.0",
+      "locale": "en",
+      "classification_hint": "formal or theory-led candidate",
+      "why_this_hint": "The field name suggests that objects, transformations, invariants, and proof may organize part of the domain.",
+      "signal_terms": [
+        { "term": "algebra", "locale": "en" },
+        { "term": "analysis", "locale": "en" },
+        { "term": "automata", "locale": "en" },
+        { "term": "category theory", "locale": "en" },
+        { "term": "complexity", "locale": "en" },
+        { "term": "cryptography", "locale": "en" },
+        { "term": "formal methods", "locale": "en" },
+        { "term": "geometry", "locale": "en" },
+        { "term": "logic", "locale": "en" },
+        { "term": "mathematics", "locale": "en" },
+        { "term": "number theory", "locale": "en" },
+        { "term": "optimization", "locale": "en" },
+        { "term": "probability", "locale": "en" },
+        { "term": "proof", "locale": "en" },
+        { "term": "quantum information", "locale": "en" },
+        { "term": "set theory", "locale": "en" },
+        { "term": "statistics", "locale": "en" },
+        { "term": "theoretical computer science", "locale": "en" },
+        { "term": "topology", "locale": "en" },
+        { "term": "type theory", "locale": "en" },
+        { "term": "대수", "locale": "ko" },
+        { "term": "해석학", "locale": "ko" },
+        { "term": "기하학", "locale": "ko" },
+        { "term": "논리학", "locale": "ko" },
+        { "term": "수학", "locale": "ko" },
+        { "term": "수론", "locale": "ko" },
+        { "term": "최적화", "locale": "ko" },
+        { "term": "확률", "locale": "ko" },
+        { "term": "증명", "locale": "ko" },
+        { "term": "양자 정보", "locale": "ko" },
+        { "term": "집합론", "locale": "ko" },
+        { "term": "통계학", "locale": "ko" },
+        { "term": "이론 컴퓨터 과학", "locale": "ko" },
+        { "term": "위상수학", "locale": "ko" },
+        { "term": "타입 이론", "locale": "ko" }
+      ],
+      "lens_prompts": [
+        {
+          "name": "Object grammar",
+          "inspect": "Definitions, canonical examples, non-examples, transformations, and equivalence.",
+          "revise_when": "Cases, instruments, institutions, or empirical practices carry more explanatory weight than formal objects."
+        },
+        {
+          "name": "Dependency and invariance",
+          "inspect": "Prerequisites, constructions, theorem families, invariants, and counterexamples.",
+          "revise_when": "The field is better organized by a process, controversy, chronology, or problem ecology."
+        },
+        {
+          "name": "Proof and validation",
+          "inspect": "Accepted proof styles, derivations, reductions, computations, and failure tests.",
+          "revise_when": "Multiple communities use materially different warrants."
+        }
+      ],
+      "scaffold_questions": [
+        "Which objects and transformations recur across independent boundary sources?",
+        "Which relations are genuinely load-bearing: prerequisite, equivalence, construction, classification, or limitation?",
+        "Which representations make expert work possible, and when do they mislead?",
+        "Do applications or computational infrastructure reorganize what appears to be a purely formal field?"
+      ],
+      "source_role_probes": [
+        {
+          "role": "Boundary / orientation",
+          "inspect": "How experts delimit the field and name its recurring questions and objects.",
+          "decision_rule": "Required unless the scope is already explicitly bounded by the user."
+        },
+        {
+          "role": "Foundation / canonical corpus",
+          "inspect": "Which concepts, cases, results, or practices recur across authoritative accounts.",
+          "decision_rule": "Require the source form that actually carries durable knowledge in this field."
+        },
+        {
+          "role": "Method / warrant",
+          "inspect": "How the field produces, tests, interprets, or rejects claims.",
+          "decision_rule": "Required; split by community when warrant standards differ."
+        },
+        {
+          "role": "Pedagogical sequence",
+          "inspect": "Which dependencies or threshold concepts repeatedly shape expert teaching.",
+          "decision_rule": "Required for learning, curriculum, onboarding, or staged-practice goals; otherwise optional or waived. Never use it as the field boundary."
+        },
+        {
+          "role": "Current synthesis / frontier",
+          "inspect": "Which questions, methods, standards, or disagreements are changing now.",
+          "decision_rule": "Required only when the goal includes current state or research entry."
+        }
+      ],
+      "projection_keyword_mappings": [
+        {
+          "projection": "representation",
+          "item_prefix": "rep",
+          "terms": [
+            { "term": "representation", "locale": "en" },
+            { "term": "model", "locale": "en" },
+            { "term": "notation", "locale": "en" },
+            { "term": "표현", "locale": "ko" },
+            { "term": "모형", "locale": "ko" },
+            { "term": "모델", "locale": "ko" },
+            { "term": "표기", "locale": "ko" }
+          ]
+        },
+        {
+          "projection": "method",
+          "item_prefix": "method",
+          "terms": [
+            { "term": "syntactic", "locale": "en" },
+            { "term": "method", "locale": "en" },
+            { "term": "operation", "locale": "en" },
+            { "term": "practice", "locale": "en" },
+            { "term": "proof", "locale": "en" },
+            { "term": "warrant", "locale": "en" },
+            { "term": "evidence standard", "locale": "en" },
+            { "term": "구문", "locale": "ko" },
+            { "term": "방법", "locale": "ko" },
+            { "term": "방법론", "locale": "ko" },
+            { "term": "연산", "locale": "ko" },
+            { "term": "실천", "locale": "ko" },
+            { "term": "실무", "locale": "ko" },
+            { "term": "증명", "locale": "ko" },
+            { "term": "보증", "locale": "ko" },
+            { "term": "근거", "locale": "ko" },
+            { "term": "증거 기준", "locale": "ko" }
+          ]
+        },
+        {
+          "projection": "omit",
+          "item_prefix": "concept",
+          "terms": [
+            { "term": "failure mode", "locale": "en" },
+            { "term": "frontier", "locale": "en" },
+            { "term": "dispute", "locale": "en" },
+            { "term": "debate", "locale": "en" },
+            { "term": "open problem", "locale": "en" },
+            { "term": "실패 양식", "locale": "ko" },
+            { "term": "한계", "locale": "ko" },
+            { "term": "프런티어", "locale": "ko" },
+            { "term": "쟁점", "locale": "ko" },
+            { "term": "논쟁", "locale": "ko" },
+            { "term": "미해결 문제", "locale": "ko" }
+          ]
+        }
+      ],
+      "fallback_behavior": {
+        "advisory_message": "Use this profile only as a source-review hypothesis; source findings may revise it."
+      }
+    },
+    {
+      "profile_id": "interpretive",
+      "profile_version": "1.0.0",
+      "locale": "en",
+      "classification_hint": "interpretive or contested candidate",
+      "why_this_hint": "The field name suggests that cases, institutions, schools, or competing interpretations may organize part of the domain.",
+      "signal_terms": [
+        { "term": "anthropology", "locale": "en" },
+        { "term": "constitutional", "locale": "en" },
+        { "term": "critical theory", "locale": "en" },
+        { "term": "design", "locale": "en" },
+        { "term": "education", "locale": "en" },
+        { "term": "ethics", "locale": "en" },
+        { "term": "governance", "locale": "en" },
+        { "term": "history", "locale": "en" },
+        { "term": "law", "locale": "en" },
+        { "term": "legal", "locale": "en" },
+        { "term": "literature", "locale": "en" },
+        { "term": "management", "locale": "en" },
+        { "term": "media studies", "locale": "en" },
+        { "term": "policy", "locale": "en" },
+        { "term": "political", "locale": "en" },
+        { "term": "sociology", "locale": "en" },
+        { "term": "strategy", "locale": "en" },
+        { "term": "urban planning", "locale": "en" },
+        { "term": "인류학", "locale": "ko" },
+        { "term": "헌법", "locale": "ko" },
+        { "term": "비판 이론", "locale": "ko" },
+        { "term": "디자인", "locale": "ko" },
+        { "term": "교육", "locale": "ko" },
+        { "term": "윤리", "locale": "ko" },
+        { "term": "거버넌스", "locale": "ko" },
+        { "term": "역사", "locale": "ko" },
+        { "term": "법학", "locale": "ko" },
+        { "term": "문학", "locale": "ko" },
+        { "term": "경영", "locale": "ko" },
+        { "term": "미디어 연구", "locale": "ko" },
+        { "term": "정책", "locale": "ko" },
+        { "term": "정치", "locale": "ko" },
+        { "term": "사회학", "locale": "ko" },
+        { "term": "전략", "locale": "ko" },
+        { "term": "도시 계획", "locale": "ko" }
+      ],
+      "lens_prompts": [
+        {
+          "name": "Cases and contexts",
+          "inspect": "Canonical cases, texts, artifacts, episodes, institutions, and boundary cases.",
+          "revise_when": "Stable formal objects or a shared causal mechanism better explains the field."
+        },
+        {
+          "name": "Schools and disputes",
+          "inspect": "Competing lenses, normative commitments, interpretive traditions, and live controversies.",
+          "revise_when": "Apparent schools are historical labels rather than active organizing structures."
+        },
+        {
+          "name": "Situated warrants",
+          "inspect": "Source criticism, precedent, comparison, triangulation, interpretation, and normative argument.",
+          "revise_when": "One warrant system is broadly shared or the goal concerns only one bounded practice."
+        }
+      ],
+      "scaffold_questions": [
+        "Which cases or texts change the meaning of the field's central concepts?",
+        "Where do expert communities disagree about evidence rather than merely conclusions?",
+        "Which institutions or historical conditions make the current structure intelligible?",
+        "Would a debate network, case constellation, genealogy, or comparative matrix reveal more than a hierarchy?"
+      ],
+      "source_role_probes": [
+        {
+          "role": "Boundary / orientation",
+          "inspect": "How experts delimit the field and name its recurring questions and objects.",
+          "decision_rule": "Required unless the scope is already explicitly bounded by the user."
+        },
+        {
+          "role": "Foundation / canonical corpus",
+          "inspect": "Which concepts, cases, results, or practices recur across authoritative accounts.",
+          "decision_rule": "Require the source form that actually carries durable knowledge in this field."
+        },
+        {
+          "role": "Method / warrant",
+          "inspect": "How the field produces, tests, interprets, or rejects claims.",
+          "decision_rule": "Required; split by community when warrant standards differ."
+        },
+        {
+          "role": "Pedagogical sequence",
+          "inspect": "Which dependencies or threshold concepts repeatedly shape expert teaching.",
+          "decision_rule": "Required for learning, curriculum, onboarding, or staged-practice goals; otherwise optional or waived. Never use it as the field boundary."
+        },
+        {
+          "role": "Current synthesis / frontier",
+          "inspect": "Which questions, methods, standards, or disagreements are changing now.",
+          "decision_rule": "Required only when the goal includes current state or research entry."
+        }
+      ],
+      "projection_keyword_mappings": [
+        {
+          "projection": "representation",
+          "item_prefix": "rep",
+          "terms": [
+            { "term": "representation", "locale": "en" },
+            { "term": "model", "locale": "en" },
+            { "term": "notation", "locale": "en" },
+            { "term": "표현", "locale": "ko" },
+            { "term": "모형", "locale": "ko" },
+            { "term": "모델", "locale": "ko" },
+            { "term": "표기", "locale": "ko" }
+          ]
+        },
+        {
+          "projection": "method",
+          "item_prefix": "method",
+          "terms": [
+            { "term": "syntactic", "locale": "en" },
+            { "term": "method", "locale": "en" },
+            { "term": "operation", "locale": "en" },
+            { "term": "practice", "locale": "en" },
+            { "term": "proof", "locale": "en" },
+            { "term": "warrant", "locale": "en" },
+            { "term": "evidence standard", "locale": "en" },
+            { "term": "구문", "locale": "ko" },
+            { "term": "방법", "locale": "ko" },
+            { "term": "방법론", "locale": "ko" },
+            { "term": "연산", "locale": "ko" },
+            { "term": "실천", "locale": "ko" },
+            { "term": "실무", "locale": "ko" },
+            { "term": "증명", "locale": "ko" },
+            { "term": "보증", "locale": "ko" },
+            { "term": "근거", "locale": "ko" },
+            { "term": "증거 기준", "locale": "ko" }
+          ]
+        },
+        {
+          "projection": "omit",
+          "item_prefix": "concept",
+          "terms": [
+            { "term": "failure mode", "locale": "en" },
+            { "term": "frontier", "locale": "en" },
+            { "term": "dispute", "locale": "en" },
+            { "term": "debate", "locale": "en" },
+            { "term": "open problem", "locale": "en" },
+            { "term": "실패 양식", "locale": "ko" },
+            { "term": "한계", "locale": "ko" },
+            { "term": "프런티어", "locale": "ko" },
+            { "term": "쟁점", "locale": "ko" },
+            { "term": "논쟁", "locale": "ko" },
+            { "term": "미해결 문제", "locale": "ko" }
+          ]
+        }
+      ],
+      "fallback_behavior": {
+        "advisory_message": "Use this profile only as a source-review hypothesis; source findings may revise it."
+      }
+    },
+    {
+      "profile_id": "infrastructure",
+      "profile_version": "1.0.0",
+      "locale": "en",
+      "classification_hint": "empirical or infrastructure-bound candidate",
+      "why_this_hint": "The field name suggests that instruments, data products, collaborations, or standards may shape what can be known.",
+      "signal_terms": [
+        { "term": "accelerator", "locale": "en" },
+        { "term": "astronomy", "locale": "en" },
+        { "term": "astrophysics", "locale": "en" },
+        { "term": "bioinformatics", "locale": "en" },
+        { "term": "climate", "locale": "en" },
+        { "term": "collider", "locale": "en" },
+        { "term": "earth observation", "locale": "en" },
+        { "term": "epidemiology", "locale": "en" },
+        { "term": "genomics", "locale": "en" },
+        { "term": "gravitational wave", "locale": "en" },
+        { "term": "high energy physics", "locale": "en" },
+        { "term": "materials characterization", "locale": "en" },
+        { "term": "metabolomics", "locale": "en" },
+        { "term": "neuroscience", "locale": "en" },
+        { "term": "oceanography", "locale": "en" },
+        { "term": "particle physics", "locale": "en" },
+        { "term": "proteomics", "locale": "en" },
+        { "term": "remote sensing", "locale": "en" },
+        { "term": "seismology", "locale": "en" },
+        { "term": "synchrotron", "locale": "en" },
+        { "term": "가속기", "locale": "ko" },
+        { "term": "천문학", "locale": "ko" },
+        { "term": "천체물리학", "locale": "ko" },
+        { "term": "생물정보학", "locale": "ko" },
+        { "term": "기후", "locale": "ko" },
+        { "term": "충돌기", "locale": "ko" },
+        { "term": "지구 관측", "locale": "ko" },
+        { "term": "전염병학", "locale": "ko" },
+        { "term": "역학조사", "locale": "ko" },
+        { "term": "유전체학", "locale": "ko" },
+        { "term": "중력파", "locale": "ko" },
+        { "term": "고에너지 물리", "locale": "ko" },
+        { "term": "재료 특성화", "locale": "ko" },
+        { "term": "대사체학", "locale": "ko" },
+        { "term": "신경과학", "locale": "ko" },
+        { "term": "해양학", "locale": "ko" },
+        { "term": "입자 물리", "locale": "ko" },
+        { "term": "단백질체학", "locale": "ko" },
+        { "term": "원격탐사", "locale": "ko" },
+        { "term": "지진학", "locale": "ko" },
+        { "term": "싱크로트론", "locale": "ko" }
+      ],
+      "lens_prompts": [
+        {
+          "name": "Phenomenon-to-data chain",
+          "inspect": "Phenomena, instruments, acquisition, calibration, processing, models, and inference.",
+          "revise_when": "The field is organized mainly by formal theory or clinical/professional decisions."
+        },
+        {
+          "name": "Infrastructure and coordination",
+          "inspect": "Facilities, datasets, software, standards, collaborations, governance, and access.",
+          "revise_when": "Infrastructure supports the field but does not shape its central questions or warrants."
+        },
+        {
+          "name": "Uncertainty and validation",
+          "inspect": "Error budgets, benchmarks, controls, replication, sensitivity, and model comparison.",
+          "revise_when": "Different subfields require separate validation chains."
+        }
+      ],
+      "scaffold_questions": [
+        "Where does the object of study become an observation, dataset, or model output?",
+        "Which infrastructure choices constrain the questions that can be asked?",
+        "Which uncertainty transformations are load-bearing but usually hidden?",
+        "Would a pipeline, multiscale system, actor network, or decision flow best expose the field's structure?"
+      ],
+      "source_role_probes": [
+        {
+          "role": "Boundary / orientation",
+          "inspect": "How experts delimit the field and name its recurring questions and objects.",
+          "decision_rule": "Required unless the scope is already explicitly bounded by the user."
+        },
+        {
+          "role": "Foundation / canonical corpus",
+          "inspect": "Which concepts, cases, results, or practices recur across authoritative accounts.",
+          "decision_rule": "Require the source form that actually carries durable knowledge in this field."
+        },
+        {
+          "role": "Method / warrant",
+          "inspect": "How the field produces, tests, interprets, or rejects claims.",
+          "decision_rule": "Required; split by community when warrant standards differ."
+        },
+        {
+          "role": "Pedagogical sequence",
+          "inspect": "Which dependencies or threshold concepts repeatedly shape expert teaching.",
+          "decision_rule": "Required for learning, curriculum, onboarding, or staged-practice goals; otherwise optional or waived. Never use it as the field boundary."
+        },
+        {
+          "role": "Current synthesis / frontier",
+          "inspect": "Which questions, methods, standards, or disagreements are changing now.",
+          "decision_rule": "Required only when the goal includes current state or research entry."
+        }
+      ],
+      "projection_keyword_mappings": [
+        {
+          "projection": "representation",
+          "item_prefix": "rep",
+          "terms": [
+            { "term": "representation", "locale": "en" },
+            { "term": "model", "locale": "en" },
+            { "term": "notation", "locale": "en" },
+            { "term": "표현", "locale": "ko" },
+            { "term": "모형", "locale": "ko" },
+            { "term": "모델", "locale": "ko" },
+            { "term": "표기", "locale": "ko" }
+          ]
+        },
+        {
+          "projection": "method",
+          "item_prefix": "method",
+          "terms": [
+            { "term": "syntactic", "locale": "en" },
+            { "term": "method", "locale": "en" },
+            { "term": "operation", "locale": "en" },
+            { "term": "practice", "locale": "en" },
+            { "term": "proof", "locale": "en" },
+            { "term": "warrant", "locale": "en" },
+            { "term": "evidence standard", "locale": "en" },
+            { "term": "구문", "locale": "ko" },
+            { "term": "방법", "locale": "ko" },
+            { "term": "방법론", "locale": "ko" },
+            { "term": "연산", "locale": "ko" },
+            { "term": "실천", "locale": "ko" },
+            { "term": "실무", "locale": "ko" },
+            { "term": "증명", "locale": "ko" },
+            { "term": "보증", "locale": "ko" },
+            { "term": "근거", "locale": "ko" },
+            { "term": "증거 기준", "locale": "ko" }
+          ]
+        },
+        {
+          "projection": "omit",
+          "item_prefix": "concept",
+          "terms": [
+            { "term": "failure mode", "locale": "en" },
+            { "term": "frontier", "locale": "en" },
+            { "term": "dispute", "locale": "en" },
+            { "term": "debate", "locale": "en" },
+            { "term": "open problem", "locale": "en" },
+            { "term": "실패 양식", "locale": "ko" },
+            { "term": "한계", "locale": "ko" },
+            { "term": "프런티어", "locale": "ko" },
+            { "term": "쟁점", "locale": "ko" },
+            { "term": "논쟁", "locale": "ko" },
+            { "term": "미해결 문제", "locale": "ko" }
+          ]
+        }
+      ],
+      "fallback_behavior": {
+        "advisory_message": "Use this profile only as a source-review hypothesis; source findings may revise it."
+      }
+    },
+    {
+      "profile_id": "open",
+      "profile_version": "1.0.0",
+      "locale": "und",
+      "classification_hint": "open or mixed candidate",
+      "why_this_hint": "The field name alone does not justify a dominant organizing lens.",
+      "signal_terms": [],
+      "lens_prompts": [
+        {
+          "name": "Objects and concepts",
+          "inspect": "Recurring objects, categories, representations, and transformations.",
+          "revise_when": "They are local vocabulary rather than the field's organizing structure."
+        },
+        {
+          "name": "Practices and warrants",
+          "inspect": "Methods, evidence standards, decision rules, and expert performances.",
+          "revise_when": "Different communities require separate maps."
+        },
+        {
+          "name": "History, institutions, and infrastructure",
+          "inspect": "Cases, actors, facilities, standards, datasets, and path dependencies.",
+          "revise_when": "They provide context but do not organize the field's knowledge."
+        }
+      ],
+      "scaffold_questions": [
+        "What questions recur across independent descriptions of the field?",
+        "What kinds of things are manipulated, compared, interpreted, measured, or built?",
+        "Which relations make those elements cohere rather than remain a topic list?",
+        "Which candidate organizing form survives comparison against the sources and the user's goal?"
+      ],
+      "source_role_probes": [
+        {
+          "role": "Boundary / orientation",
+          "inspect": "How experts delimit the field and name its recurring questions and objects.",
+          "decision_rule": "Required unless the scope is already explicitly bounded by the user."
+        },
+        {
+          "role": "Foundation / canonical corpus",
+          "inspect": "Which concepts, cases, results, or practices recur across authoritative accounts.",
+          "decision_rule": "Require the source form that actually carries durable knowledge in this field."
+        },
+        {
+          "role": "Method / warrant",
+          "inspect": "How the field produces, tests, interprets, or rejects claims.",
+          "decision_rule": "Required; split by community when warrant standards differ."
+        },
+        {
+          "role": "Pedagogical sequence",
+          "inspect": "Which dependencies or threshold concepts repeatedly shape expert teaching.",
+          "decision_rule": "Required for learning, curriculum, onboarding, or staged-practice goals; otherwise optional or waived. Never use it as the field boundary."
+        },
+        {
+          "role": "Current synthesis / frontier",
+          "inspect": "Which questions, methods, standards, or disagreements are changing now.",
+          "decision_rule": "Required only when the goal includes current state or research entry."
+        }
+      ],
+      "projection_keyword_mappings": [
+        {
+          "projection": "representation",
+          "item_prefix": "rep",
+          "terms": [
+            { "term": "representation", "locale": "en" },
+            { "term": "model", "locale": "en" },
+            { "term": "notation", "locale": "en" },
+            { "term": "표현", "locale": "ko" },
+            { "term": "모형", "locale": "ko" },
+            { "term": "모델", "locale": "ko" },
+            { "term": "표기", "locale": "ko" }
+          ]
+        },
+        {
+          "projection": "method",
+          "item_prefix": "method",
+          "terms": [
+            { "term": "syntactic", "locale": "en" },
+            { "term": "method", "locale": "en" },
+            { "term": "operation", "locale": "en" },
+            { "term": "practice", "locale": "en" },
+            { "term": "proof", "locale": "en" },
+            { "term": "warrant", "locale": "en" },
+            { "term": "evidence standard", "locale": "en" },
+            { "term": "구문", "locale": "ko" },
+            { "term": "방법", "locale": "ko" },
+            { "term": "방법론", "locale": "ko" },
+            { "term": "연산", "locale": "ko" },
+            { "term": "실천", "locale": "ko" },
+            { "term": "실무", "locale": "ko" },
+            { "term": "증명", "locale": "ko" },
+            { "term": "보증", "locale": "ko" },
+            { "term": "근거", "locale": "ko" },
+            { "term": "증거 기준", "locale": "ko" }
+          ]
+        },
+        {
+          "projection": "omit",
+          "item_prefix": "concept",
+          "terms": [
+            { "term": "failure mode", "locale": "en" },
+            { "term": "frontier", "locale": "en" },
+            { "term": "dispute", "locale": "en" },
+            { "term": "debate", "locale": "en" },
+            { "term": "open problem", "locale": "en" },
+            { "term": "실패 양식", "locale": "ko" },
+            { "term": "한계", "locale": "ko" },
+            { "term": "프런티어", "locale": "ko" },
+            { "term": "쟁점", "locale": "ko" },
+            { "term": "논쟁", "locale": "ko" },
+            { "term": "미해결 문제", "locale": "ko" }
+          ]
+        }
+      ],
+      "fallback_behavior": {
+        "advisory_message": "No profile signal matched or the locale is unknown; keep the profile open and untyped until source review."
+      }
+    }
+  ]
+}

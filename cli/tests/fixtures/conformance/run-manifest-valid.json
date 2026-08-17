@@ -1,0 +1,62 @@
+{
+  "schema_version": "sok-run/v1",
+  "run_id": "run-1111111111111111",
+  "sok_revision": {
+    "name": "sok-cli-rust",
+    "version": "0.3.0"
+  },
+  "skill_revision": {
+    "name": "structure-of-knowledge",
+    "version": "0.3.0"
+  },
+  "profile_version": "1.0.0",
+  "command": {
+    "name": "conformance-fixture",
+    "args": ["--fixture"]
+  },
+  "stage": "conformance",
+  "declared_permissions": {
+    "network": false,
+    "subprocess": false,
+    "read_roots": [],
+    "write_roots": []
+  },
+  "bounded_input_files": [
+    {
+      "kind": "core-packages",
+      "path": "cli/tests/fixtures/conformance/core-packages-valid.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "bytes": 1234
+    }
+  ],
+  "work_order_hashes": [
+    {
+      "kind": "sok-work-order",
+      "label": "work-order-valid.json",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+  "work_result_hashes": [
+    {
+      "kind": "sok-work-result",
+      "label": "work-result-valid.json",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "output_files": [
+    {
+      "kind": "sok-report",
+      "path": "cli/tests/fixtures/conformance/report-valid.json",
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "bytes": 5678
+    }
+  ],
+  "semantic_digest": {
+    "algorithm": "sha256",
+    "value": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "timestamps": {
+    "started_at": "2026-07-16T00:00:00Z",
+    "finished_at": "2026-07-16T00:00:01Z"
+  }
+}

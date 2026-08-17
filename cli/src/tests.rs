@@ -1,5 +1,9 @@
 use super::*;
+use crate::commands::{ingest_last_manifest, run_download_sources};
+use crate::sources::sorted_open_access_statuses;
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -49,8 +53,11 @@ fn every_documented_command_supports_immediate_help() {
         "export-json",
         "lint",
         "validate-report",
+        "migrate-ids",
+        "eval",
         "render-html",
         "specificity",
+        "work",
     ] {
         assert_eq!(
             run_cli(vec![command.to_string(), "--help".to_string()]).unwrap(),
@@ -155,6 +162,109 @@ fn report_scaffold_uses_domain_hints_for_discovery_not_final_sections() {
         &mixed,
         "Which candidate organizing form survives comparison against the sources",
     );
+}
+
+#[test]
+fn declarative_profiles_support_korean_signals_and_open_fallback() {
+    assert_eq!(
+        profiles::embedded_profile_schema_version(),
+        "sok-discovery-profiles/v1"
+    );
+
+    let korean_formal = build_report_scaffold("위상수학", "doctoral learner", "map proofs", 8);
+    assert_contains(
+        &korean_formal,
+        "| Provisional lens | formal or theory-led candidate |",
+    );
+    assert_contains(&korean_formal, "| Profile proposal | formal |");
+    assert_contains(&korean_formal, "| Profile locale | ko |");
+    assert_contains(
+        &korean_formal,
+        "Matched field-name signal \"위상수학\" for locale ko; provisional until source review.",
+    );
+
+    let korean_interpretive =
+        build_report_scaffold("비교 헌법", "legal scholar", "compare cases", 4);
+    assert_contains(
+        &korean_interpretive,
+        "| Provisional lens | interpretive or contested candidate |",
+    );
+    assert_contains(&korean_interpretive, "| Profile proposal | interpretive |");
+    assert_contains(&korean_interpretive, "| Profile locale | ko |");
+
+    let unknown = build_report_scaffold("zzqv untranslated domain", "reader", "orient", 0);
+    assert_contains(&unknown, "| Provisional lens | open or mixed candidate |");
+    assert_contains(&unknown, "| Profile proposal | open |");
+    assert_contains(&unknown, "| Profile locale | und |");
+    assert_contains(&unknown, "| Profile confidence | low |");
+    assert_contains(
+        &unknown,
+        "No profile signal matched or the locale is unknown; keep the profile open and untyped until source review.",
+    );
+
+    let korean_unmatched = build_report_scaffold("방법론 일반론", "reader", "orient", 0);
+    assert_contains(
+        &korean_unmatched,
+        "| Provisional lens | open or mixed candidate |",
+    );
+    assert_contains(&korean_unmatched, "| Profile locale | und |");
+}
+
+#[test]
+fn explicit_profile_proposal_and_korean_projection_terms_round_trip() {
+    let dir = tempfile::tempdir().unwrap();
+    let sources_path = dir.path().join("sources.csv");
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+Open Korean Source,review,fixture:open-korean-source,https://example.test/korean,2026-01-01,open_access,Fixture URL,$0,CC BY,foundation,Supports Korean profile fixture.,Use for profile fixture,Fixture row\n",
+    )
+    .unwrap();
+
+    let fixture_path = repo_path("cli/tests/fixtures/profiles/explicit-profile-scaffold.md");
+    let exported = report::export_markdown_report(
+        &fixture_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Scaffold,
+    )
+    .unwrap();
+
+    let internal = exported.internal_context.as_ref().unwrap();
+    assert_eq!(internal.profile_proposals.len(), 1);
+    let proposal = &internal.profile_proposals[0];
+    assert_eq!(proposal.proposer_type, report::ProfileProposerType::User);
+    assert_eq!(proposal.profile_id, "interpretive");
+    assert_eq!(proposal.profile_version, "1.0.0");
+    assert_eq!(proposal.locale, "ko");
+    assert_eq!(proposal.confidence, "0.72");
+    assert_contains(
+        &proposal.rationale,
+        "case comparison and schools of interpretation",
+    );
+
+    assert!(exported
+        .report
+        .methods
+        .iter()
+        .any(|item| item.label == "판례 비교"));
+    assert!(exported
+        .report
+        .representations
+        .iter()
+        .any(|item| item.label == "권리 분석 틀"));
+    let compatibility_labels = exported
+        .report
+        .core_ideas
+        .iter()
+        .chain(exported.report.methods.iter())
+        .chain(exported.report.representations.iter())
+        .map(|item| item.label.as_str())
+        .collect::<Vec<_>>();
+    assert!(!compatibility_labels.contains(&"사법 적극주의 논쟁"));
+
+    let validation = report::validate_report_value(&serde_json::to_value(&exported).unwrap());
+    assert_eq!(validation.error_count(), 0);
 }
 
 #[test]
@@ -647,6 +757,17 @@ Open Topology Notes,notes,https://example.test/topology,https://example.test/top
     assert_eq!(internal.raw_learner_profile, "SENTINEL_INTERNAL_LEARNER");
     assert_eq!(internal.original_goal, "SENTINEL_INTERNAL_GOAL");
     assert!(internal.placeholder_state.contains_key("placeholder_lines"));
+    assert_eq!(internal.profile_proposals.len(), 1);
+    let proposal = &internal.profile_proposals[0];
+    assert_eq!(
+        proposal.proposer_type,
+        report::ProfileProposerType::Inference
+    );
+    assert_eq!(proposal.profile_id, "formal");
+    assert_eq!(proposal.profile_version, "1.0.0");
+    assert_eq!(proposal.locale, "en");
+    assert_eq!(proposal.confidence, "medium");
+    assert_contains(&proposal.rationale, "provisional until source review");
     assert!(internal
         .prompt_derived_assumptions
         .iter()
@@ -957,27 +1078,32 @@ Read every result as material chemistry to measured transport to interface evolu
     assert_eq!(exported.report.literature_ladder[0].layer, "Foundation");
     assert_eq!(exported.report.literature_ladder[0].source_ids.len(), 1);
 
-    assert_eq!(exported.report.relations.len(), 2);
-    let relation = exported
-        .report
-        .relations
-        .iter()
-        .find(|relation| relation.id == "rel-interface-measurement-after-grammar")
-        .unwrap();
-    assert_eq!(relation.kind, report::RelationKind::DependsOn);
-    assert_eq!(
-        relation.from.entity_type,
-        report::EntityType::CurriculumStep
-    );
-    assert_eq!(relation.to.entity_type, report::EntityType::CurriculumStep);
-    assert_eq!(relation.source_ids.len(), 1);
-
     let interface_step = exported
         .report
         .curriculum_path
         .iter()
         .find(|step| step.title == "Interface measurement")
         .unwrap();
+    assert_eq!(exported.report.relations.len(), 4);
+    let relation = exported
+        .report
+        .relations
+        .iter()
+        .find(|relation| relation.id == "rel-interface-measurement-after-grammar")
+        .unwrap();
+    assert_eq!(relation.kind, report::RelationKind::RequiresBefore);
+    assert_eq!(
+        relation.from.entity_type,
+        report::EntityType::CurriculumStep
+    );
+    assert!(relation
+        .from
+        .id
+        .starts_with("step-electrochemical-grammar-"));
+    assert_eq!(relation.to.id, interface_step.id);
+    assert_eq!(relation.to.entity_type, report::EntityType::CurriculumStep);
+    assert_eq!(relation.source_ids.len(), 1);
+
     assert!(interface_step
         .prerequisite_ids
         .iter()
@@ -1095,7 +1221,7 @@ The field is organized by the transformations that turn a remote signal into a w
     assert_contains(&receiver_chain.actual_form, "antenna");
     assert_contains(
         &receiver_chain.load_bearing_relations,
-        "transforms the remote signal",
+        "phenomenon becomes data",
     );
     assert_eq!(exported.report.core_ideas.len(), 2);
     assert_eq!(exported.report.representations.len(), 1);
@@ -1203,6 +1329,141 @@ This summary has no structured visual view to attach to.
 }
 
 #[test]
+fn export_json_resolves_unicode_aliases_without_losing_ascii_safe_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("unicode-report.md");
+    let sources_path = dir.path().join("sources.csv");
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+양자 센싱 입문,review_article,doi:10.0000/ko,https://example.test/ko,2025-01-01,open_access,Official URL,$0,CC BY,foundation,한국어 source alias resolution fixture.,Use in module 1,Reviewed metadata.\n",
+    )
+    .unwrap();
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: 양자 센싱
+
+## Report Architecture
+
+| Item | Decision |
+|---|---|
+| Executive thesis | 양자 센싱은 신호 모델과 추정기의 관계로 설명된다. |
+| Chosen organizing form | A relation-centered path. |
+| Architecture rationale | The report follows the relation under test. |
+| Rejected alternatives and why | A glossary-only form would hide the relation. |
+
+## Domain Decomposition
+
+양자 센싱은 신호 모델과 추정기를 함께 다룬다.
+
+## Field Element Inventory
+
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Concept | 신호 모델 | 관측 신호를 수학적으로 표현한다. | core | 추정기가 이 모델을 사용한다. | 양자 센싱 입문 | high |
+| Method | 추정기 | 신호 모델에서 파라미터를 추정한다. | surrounding | 신호 모델을 적용한다. | 양자 센싱 입문 | high |
+
+## Relations
+
+| Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale |
+|---|---|---|---|---|---|---|
+| rel-korean-reference-1111111111 | uses_method | field_element | 추정기 | field_element | 신호 모델 | Korean labels should resolve through Unicode-aware aliases. |
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Final,
+    )
+    .unwrap();
+
+    let source_id = &exported.report.sources[0].id;
+    assert!(validate_stable_id(source_id).is_ok());
+    assert!(exported
+        .report
+        .field_elements
+        .iter()
+        .all(|element| element.source_ids == vec![source_id.clone()]));
+    let signal_model = exported
+        .report
+        .field_elements
+        .iter()
+        .find(|element| element.label == "신호 모델")
+        .unwrap();
+    assert!(signal_model.id.starts_with("element-item-"));
+    validate_stable_id(&signal_model.id).unwrap();
+    let relation = exported.report.relations.first().unwrap();
+    assert_eq!(relation.to.id, signal_model.id);
+    assert!(exported
+        .diagnostics
+        .as_ref()
+        .map(|diagnostics| diagnostics.checks.iter().all(|check| {
+            check.check_id != report::CHECK_EXPORT_UNRESOLVED_REFERENCE
+                && check.check_id != report::CHECK_EXPORT_AMBIGUOUS_REFERENCE
+        }))
+        .unwrap_or(true));
+}
+
+#[test]
+fn export_json_reports_ambiguous_and_dangling_unicode_source_aliases() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("ambiguous-source-report.md");
+    let sources_path = dir.path().join("sources.csv");
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+공통 제목,review_article,doi:10.0000/a,https://example.test/a,2025-01-01,open_access,Official URL,$0,CC BY,foundation,First duplicate alias.,Use in module 1,Reviewed metadata.\n\
+공통 제목,review_article,doi:10.0000/b,https://example.test/b,2025-01-02,open_access,Official URL,$0,CC BY,foundation,Second duplicate alias.,Use in module 1,Reviewed metadata.\n",
+    )
+    .unwrap();
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: 중복 alias
+
+## Field Element Inventory
+
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Concept | 공통 개념 | 중복 source alias와 dangling alias를 검사한다. | core | source resolution must not guess. | 공통 제목; 없는 자료 | high |
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Scaffold,
+    )
+    .unwrap();
+    let diagnostics = exported.diagnostics.as_ref().unwrap();
+    let ambiguous = diagnostics
+        .checks
+        .iter()
+        .find(|check| check.check_id == report::CHECK_EXPORT_AMBIGUOUS_REFERENCE)
+        .unwrap();
+    assert_eq!(ambiguous.severity, report::DiagnosticSeverity::Error);
+    assert_contains(&ambiguous.message, "공통 제목");
+    assert_contains(&ambiguous.message, "src-");
+    let dangling = diagnostics
+        .checks
+        .iter()
+        .find(|check| check.check_id == report::CHECK_EXPORT_UNRESOLVED_REFERENCE)
+        .unwrap();
+    assert_contains(&dangling.message, "없는 자료");
+    assert!(exported.report.field_elements[0].source_ids.is_empty());
+    let validation = report::validate_report_value(&serde_json::to_value(&exported).unwrap());
+    assert_validation_check(
+        &validation,
+        report::CHECK_EXPORT_AMBIGUOUS_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
 fn reviewed_or_verified_evidence_needs_usable_support_metadata() {
     let reviewed = report::EvidenceEntry {
         evidence_id: "ev-example-reviewed-1111111111".to_string(),
@@ -1275,11 +1536,20 @@ fn content_ids_are_content_derived_and_order_independent() {
     let first = report::content_id("claim", &["  Persistent   Homology! "]);
     let second = report::content_id("claim", &["persistent homology"]);
     assert_eq!(first, second);
+    assert_eq!(first, "claim-persistent-homology-c48a3a31c5");
     assert!(first.starts_with("claim-persistent-homology-"));
 
     let left = report::content_id_map("src", ["Alpha Source", "Beta Source"]);
     let right = report::content_id_map("src", ["Beta Source", "Alpha Source"]);
     assert_eq!(left, right);
+    assert_eq!(
+        left.get("alpha source").map(String::as_str),
+        Some("src-alpha-source-5a23ba1b22")
+    );
+    assert_eq!(
+        left.get("beta source").map(String::as_str),
+        Some("src-beta-source-f7c3e018ea")
+    );
 
     let source_a = Source {
         title: "Alpha Source".to_string(),
@@ -1294,6 +1564,33 @@ fn content_ids_are_content_derived_and_order_independent() {
     let ids_forward = report_source_ids_by_title(&[source_a.clone(), source_b.clone()]);
     let ids_reverse = report_source_ids_by_title(&[source_b, source_a]);
     assert_eq!(ids_forward, ids_reverse);
+}
+
+#[test]
+fn content_ids_are_unicode_safe_and_identity_hashes_use_normalized_utf8() {
+    let korean = report::content_id_identity("element", &["양자 센싱"]);
+    let korean_nfd = report::content_id("element", &["양자 센싱"]);
+    assert_eq!(korean.stable_id, korean_nfd);
+    assert_eq!(korean.display_slug, "item");
+    assert_eq!(korean.normalized_identity, "양자 센싱");
+    validate_stable_id(&korean.stable_id).unwrap();
+
+    let composed = report::content_id("concept", &["가"]);
+    let decomposed = report::content_id("concept", &["가"]);
+    assert_eq!(composed, decomposed);
+
+    let greek_upper = report::content_id("concept", &["Μέθοδος"]);
+    let greek_lower = report::content_id("concept", &["μέθοδος"]);
+    assert_eq!(greek_upper, greek_lower);
+
+    let korean_concept = report::content_id("concept", &["양자 센싱"]);
+    let cjk = report::content_id("concept", &["量子センシング"]);
+    let greek = report::content_id("concept", &["μέθοδος"]);
+    let mixed = report::content_id("concept", &["Graph 그래프"]);
+    let ids = BTreeSet::from([korean_concept, cjk, greek, mixed]);
+    assert_eq!(ids.len(), 4);
+    assert!(ids.iter().all(|id| validate_stable_id(id).is_ok()));
+    assert!(ids.iter().any(|id| id.starts_with("concept-graph-")));
 }
 
 #[test]
@@ -1486,6 +1783,1171 @@ fn sok_report_schema_declares_json_first_contract() {
         &defs["visual_view"]["properties"]["kind"]["enum"],
         "custom"
     ));
+}
+
+#[test]
+fn sok_id_migration_schema_declares_reviewable_map_contract() {
+    let schema = load_repo_json("specs/sok-id-migration.schema.json");
+    assert_eq!(
+        schema["$schema"],
+        json!("https://json-schema.org/draft/2020-12/schema")
+    );
+    assert!(json_array_contains(&schema["required"], "schema_version"));
+    assert!(json_array_contains(
+        &schema["required"],
+        "source_schema_version"
+    ));
+    assert!(json_array_contains(&schema["required"], "mappings"));
+    assert_eq!(
+        schema["properties"]["schema_version"]["const"],
+        json!("sok-id-migration/v1")
+    );
+    assert!(json_array_contains(
+        &schema["$defs"]["mapping"]["required"],
+        "normalized_identity"
+    ));
+}
+
+#[test]
+fn sok_core_schemas_declare_versioned_package_contracts() {
+    let knowledge = load_repo_json("specs/sok-knowledge.schema.json");
+    let evidence = load_repo_json("specs/sok-evidence.schema.json");
+    let pedagogy = load_repo_json("specs/sok-pedagogy.schema.json");
+    assert_eq!(
+        knowledge["$schema"],
+        json!("https://json-schema.org/draft/2020-12/schema")
+    );
+    assert_eq!(
+        knowledge["properties"]["schema_version"]["const"],
+        json!("sok-knowledge/v1")
+    );
+    assert_eq!(
+        evidence["properties"]["schema_version"]["const"],
+        json!("sok-evidence/v1")
+    );
+    assert_eq!(
+        pedagogy["properties"]["schema_version"]["const"],
+        json!("sok-pedagogy/v1")
+    );
+    assert!(knowledge["$defs"]["knowledge_element"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("semantic_roles"));
+    assert!(knowledge["$defs"]["knowledge_element"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("relation_ids"));
+    assert!(knowledge["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("relations"));
+    assert!(json_array_contains(
+        &knowledge["$defs"]["relation_kind"]["enum"],
+        "requires_before"
+    ));
+    assert!(evidence["$defs"]["claim"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("evidence_links"));
+    assert!(pedagogy["$defs"]["learning_step"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("prerequisite_ids"));
+    assert!(pedagogy["$defs"]["learning_step"]["properties"]
+        .as_object()
+        .unwrap()
+        .contains_key("prerequisite_relation_ids"));
+
+    let report_schema = load_repo_json("specs/sok-report.schema.json");
+    let public_report_properties = report_schema["$defs"]["public_report"]["properties"]
+        .as_object()
+        .unwrap();
+    for disallowed in ["knowledge", "evidence_package", "pedagogy", "core_packages"] {
+        assert!(
+            !public_report_properties.contains_key(disallowed),
+            "sok-report schema must not embed secondary core package field {disallowed}"
+        );
+    }
+}
+
+#[test]
+fn sok_run_schema_declares_private_manifest_contract() {
+    let schema = load_repo_json("specs/sok-run.schema.json");
+    assert_eq!(
+        schema["$schema"],
+        json!("https://json-schema.org/draft/2020-12/schema")
+    );
+    assert_eq!(
+        schema["properties"]["schema_version"]["const"],
+        json!("sok-run/v1")
+    );
+    for required in [
+        "run_id",
+        "sok_revision",
+        "skill_revision",
+        "profile_version",
+        "command",
+        "declared_permissions",
+        "bounded_input_files",
+        "work_order_hashes",
+        "work_result_hashes",
+        "output_files",
+        "semantic_digest",
+        "timestamps",
+    ] {
+        assert!(json_array_contains(&schema["required"], required));
+    }
+    assert_eq!(
+        schema["$defs"]["sha256"]["pattern"],
+        json!("^[0-9a-f]{64}$")
+    );
+
+    let report_schema = load_repo_json("specs/sok-report.schema.json");
+    let public_report_properties = report_schema["$defs"]["public_report"]["properties"]
+        .as_object()
+        .unwrap();
+    let metadata_properties = report_schema["$defs"]["metadata"]["properties"]
+        .as_object()
+        .unwrap();
+    for disallowed in [
+        "run_manifest",
+        "run_id",
+        "executor",
+        "declared_permissions",
+        "bounded_input_files",
+        "output_files",
+        "semantic_digest",
+    ] {
+        assert!(
+            !public_report_properties.contains_key(disallowed),
+            "public report schema must not expose private run field {disallowed}"
+        );
+        assert!(
+            !metadata_properties.contains_key(disallowed),
+            "public report metadata must not expose private run field {disallowed}"
+        );
+    }
+}
+
+#[test]
+fn sok_work_schemas_declare_provider_neutral_protocol_contracts() {
+    let order = load_repo_json("specs/sok-work-order.schema.json");
+    let result = load_repo_json("specs/sok-work-result.schema.json");
+    let patch = load_repo_json("specs/sok-work-patch.schema.json");
+    assert_eq!(
+        order["properties"]["schema_version"]["const"],
+        json!("sok-work-order/v1")
+    );
+    assert_eq!(
+        result["properties"]["schema_version"]["const"],
+        json!("sok-work-result/v1")
+    );
+    assert_eq!(
+        patch["properties"]["schema_version"]["const"],
+        json!("sok-work-patch/v1")
+    );
+
+    for task_kind in supported_work_task_kind_labels() {
+        assert!(json_array_contains(
+            &order["$defs"]["task_kind"]["enum"],
+            task_kind
+        ));
+        assert!(json_array_contains(
+            &result["$defs"]["task_kind"]["enum"],
+            task_kind
+        ));
+    }
+    for capability in [
+        "basic_completion",
+        "structured_output",
+        "tool_capable",
+        "long_context_agent",
+    ] {
+        assert!(json_array_contains(
+            &order["$defs"]["capability"]["enum"],
+            capability
+        ));
+        assert!(json_array_contains(
+            &result["$defs"]["capability"]["enum"],
+            capability
+        ));
+    }
+}
+
+#[test]
+fn work_order_validators_cover_supported_task_kinds_and_reject_unknowns() {
+    for task_kind in supported_work_task_kinds() {
+        let order = test_work_order(task_kind);
+        let validation = work::validate_work_order(&order);
+        assert!(
+            validation.valid,
+            "{task_kind:?}: {:?}",
+            validation.diagnostics
+        );
+    }
+
+    let mut unknown_version = test_work_order(work::WorkTaskKind::Framing);
+    unknown_version.schema_version = "sok-work-order/v99".to_string();
+    let validation = work::validate_work_order(&unknown_version);
+    assert_work_check(&validation, work::validation::CHECK_WORK_VERSION);
+
+    let unsupported_task_kind = json!({
+        "schema_version": "sok-work-order/v1",
+        "work_order_id": "work-order-1111111111",
+        "task_kind": "book_generation",
+        "objective": "Out of scope task.",
+        "allowed_patch_paths": ["/knowledge/elements"]
+    });
+    assert!(serde_json::from_value::<work::WorkOrder>(unsupported_task_kind).is_err());
+}
+
+#[test]
+fn work_result_rejects_unknown_versions_and_unsupported_task_kinds() {
+    let order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    let mut result = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-1111111111")],
+    );
+    let validation = work::validate_work_result(&order, &result);
+    assert!(validation.valid, "{:?}", validation.diagnostics);
+
+    result.schema_version = "sok-work-result/v99".to_string();
+    let validation = work::validate_work_result(&order, &result);
+    assert_work_check(&validation, work::validation::CHECK_WORK_VERSION);
+
+    let unsupported_task_kind = json!({
+        "schema_version": "sok-work-result/v1",
+        "work_order_id": order.work_order_id,
+        "result_id": "work-result-1111111111",
+        "task_kind": "book_generation",
+        "status": "refusal",
+        "capability_response": {
+            "status": "refusal",
+            "missing_capabilities": ["basic_completion"],
+            "rationale": "unsupported"
+        }
+    });
+    assert!(serde_json::from_value::<work::WorkResult>(unsupported_task_kind).is_err());
+}
+
+#[test]
+fn work_protocol_fixtures_validate_and_apply_against_core_packages() {
+    let order: work::WorkOrder = report::read_json_file(repo_path(
+        "cli/tests/fixtures/work/work-order-field-element.json",
+    ))
+    .unwrap();
+    let result: work::WorkResult = report::read_json_file(repo_path(
+        "cli/tests/fixtures/work/work-result-field-element.json",
+    ))
+    .unwrap();
+    assert!(work::validate_work_order(&order).valid);
+    assert!(work::validate_work_result(&order, &result).valid);
+
+    let patched =
+        work::accept_work_result_patches(&order, &result, &core_fixture_packages()).unwrap();
+    assert!(patched
+        .knowledge
+        .elements
+        .iter()
+        .any(|element| element.id == "element-work-fixture-4444444444"));
+}
+
+#[test]
+fn work_capability_negotiation_validates_match_refusal_and_degradation() {
+    let mut order = test_work_order(work::WorkTaskKind::ReportProjection);
+    order.required_capabilities = vec![
+        work::WorkCapability::BasicCompletion,
+        work::WorkCapability::StructuredOutput,
+        work::WorkCapability::LongContextAgent,
+    ];
+    let offered = vec![
+        work::WorkCapability::BasicCompletion,
+        work::WorkCapability::StructuredOutput,
+    ];
+
+    let missing = work::missing_capabilities(&order.required_capabilities, &offered);
+    assert_eq!(missing, vec![work::WorkCapability::LongContextAgent]);
+
+    let refusal = work::negotiate_capabilities(
+        &order.required_capabilities,
+        &offered,
+        work::NegotiationMode::Refusal,
+    );
+    assert_eq!(refusal.status, work::CapabilityResolutionStatus::Refusal);
+    let refusal_result = work::WorkResult {
+        schema_version: "sok-work-result/v1".to_string(),
+        work_order_id: order.work_order_id.clone(),
+        result_id: "work-result-refusal-1111111111".to_string(),
+        task_kind: order.task_kind,
+        status: work::WorkResultStatus::Refusal,
+        offered_capabilities: offered.clone(),
+        capability_response: refusal,
+        patches: Vec::new(),
+        notes: String::new(),
+    };
+    assert!(work::validate_work_result(&order, &refusal_result).valid);
+
+    let degradation = work::negotiate_capabilities(
+        &order.required_capabilities,
+        &offered,
+        work::NegotiationMode::DegradationPlan,
+    );
+    assert_eq!(
+        degradation.status,
+        work::CapabilityResolutionStatus::DegradationPlan
+    );
+    assert!(!degradation.degradation_plan.is_empty());
+    let degradation_result = work::WorkResult {
+        schema_version: "sok-work-result/v1".to_string(),
+        work_order_id: order.work_order_id.clone(),
+        result_id: "work-result-degradation-1111111111".to_string(),
+        task_kind: order.task_kind,
+        status: work::WorkResultStatus::DegradationPlan,
+        offered_capabilities: offered.clone(),
+        capability_response: degradation,
+        patches: Vec::new(),
+        notes: String::new(),
+    };
+    assert!(work::validate_work_result(&order, &degradation_result).valid);
+
+    let mut bad = refusal_result.clone();
+    bad.status = work::WorkResultStatus::PatchProposal;
+    bad.capability_response = work::CapabilityResponse::accepted();
+    bad.patches = vec![valid_element_patch("patch-element-2222222222")];
+    let validation = work::validate_work_result(&order, &bad);
+    assert_work_check(&validation, work::validation::CHECK_WORK_CAPABILITY);
+}
+
+#[test]
+fn work_permission_envelopes_default_deny_and_constrain_roots() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("input.json");
+    let output = dir.path().join("output.json");
+    let mut order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    order.input_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        input.display().to_string(),
+    )];
+    order.output_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        output.display().to_string(),
+    )];
+
+    let validation = work::validate_work_order(&order);
+    assert_work_check(&validation, work::validation::CHECK_WORK_PERMISSION);
+
+    order.permissions.read_roots = vec![dir.path().display().to_string()];
+    order.permissions.write_roots = vec![dir.path().display().to_string()];
+    let validation = work::validate_work_order(&order);
+    assert!(validation.valid, "{:?}", validation.diagnostics);
+
+    let outside = dir.path().join("..").join("outside.json");
+    order.output_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        outside.display().to_string(),
+    )];
+    let validation = work::validate_work_order(&order);
+    assert_work_check(&validation, work::validation::CHECK_WORK_PERMISSION);
+}
+
+#[cfg(unix)]
+#[test]
+fn work_permission_envelopes_reject_symlink_escapes() {
+    use std::os::unix::fs::symlink;
+
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let outside_input = outside.path().join("outside-input.json");
+    fs::write(&outside_input, "{}\n").unwrap();
+    let escape = root.path().join("escape");
+    symlink(outside.path(), &escape).unwrap();
+
+    let escaped_input = escape.join("outside-input.json");
+    let escaped_output = escape.join("outside-output.json");
+    let mut order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    order.permissions.read_roots = vec![root.path().display().to_string()];
+    order.permissions.write_roots = vec![root.path().display().to_string()];
+    order.input_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        escaped_input.display().to_string(),
+    )];
+    order.output_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        escaped_output.display().to_string(),
+    )];
+
+    let validation = work::validate_work_order(&order);
+    assert_work_check(&validation, work::validation::CHECK_WORK_PERMISSION);
+    assert!(work::permissions::ensure_read_path(&order.permissions, &escaped_input).is_err());
+    assert!(work::permissions::ensure_write_path(&order.permissions, &escaped_output).is_err());
+
+    let outside_child = outside.path().join("child");
+    fs::create_dir(&outside_child).unwrap();
+    let outside_parent_input = outside.path().join("parent-input.json");
+    fs::write(&outside_parent_input, "{}\n").unwrap();
+    let jump = root.path().join("jump");
+    symlink(&outside_child, &jump).unwrap();
+    let parent_escape_input = jump.join("..").join("parent-input.json");
+    let parent_escape_output = jump.join("..").join("parent-output.json");
+
+    assert!(work::permissions::ensure_read_path(&order.permissions, &parent_escape_input).is_err());
+    assert!(
+        work::permissions::ensure_write_path(&order.permissions, &parent_escape_output).is_err()
+    );
+}
+
+#[test]
+fn work_patch_accepts_valid_patches_and_rejects_invalid_paths_versions_and_dangling_refs() {
+    let packages = core_fixture_packages();
+    let order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    let result = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-1111111111")],
+    );
+    let patched = work::accept_work_result_patches(&order, &result, &packages).unwrap();
+    assert!(patched
+        .knowledge
+        .elements
+        .iter()
+        .any(|element| element.id == "element-command-string-4444444444"));
+    assert!(!packages
+        .knowledge
+        .elements
+        .iter()
+        .any(|element| element.id == "element-command-string-4444444444"));
+
+    let mut unknown_patch_version = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-version-1111111111")],
+    );
+    unknown_patch_version.patches[0].schema_version = "sok-work-patch/v99".to_string();
+    let validation = work::validate_work_result(&order, &unknown_patch_version);
+    assert_work_check(&validation, work::validation::CHECK_WORK_VERSION);
+
+    let undeclared = work::WorkPatch::add(
+        "patch-claim-1111111111",
+        work::CorePackageArea::Evidence,
+        "/evidence/claims/-",
+        json!({
+            "id": "claim-undeclared-1111111111",
+            "statement": "This should not be accepted through a field-element order.",
+            "claim_type": "structural",
+            "evidence_requirement": "reviewed_source",
+            "temporal": {
+                "as_of": "2026-07-16",
+                "review_after": "2027-01-16",
+                "temporal_status": "durable",
+                "rationale": "Fixture."
+            }
+        }),
+    );
+    let undeclared_result = test_work_result(&order, vec![undeclared]);
+    let validation = work::validate_work_result(&order, &undeclared_result);
+    assert_work_check(&validation, work::validation::CHECK_WORK_PATCH);
+
+    let mut unsupported_operation = valid_element_patch("patch-operation-1111111111");
+    unsupported_operation.op = work::PatchOperation::Replace;
+    unsupported_operation.path = "/knowledge/elements".to_string();
+    let validation = work::validate_work_result(
+        &order,
+        &test_work_result(&order, vec![unsupported_operation]),
+    );
+    assert_work_check(&validation, work::validation::CHECK_WORK_PATCH);
+
+    let mut bad_shape = valid_element_patch("patch-shape-1111111111");
+    bad_shape.value = json!({
+        "id": "element-command-string-4444444444"
+    });
+    let validation = work::validate_work_result(&order, &test_work_result(&order, vec![bad_shape]));
+    assert_work_check(&validation, work::validation::CHECK_WORK_PATCH);
+
+    let relation_order = test_work_order(work::WorkTaskKind::RelationProposals);
+    let dangling_relation = work::WorkPatch::add(
+        "patch-relation-dangling-1111111111",
+        work::CorePackageArea::Knowledge,
+        "/knowledge/relations/-",
+        json!({
+            "id": "rel-dangling-1111111111",
+            "kind": "requires_before",
+            "from": {
+                "entity_type": "field_element",
+                "id": "element-missing-9999999999"
+            },
+            "to": {
+                "entity_type": "field_element",
+                "id": "element-calibration-transfer-2222222222"
+            }
+        }),
+    );
+    let dangling_result = test_work_result(&relation_order, vec![dangling_relation]);
+    assert_contains(
+        &work::accept_work_result_patches(&relation_order, &dangling_result, &packages)
+            .unwrap_err()
+            .to_string(),
+        "patched core packages failed validation",
+    );
+
+    let legacy_relation_kind = work::WorkPatch::add(
+        "patch-relation-legacy-1111111111",
+        work::CorePackageArea::Knowledge,
+        "/knowledge/relations/-",
+        json!({
+            "id": "rel-legacy-kind-1111111111",
+            "kind": "depends_on",
+            "from": {
+                "entity_type": "field_element",
+                "id": "element-calibration-transfer-2222222222"
+            },
+            "to": {
+                "entity_type": "field_element",
+                "id": "element-noise-model-3333333333"
+            }
+        }),
+    );
+    let validation = work::validate_work_result(
+        &relation_order,
+        &test_work_result(&relation_order, vec![legacy_relation_kind]),
+    );
+    assert_work_check(&validation, work::validation::CHECK_WORK_PATCH);
+}
+
+#[test]
+fn work_accept_patch_cli_writes_new_validated_output_without_mutating_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let input_path = dir.path().join("core-input.json");
+    let output_path = dir.path().join("core-output.json");
+    let order_path = dir.path().join("order.json");
+    let result_path = dir.path().join("result.json");
+    let packages = core_fixture_packages();
+    report::write_json_file(&input_path, &packages).unwrap();
+    let input_before = fs::read_to_string(&input_path).unwrap();
+
+    let mut order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    order.permissions.read_roots = vec![dir.path().display().to_string()];
+    order.permissions.write_roots = vec![dir.path().display().to_string()];
+    order.input_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        input_path.display().to_string(),
+    )];
+    order.output_files = vec![work::WorkFileRef::new(
+        "core-packages",
+        output_path.display().to_string(),
+    )];
+    let result = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-3333333333")],
+    );
+    report::write_json_file(&order_path, &order).unwrap();
+    report::write_json_file(&result_path, &result).unwrap();
+
+    assert_eq!(
+        run_cli(vec![
+            "work".to_string(),
+            "accept-patch".to_string(),
+            "--order".to_string(),
+            order_path.display().to_string(),
+            "--result".to_string(),
+            result_path.display().to_string(),
+            "--input".to_string(),
+            input_path.display().to_string(),
+            "--output".to_string(),
+            output_path.display().to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+    assert_eq!(fs::read_to_string(&input_path).unwrap(), input_before);
+    let patched: crate::core::CorePackages = report::read_json_file(&output_path).unwrap();
+    assert!(patched
+        .knowledge
+        .elements
+        .iter()
+        .any(|element| element.id == "element-command-string-4444444444"));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+
+        let alias_path = dir.path().join("core-input-alias.json");
+        symlink(&input_path, &alias_path).unwrap();
+        let err = run_cli(vec![
+            "work".to_string(),
+            "accept-patch".to_string(),
+            "--order".to_string(),
+            order_path.display().to_string(),
+            "--result".to_string(),
+            result_path.display().to_string(),
+            "--input".to_string(),
+            input_path.display().to_string(),
+            "--output".to_string(),
+            alias_path.display().to_string(),
+        ])
+        .unwrap_err();
+        assert_contains(
+            &err.to_string(),
+            "--output must be a new file; refusing to mutate --input in place",
+        );
+        assert_eq!(fs::read_to_string(&input_path).unwrap(), input_before);
+    }
+}
+
+#[test]
+fn work_jsonl_batch_validation_reports_each_line_without_provider_calls() {
+    let order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    let mut bad_order = order.clone();
+    bad_order.schema_version = "sok-work-order/v99".to_string();
+    let input = format!(
+        "{}\n{}\n",
+        serde_json::to_string(&order).unwrap(),
+        serde_json::to_string(&bad_order).unwrap()
+    );
+    let (output, all_valid) = work::validate_work_order_jsonl(&input).unwrap();
+    assert!(!all_valid);
+    let rows = output
+        .lines()
+        .map(|line| serde_json::from_str::<work::WorkJsonlValidationLine>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].valid);
+    assert!(!rows[1].valid);
+    assert_eq!(rows[1].line, 2);
+
+    let good_result = test_work_result(
+        &order,
+        vec![valid_element_patch("patch-element-5555555555")],
+    );
+    let mut bad_result = good_result.clone();
+    bad_result.capability_response = work::CapabilityResponse::accepted();
+    bad_result.offered_capabilities.clear();
+    let input = format!(
+        "{}\n{}\n",
+        serde_json::to_string(&good_result).unwrap(),
+        serde_json::to_string(&bad_result).unwrap()
+    );
+    let (output, all_valid) = work::validate_work_result_jsonl(&order, &input).unwrap();
+    assert!(!all_valid);
+    let rows = output
+        .lines()
+        .map(|line| serde_json::from_str::<work::WorkJsonlValidationLine>(line).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].valid);
+    assert!(!rows[1].valid);
+}
+
+#[test]
+fn work_patch_shell_like_strings_remain_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let sentinel = dir.path().join("shell-sentinel");
+    let packages = core_fixture_packages();
+    let order = test_work_order(work::WorkTaskKind::FieldElementExtraction);
+    let mut patch = valid_element_patch("patch-element-shell-1111111111");
+    patch.value["actual_form"]["text"] = json!(format!("sh -c 'touch {}'", sentinel.display()));
+    let result = test_work_result(&order, vec![patch]);
+    let patched = work::accept_work_result_patches(&order, &result, &packages).unwrap();
+    assert!(patched.knowledge.elements.iter().any(|element| element
+        .actual_form
+        .text
+        .contains(&sentinel.display().to_string())));
+    assert!(!sentinel.exists());
+}
+
+#[test]
+fn run_manifest_validator_rejects_unknown_versions_and_short_hashes() {
+    let fixture = run_manifest::RunFile::new(
+        "bounded-input",
+        repo_path("cli/tests/fixtures/run-manifest/bounded-input.txt"),
+    );
+    let mut spec = run_manifest::RunManifestSpec::new("fixture-command");
+    spec.stage = "fixture".to_string();
+    spec.profile_version = "1.0.0".to_string();
+    spec.started_at = "2026-07-16T00:00:00Z".to_string();
+    spec.finished_at = "2026-07-16T00:00:01Z".to_string();
+    spec.declared_permissions =
+        run_manifest::declared_permissions_for_files(std::slice::from_ref(&fixture), &[], false);
+    spec.bounded_input_files = vec![fixture.clone()];
+    spec.semantic_payloads = vec![run_manifest::SemanticPayload::from_text(
+        "fixture",
+        "semantic",
+        "stable semantic payload",
+    )];
+    let manifest = run_manifest::build_run_manifest(spec).unwrap();
+    assert_eq!(manifest.schema_version, "sok-run/v1");
+    assert_eq!(
+        manifest.bounded_input_files[0].sha256,
+        "a5ac294458d1e41db8cdd8420503bdf4feaddef9b167e565b3a9b84c3328664c"
+    );
+    assert_eq!(manifest.bounded_input_files[0].sha256.len(), 64);
+
+    let mut unknown_version = manifest.clone();
+    unknown_version.schema_version = "sok-run/v99".to_string();
+    assert_contains(
+        &run_manifest::validate_run_manifest(&unknown_version)
+            .unwrap_err()
+            .to_string(),
+        "unsupported run manifest schema_version",
+    );
+
+    let mut short_hash = manifest.clone();
+    short_hash.bounded_input_files[0].sha256 = "a5ac294458d1e41d".to_string();
+    assert_contains(
+        &run_manifest::validate_run_manifest(&short_hash)
+            .unwrap_err()
+            .to_string(),
+        "full SHA-256",
+    );
+}
+
+#[test]
+fn run_manifest_semantic_digest_ignores_timestamps() {
+    let fixture = run_manifest::RunFile::new(
+        "bounded-input",
+        repo_path("cli/tests/fixtures/run-manifest/bounded-input.txt"),
+    );
+    let mut first = run_manifest::RunManifestSpec::new("fixture-command");
+    first.stage = "fixture".to_string();
+    first.profile_version = "1.0.0".to_string();
+    first.started_at = "2026-07-16T00:00:00Z".to_string();
+    first.finished_at = "2026-07-16T00:00:01Z".to_string();
+    first.declared_permissions =
+        run_manifest::declared_permissions_for_files(std::slice::from_ref(&fixture), &[], false);
+    first.bounded_input_files = vec![fixture.clone()];
+    first.semantic_payloads = vec![run_manifest::SemanticPayload::from_text(
+        "fixture",
+        "semantic",
+        "stable semantic payload",
+    )];
+
+    let mut second = first.clone();
+    second.started_at = "2026-07-17T01:02:03Z".to_string();
+    second.finished_at = "2026-07-17T01:02:04Z".to_string();
+
+    let first = run_manifest::build_run_manifest(first).unwrap();
+    let second = run_manifest::build_run_manifest(second).unwrap();
+    assert_ne!(first.timestamps, second.timestamps);
+    assert_eq!(first.semantic_digest, second.semantic_digest);
+}
+
+#[test]
+fn conformance_fixtures_score_without_provider_calls() {
+    let fixture_dir = repo_path("cli/tests/fixtures/conformance");
+    let report = crate::eval::score_conformance_dir(&fixture_dir).unwrap();
+
+    assert_eq!(report.schema_version, "sok-conformance-report/v1");
+    assert_eq!(report.suite_id, "sok-harness-hardening-v1");
+    assert!(report.all_expectations_passed(), "{report:#?}");
+    assert!(report.validation_passed > 0);
+    assert!(report.validation_failed > 0);
+    assert_eq!(report.validation_pass_rate, "5/18");
+    assert_eq!(report.repair_count, 3);
+    assert_eq!(report.human_correction_count, 1);
+
+    let contracts = report
+        .cases
+        .iter()
+        .map(|case| case.contract.as_str())
+        .collect::<BTreeSet<_>>();
+    for contract in [
+        "core conformance",
+        "stable-ID uniqueness",
+        "reference closure",
+        "relation validity",
+        "evidence support",
+        "currentness metadata",
+        "public/internal boundary",
+        "multilingual retention",
+        "prerequisite violations",
+        "source-role coverage",
+        "validation pass rate",
+        "unknown report schema versions",
+        "unknown core schema versions",
+        "unknown run schema versions",
+        "unknown work schema versions",
+        "run manifests",
+        "WorkOrder sidecars",
+        "WorkResult capability response",
+    ] {
+        assert!(
+            contracts.contains(contract),
+            "conformance suite should cover {contract}"
+        );
+    }
+
+    let public_boundary = report
+        .cases
+        .iter()
+        .find(|case| case.id == "public-internal-boundary")
+        .unwrap();
+    assert!(!public_boundary.actual_valid);
+    assert_eq!(public_boundary.human_correction.count, 1);
+    assert_eq!(public_boundary.repair_count, 0);
+
+    let output_dir = tempfile::tempdir().unwrap();
+    let output_path = output_dir.path().join("conformance-report.json");
+    let exit = run_cli(vec![
+        "eval".to_string(),
+        "conformance".to_string(),
+        "--fixtures".to_string(),
+        fixture_dir.display().to_string(),
+        "--output".to_string(),
+        output_path.display().to_string(),
+    ])
+    .unwrap();
+    assert_eq!(exit, 0);
+    let saved: crate::eval::ConformanceReport = report::read_json_file(&output_path).unwrap();
+    assert_eq!(saved.expectation_failed, 0);
+    assert_eq!(saved.repair_count, report.repair_count);
+}
+
+#[test]
+fn core_validators_reject_unknown_versions_and_dangling_references() {
+    assert!(
+        serde_json::from_value::<crate::core::knowledge::KnowledgePackage>(json!({
+            "elements": []
+        }))
+        .is_err()
+    );
+
+    let mut packages = core_fixture_packages();
+    let valid = crate::core::validation::validate_core_packages(&packages);
+    assert_eq!(valid.error_count(), 0, "{:?}", valid.diagnostics);
+
+    packages.knowledge.schema_version = "sok-knowledge/v99".to_string();
+    packages.knowledge.elements[0]
+        .source_ids
+        .push("src-missing-source-9999999999".to_string());
+    packages.pedagogy.learning_path[1]
+        .prerequisite_ids
+        .push("element-missing-prerequisite-9999999999".to_string());
+    let validation = crate::core::validation::validate_core_packages(&packages);
+    assert_validation_check(
+        &report::ReportValidation {
+            diagnostics: validation.diagnostics.clone(),
+        },
+        crate::core::validation::CHECK_CORE_VERSION,
+        report::DiagnosticSeverity::Error,
+    );
+    assert_validation_check(
+        &report::ReportValidation {
+            diagnostics: validation.diagnostics.clone(),
+        },
+        crate::core::validation::CHECK_CORE_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut broken_support = core_fixture_packages();
+    broken_support.evidence.claims[0].evidence_links[0]
+        .reviewed_at
+        .clear();
+    let support_validation = crate::core::validation::validate_core_packages(&broken_support);
+    assert_validation_check(
+        &report::ReportValidation {
+            diagnostics: support_validation.diagnostics,
+        },
+        crate::core::validation::CHECK_CORE_SUPPORT,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
+fn core_packages_project_to_sok_report_v2_and_html() {
+    let packages = core_fixture_packages();
+    let validation = crate::core::validation::validate_core_packages(&packages);
+    assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
+
+    let projected = crate::core::projection::project_report_compatibility(
+        &packages,
+        &core_projection_context(),
+    )
+    .unwrap();
+    assert_eq!(projected.metadata.schema_version, "sok-report/v2");
+    assert_eq!(projected.report.field, "Quantum sensing");
+    assert_eq!(projected.report.field_elements.len(), 3);
+    assert!(projected
+        .report
+        .core_ideas
+        .iter()
+        .any(|item| item.label == "Physical quantity"));
+    assert!(projected
+        .report
+        .methods
+        .iter()
+        .any(|item| item.label == "Calibration transfer"));
+    assert!(projected
+        .report
+        .representations
+        .iter()
+        .any(|item| item.label == "Noise model"));
+    assert_eq!(projected.report.literature_ladder.len(), 1);
+    assert_eq!(projected.report.curriculum_path.len(), 2);
+
+    let report_validation =
+        report::validate_report_value(&serde_json::to_value(&projected).unwrap());
+    assert_eq!(
+        report_validation.error_count(),
+        0,
+        "{:?}",
+        report_validation.diagnostics
+    );
+    let html = report::render_html_report(&projected).unwrap();
+    assert_contains(&html, "Quantum sensing");
+    assert_contains(&html, "Calibration transfer");
+}
+
+#[test]
+fn export_json_accepts_core_sidecars_without_markdown_tables() {
+    let dir = tempfile::tempdir().unwrap();
+    let output_json_path = dir.path().join("sok-report.json");
+
+    assert_eq!(
+        run_cli(vec![
+            "export-json".to_string(),
+            "--stage".to_string(),
+            "scaffold".to_string(),
+            "--report".to_string(),
+            repo_path("cli/tests/fixtures/input-lanes/machine-only.md")
+                .display()
+                .to_string(),
+            "--sources".to_string(),
+            repo_path("cli/tests/fixtures/input-lanes/header-only-sources.csv")
+                .display()
+                .to_string(),
+            "--knowledge".to_string(),
+            repo_path("cli/tests/fixtures/core/knowledge-valid.json")
+                .display()
+                .to_string(),
+            "--evidence-package".to_string(),
+            repo_path("cli/tests/fixtures/core/evidence-valid.json")
+                .display()
+                .to_string(),
+            "--pedagogy".to_string(),
+            repo_path("cli/tests/fixtures/core/pedagogy-valid.json")
+                .display()
+                .to_string(),
+            "--output".to_string(),
+            output_json_path.display().to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+
+    let exported: report::ReportDocument = report::read_json_file(&output_json_path).unwrap();
+    assert_eq!(exported.metadata.report_type, report::ReportType::Scaffold);
+    assert_eq!(exported.report.field, "Quantum sensing");
+    assert_eq!(exported.report.field_elements.len(), 3);
+    assert_eq!(exported.report.sources.len(), 1);
+    assert_eq!(exported.report.curriculum_path.len(), 2);
+    assert!(
+        exported.diagnostics.is_none(),
+        "valid sidecars should not emit Markdown table diagnostics: {:?}",
+        exported.diagnostics
+    );
+}
+
+#[test]
+fn machine_sidecars_merge_with_markdown_without_overwriting_human_items() {
+    let dir = tempfile::tempdir().unwrap();
+    let knowledge_path = dir.path().join("extra-knowledge.json");
+    report::write_json_file(
+        &knowledge_path,
+        &json!({
+            "schema_version": "sok-knowledge/v1",
+            "elements": [
+                {
+                    "id": "element-field-validation-4444444444",
+                    "element_class": "Practice",
+                    "label": {
+                        "text": "Field validation protocol"
+                    },
+                    "actual_form": {
+                        "text": "A machine-supplied protocol element added without localized Markdown headers."
+                    },
+                    "semantic_roles": ["surrounding", "practice"],
+                    "role_note": "surrounding",
+                    "confidence": "medium"
+                }
+            ]
+        }),
+    )
+    .unwrap();
+
+    let baseline = current_human_report_document();
+    let exported = report::export_markdown_report_with_machine_inputs(
+        repo_path("cli/tests/fixtures/pipeline/report.md"),
+        repo_path("cli/tests/fixtures/pipeline/sources.csv"),
+        Some(repo_path(
+            "cli/tests/fixtures/pipeline/reviewed-evidence.jsonl",
+        )),
+        report::ExportStage::Final,
+        report::MachineInputPaths {
+            knowledge: Some(knowledge_path),
+            ..report::MachineInputPaths::default()
+        },
+    )
+    .unwrap();
+
+    assert_eq!(
+        exported.report.field_elements.len(),
+        baseline.report.field_elements.len() + 1
+    );
+    assert!(exported
+        .report
+        .field_elements
+        .iter()
+        .any(|element| element.label == "Field validation protocol"));
+    assert!(exported.diagnostics.is_none(), "{:?}", exported.diagnostics);
+}
+
+#[test]
+fn sok_json_blocks_feed_core_models_without_localized_table_headers() {
+    let exported = report::export_markdown_report(
+        repo_path("cli/tests/fixtures/input-lanes/korean-sok-json.md"),
+        repo_path("cli/tests/fixtures/input-lanes/header-only-sources.csv"),
+        None,
+        report::ExportStage::Scaffold,
+    )
+    .unwrap();
+
+    assert_eq!(exported.report.field, "약물정보학");
+    assert_eq!(exported.report.field_elements.len(), 1);
+    assert_eq!(exported.report.field_elements[0].label, "의약품 허가사항");
+    assert_eq!(exported.report.field_elements[0].role, "core");
+    assert!(exported.diagnostics.is_none(), "{:?}", exported.diagnostics);
+}
+
+#[test]
+fn sok_json_blocks_reject_schema_errors_with_diagnostics() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("bad-sok-json.md");
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: Broken machine lane
+
+```sok-json
+{
+  "field": "Missing schema",
+  "elements": []
+}
+```
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &repo_path("cli/tests/fixtures/input-lanes/header-only-sources.csv"),
+        None,
+        report::ExportStage::Scaffold,
+    )
+    .unwrap();
+    let diagnostics = exported.diagnostics.clone().unwrap();
+    assert_validation_check(
+        &report::ReportValidation { diagnostics },
+        report::CHECK_EXPORT_MACHINE_INPUT,
+        report::DiagnosticSeverity::Error,
+    );
+}
+
+#[test]
+fn sok_json_examples_inside_markdown_fences_are_not_machine_inputs() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("example-sok-json.md");
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: Example-only machine syntax
+
+## Orientation
+
+````markdown
+```sok-json
+{
+  "field": "This is example text, not input"
+}
+```
+````
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &repo_path("cli/tests/fixtures/input-lanes/header-only-sources.csv"),
+        None,
+        report::ExportStage::Scaffold,
+    )
+    .unwrap();
+    if let Some(diagnostics) = exported.diagnostics {
+        assert!(
+            diagnostics
+                .checks
+                .iter()
+                .all(|check| check.check_id != report::CHECK_EXPORT_MACHINE_INPUT),
+            "fenced examples must not be parsed as machine input: {:?}",
+            diagnostics.checks
+        );
+    }
+}
+
+#[test]
+fn conflicting_human_and_machine_lane_inputs_emit_diagnostics() {
+    let dir = tempfile::tempdir().unwrap();
+    let baseline = current_human_report_document();
+    let first_element = baseline.report.field_elements.first().unwrap();
+    let knowledge_path = dir.path().join("conflict-knowledge.json");
+    report::write_json_file(
+        &knowledge_path,
+        &json!({
+            "schema_version": "sok-knowledge/v1",
+            "field": baseline.report.field.clone(),
+            "elements": [
+                {
+                    "id": first_element.id.clone(),
+                    "element_class": first_element.element_class.clone(),
+                    "label": {
+                        "text": "Conflicting machine label"
+                    },
+                    "actual_form": {
+                        "text": "Conflicting machine content"
+                    },
+                    "semantic_roles": ["core"],
+                    "role_note": "core"
+                }
+            ]
+        }),
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report_with_machine_inputs(
+        repo_path("cli/tests/fixtures/pipeline/report.md"),
+        repo_path("cli/tests/fixtures/pipeline/sources.csv"),
+        Some(repo_path(
+            "cli/tests/fixtures/pipeline/reviewed-evidence.jsonl",
+        )),
+        report::ExportStage::Final,
+        report::MachineInputPaths {
+            knowledge: Some(knowledge_path),
+            ..report::MachineInputPaths::default()
+        },
+    )
+    .unwrap();
+
+    assert!(exported
+        .report
+        .field_elements
+        .iter()
+        .any(|element| element.id == first_element.id && element.label == first_element.label));
+    let diagnostics = exported.diagnostics.clone().unwrap();
+    assert_validation_check(
+        &report::ReportValidation {
+            diagnostics: diagnostics.clone(),
+        },
+        report::CHECK_EXPORT_MACHINE_INPUT,
+        report::DiagnosticSeverity::Error,
+    );
+    assert!(diagnostics
+        .checks
+        .iter()
+        .any(|check| check.message.contains("kept first value")));
 }
 
 #[test]
@@ -1698,6 +3160,72 @@ fn validate_report_fixture_passes_without_diagnostics() {
 }
 
 #[test]
+fn migrate_ids_writes_ordered_maps_for_v1_and_v2_without_mutating_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let v2_input = dir.path().join("unicode-v2-report.json");
+    let v2_output = dir.path().join("unicode-v2-id-map.json");
+    let mut v2 = current_human_report_value();
+    v2["report"]["field_elements"][0]["id"] = json!("element-item-4a33eacd5f");
+    v2["report"]["field_elements"][0]["label"] = json!("양자 센싱");
+    report::write_json_file(&v2_input, &v2).unwrap();
+    let before = fs::read_to_string(&v2_input).unwrap();
+
+    let exit = run_cli(vec![
+        "migrate-ids".to_string(),
+        "--input".to_string(),
+        v2_input.display().to_string(),
+        "--output".to_string(),
+        v2_output.display().to_string(),
+    ])
+    .unwrap();
+    assert_eq!(exit, 0);
+    assert_eq!(fs::read_to_string(&v2_input).unwrap(), before);
+
+    let migration: report::IdMigrationDocument = report::read_json_file(&v2_output).unwrap();
+    assert_eq!(migration.schema_version, "sok-id-migration/v1");
+    assert_eq!(migration.source_schema_version, "sok-report/v2");
+    let keys = migration
+        .mappings
+        .iter()
+        .map(|entry| {
+            (
+                entry.old_id.clone(),
+                entry.entity_type.clone(),
+                entry.path.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut sorted = keys.clone();
+    sorted.sort();
+    assert_eq!(keys, sorted);
+    let unicode_entry = migration
+        .mappings
+        .iter()
+        .find(|entry| entry.old_id == "element-item-4a33eacd5f")
+        .unwrap();
+    assert!(unicode_entry.changed);
+    assert_ne!(unicode_entry.old_id, unicode_entry.new_id);
+    assert!(unicode_entry.new_id.starts_with("element-item-"));
+    assert_eq!(unicode_entry.normalized_identity, "양자 센싱");
+    validate_stable_id(&unicode_entry.new_id).unwrap();
+
+    let v1_input = dir.path().join("legacy-v1-report.json");
+    let v1_output = dir.path().join("legacy-v1-id-map.json");
+    report::write_json_file(&v1_input, &legacy_v1_report_value()).unwrap();
+    let exit = run_cli(vec![
+        "migrate-ids".to_string(),
+        "--input".to_string(),
+        v1_input.display().to_string(),
+        "--output".to_string(),
+        v1_output.display().to_string(),
+    ])
+    .unwrap();
+    assert_eq!(exit, 0);
+    let legacy_migration: report::IdMigrationDocument = report::read_json_file(&v1_output).unwrap();
+    assert_eq!(legacy_migration.source_schema_version, "sok-report/v1");
+}
+
+#[test]
 fn validate_report_schema_and_public_boundary_errors_are_stable() {
     let final_report = current_human_report_value();
 
@@ -1891,6 +3419,227 @@ fn validate_report_relation_and_curriculum_consistency_are_errors() {
         report::CHECK_VALIDATE_CURRICULUM_REFERENCE,
         report::DiagnosticSeverity::Error,
     );
+}
+
+#[test]
+fn canonical_relation_semantics_and_legacy_labels_map_explicitly() {
+    for (raw, expected, reverse) in [
+        (
+            "requires_before",
+            report::RelationKind::RequiresBefore,
+            false,
+        ),
+        ("introduced_by", report::RelationKind::IntroducedBy, false),
+        ("revisits", report::RelationKind::Revisits, false),
+        ("deepens", report::RelationKind::Deepens, false),
+        ("applies", report::RelationKind::Applies, false),
+        ("assessed_by", report::RelationKind::AssessedBy, false),
+        ("remediates", report::RelationKind::Remediates, false),
+        ("precedes", report::RelationKind::RequiresBefore, false),
+        ("depends_on", report::RelationKind::RequiresBefore, true),
+        ("prerequisite", report::RelationKind::RequiresBefore, true),
+        (
+            "prerequisite_for",
+            report::RelationKind::RequiresBefore,
+            true,
+        ),
+        ("introduces", report::RelationKind::IntroducedBy, true),
+        ("uses_method", report::RelationKind::Applies, false),
+        ("qualifies", report::RelationKind::Deepens, false),
+    ] {
+        let mapping = crate::core::relations::relation_kind_mapping(raw).unwrap();
+        assert_eq!(mapping.kind, expected, "{raw}");
+        assert_eq!(mapping.reverse_endpoints, reverse, "{raw}");
+    }
+}
+
+#[test]
+fn duplicate_relations_merge_sources_deterministically_on_import() {
+    let dir = tempfile::tempdir().unwrap();
+    let report_path = dir.path().join("duplicate-relations.md");
+    let sources_path = dir.path().join("sources.csv");
+    fs::write(
+        &sources_path,
+        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+Open Review,review_article,doi:10.0000/open,https://example.test/open,2025-01-01,open_access,Official URL,$0,CC BY,foundation,Supports relation deduplication.,Use in module 1,Reviewed metadata.\n\
+Interface Study,article,doi:10.0000/interface,https://example.test/interface,2024-06-01,open_access,Official URL,$0,CC BY,method,Adds a second relation source.,Use in module 2,Reviewed metadata.\n",
+    )
+    .unwrap();
+    fs::write(
+        &report_path,
+        r#"# Structure of Knowledge: Relation Deduplication
+
+## Field Element Inventory
+
+| Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
+|---|---|---|---|---|---|---|
+| Concept | Alpha | A source-backed element. | core | Alpha applies to beta. | Open Review | high |
+| Concept | Beta | A second source-backed element. | surrounding | Beta receives alpha. | Interface Study | high |
+
+## Relations
+
+| Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale | Source IDs |
+|---|---|---|---|---|---|---|---|
+| rel-z-duplicate-1111111111 | applies | field_element | Alpha | field_element | Beta | Duplicate semantic relation. | Open Review |
+| rel-a-duplicate-2222222222 | maps_to | field_element | Alpha | field_element | Beta | Duplicate semantic relation. | Interface Study |
+"#,
+    )
+    .unwrap();
+
+    let exported = report::export_markdown_report(
+        &report_path,
+        &sources_path,
+        None::<&PathBuf>,
+        report::ExportStage::Scaffold,
+    )
+    .unwrap();
+
+    assert_eq!(exported.report.relations.len(), 1);
+    let relation = &exported.report.relations[0];
+    assert_eq!(relation.id, "rel-a-duplicate-2222222222");
+    assert_eq!(relation.kind, report::RelationKind::Applies);
+    assert_eq!(relation.source_ids.len(), 2);
+    assert!(relation.source_ids.windows(2).all(|pair| pair[0] < pair[1]));
+}
+
+#[test]
+fn legacy_v1_and_v2_relation_kinds_read_through_canonical_mapping() {
+    for mut value in [current_human_report_value(), legacy_v1_report_value()] {
+        let index = first_hard_curriculum_relation_index(&value);
+        let from = value["report"]["relations"][index]["from"].clone();
+        let to = value["report"]["relations"][index]["to"].clone();
+        value["report"]["relations"][index]["kind"] = json!("depends_on");
+        value["report"]["relations"][index]["from"] = to;
+        value["report"]["relations"][index]["to"] = from;
+
+        let document: report::ReportDocument = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(
+            document.report.relations[index].kind,
+            report::RelationKind::RequiresBefore
+        );
+        let validation = report::validate_report_value(&value);
+        assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
+    }
+}
+
+#[test]
+fn hard_prerequisite_cycles_are_stable_errors_but_revisits_and_deepens_may_cycle() {
+    let valid = report::validate_report_value(&current_human_report_value());
+    assert_eq!(valid.error_count(), 0, "{:?}", valid.diagnostics);
+
+    let mut self_loop = current_human_report_value();
+    self_loop["report"]["relations"][0]["to"] = self_loop["report"]["relations"][0]["from"].clone();
+    let validation = report::validate_report_value(&self_loop);
+    assert!(
+        validation
+            .diagnostics
+            .checks
+            .iter()
+            .any(|check| check.message.contains("self-loop")),
+        "{:?}",
+        validation.diagnostics.checks
+    );
+
+    let mut hard_cycle = current_human_report_value();
+    let encoding_id = report_item_id(
+        &hard_cycle,
+        "field_elements",
+        "label",
+        "Encoding interaction",
+    );
+    let readout_id = report_item_id(
+        &hard_cycle,
+        "field_elements",
+        "label",
+        "Readout and transduction",
+    );
+    hard_cycle["report"]["relations"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({
+            "id": "rel-readout-before-encoding-cycle-1111111111",
+            "kind": "requires_before",
+            "from": {"entity_type": "field_element", "id": readout_id.clone()},
+            "to": {"entity_type": "field_element", "id": encoding_id.clone()},
+            "description": "Cycle fixture."
+        }));
+    let validation = report::validate_report_value(&hard_cycle);
+    let cycle_message = validation
+        .diagnostics
+        .checks
+        .iter()
+        .find(|check| check.message.contains("hard prerequisite cycle"))
+        .map(|check| check.message.clone())
+        .unwrap_or_else(|| {
+            panic!(
+                "expected hard cycle diagnostic: {:?}",
+                validation.diagnostics
+            )
+        });
+    assert_contains(
+        &cycle_message,
+        "field_element:element-encoding-interaction-",
+    );
+    assert_contains(
+        &cycle_message,
+        "field_element:element-readout-and-transduction-",
+    );
+
+    let mut allowed_cycle = current_human_report_value();
+    allowed_cycle["report"]["relations"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            json!({
+                "id": "rel-encoding-revisits-readout-1111111111",
+                "kind": "revisits",
+                "from": {"entity_type": "field_element", "id": encoding_id.clone()},
+                "to": {"entity_type": "field_element", "id": readout_id.clone()},
+                "description": "Allowed revisit cycle fixture."
+            }),
+            json!({
+                "id": "rel-readout-deepens-encoding-2222222222",
+                "kind": "deepens",
+                "from": {"entity_type": "field_element", "id": readout_id.clone()},
+                "to": {"entity_type": "field_element", "id": encoding_id.clone()},
+                "description": "Allowed deepening cycle fixture."
+            }),
+        ]);
+    let validation = report::validate_report_value(&allowed_cycle);
+    assert_eq!(validation.error_count(), 0, "{:?}", validation.diagnostics);
+}
+
+#[test]
+fn curriculum_and_visual_projections_must_reconcile_to_canonical_relations() {
+    let mut missing_curriculum_relation = current_human_report_value();
+    let relation_index = first_hard_curriculum_relation_index(&missing_curriculum_relation);
+    missing_curriculum_relation["report"]["relations"]
+        .as_array_mut()
+        .unwrap()
+        .remove(relation_index);
+    let validation = report::validate_report_value(&missing_curriculum_relation);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_CURRICULUM_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut visual_kind_mismatch = current_human_report_value();
+    visual_kind_mismatch["report"]["visual_views"][0]["edges"][0]["kind"] = json!("remediates");
+    let validation = report::validate_report_value(&visual_kind_mismatch);
+    assert_validation_check(
+        &validation,
+        report::CHECK_VALIDATE_VISUAL_REFERENCE,
+        report::DiagnosticSeverity::Error,
+    );
+
+    let mut visual_direction_mismatch = current_human_report_value();
+    let visual_edge = &mut visual_direction_mismatch["report"]["visual_views"][0]["edges"][0];
+    let from = visual_edge["from"].clone();
+    visual_edge["from"] = visual_edge["to"].clone();
+    visual_edge["to"] = from;
+    let validation = report::validate_report_value(&visual_direction_mismatch);
+    assert_validation_message(&validation, "does not match the endpoint entity references");
 }
 
 #[test]
@@ -3688,6 +5437,99 @@ fn documented_final_report_lane_lints_exports_validates_and_renders_html() {
 }
 
 #[test]
+fn optional_run_manifests_are_private_sidecars_for_report_and_html_outputs() {
+    let dir = tempfile::tempdir().unwrap();
+    let output_json_path = dir.path().join("sok-report.json");
+    let output_html_path = dir.path().join("sok-report.html");
+    let export_manifest_path = dir.path().join("private-export-run.json");
+    let render_manifest_path = dir.path().join("private-render-run.json");
+    let report_path = repo_path("cli/tests/fixtures/pipeline/report.md");
+    let sources_path = repo_path("cli/tests/fixtures/pipeline/sources.csv");
+    let evidence_path = repo_path("cli/tests/fixtures/pipeline/reviewed-evidence.jsonl");
+
+    assert_eq!(
+        run_cli(vec![
+            "export-json".to_string(),
+            "--stage".to_string(),
+            "final".to_string(),
+            "--report".to_string(),
+            report_path.display().to_string(),
+            "--sources".to_string(),
+            sources_path.display().to_string(),
+            "--evidence".to_string(),
+            evidence_path.display().to_string(),
+            "--output".to_string(),
+            output_json_path.display().to_string(),
+            "--run-manifest".to_string(),
+            export_manifest_path.display().to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+
+    let export_manifest = run_manifest::read_run_manifest(&export_manifest_path).unwrap();
+    assert_eq!(export_manifest.schema_version, "sok-run/v1");
+    assert_eq!(export_manifest.command.name, "export-json");
+    assert_eq!(export_manifest.stage, "final");
+    assert!(export_manifest
+        .bounded_input_files
+        .iter()
+        .any(|file| file.kind == "markdown-report" && file.sha256.len() == 64));
+    assert!(export_manifest
+        .bounded_input_files
+        .iter()
+        .any(|file| file.kind == "source-manifest" && file.sha256.len() == 64));
+    assert!(export_manifest
+        .bounded_input_files
+        .iter()
+        .any(|file| file.kind == "evidence-jsonl" && file.sha256.len() == 64));
+    assert!(export_manifest
+        .output_files
+        .iter()
+        .any(|file| file.kind == "sok-report" && file.sha256.len() == 64));
+    assert!(export_manifest.work_order_hashes.is_empty());
+    assert!(export_manifest.work_result_hashes.is_empty());
+
+    let report_json = fs::read_to_string(&output_json_path).unwrap();
+    assert_not_contains(&report_json, "sok-run/v1");
+    assert_not_contains(&report_json, "private-export-run.json");
+    assert_not_contains(&report_json, "run_id");
+    assert_not_contains(&report_json, "executor");
+    assert_not_contains(&report_json, "declared_permissions");
+
+    assert_eq!(
+        run_cli(vec![
+            "render-html".to_string(),
+            "--input".to_string(),
+            output_json_path.display().to_string(),
+            "--output".to_string(),
+            output_html_path.display().to_string(),
+            "--run-manifest".to_string(),
+            render_manifest_path.display().to_string(),
+        ])
+        .unwrap(),
+        0
+    );
+    let render_manifest = run_manifest::read_run_manifest(&render_manifest_path).unwrap();
+    assert_eq!(render_manifest.command.name, "render-html");
+    assert!(render_manifest
+        .bounded_input_files
+        .iter()
+        .any(|file| file.kind == "sok-report" && file.sha256.len() == 64));
+    assert!(render_manifest
+        .output_files
+        .iter()
+        .any(|file| file.kind == "html-report" && file.sha256.len() == 64));
+
+    let html = fs::read_to_string(&output_html_path).unwrap();
+    assert_not_contains(&html, "sok-run/v1");
+    assert_not_contains(&html, "private-render-run.json");
+    assert_not_contains(&html, "run_id");
+    assert_not_contains(&html, "executor");
+    assert_not_contains(&html, "declared_permissions");
+}
+
+#[test]
 fn final_markdown_requires_an_explicit_architecture_decision() {
     let dir = tempfile::tempdir().unwrap();
     let report_path = dir.path().join("missing-architecture.md");
@@ -4546,6 +6388,155 @@ fn current_scaffold_report_value() -> Value {
     serde_json::to_value(current_scaffold_report_document()).unwrap()
 }
 
+fn supported_work_task_kinds() -> Vec<work::WorkTaskKind> {
+    vec![
+        work::WorkTaskKind::Framing,
+        work::WorkTaskKind::SourceRoleClassification,
+        work::WorkTaskKind::FieldElementExtraction,
+        work::WorkTaskKind::ClaimProposals,
+        work::WorkTaskKind::RelationProposals,
+        work::WorkTaskKind::CurriculumPrerequisiteProposals,
+        work::WorkTaskKind::ArchitectureComparison,
+        work::WorkTaskKind::ConsistencyCritique,
+        work::WorkTaskKind::ReportProjection,
+    ]
+}
+
+fn supported_work_task_kind_labels() -> Vec<&'static str> {
+    supported_work_task_kinds()
+        .into_iter()
+        .map(work::work_task_kind_label)
+        .collect()
+}
+
+fn test_work_order(task_kind: work::WorkTaskKind) -> work::WorkOrder {
+    let mut order = work::WorkOrder::new(
+        "work-order-1111111111",
+        task_kind,
+        "Propose bounded SoK core patches.",
+    );
+    order.required_capabilities = vec![
+        work::WorkCapability::BasicCompletion,
+        work::WorkCapability::StructuredOutput,
+    ];
+    order
+}
+
+fn test_work_result(order: &work::WorkOrder, patches: Vec<work::WorkPatch>) -> work::WorkResult {
+    work::WorkResult::patch_proposal(
+        order.work_order_id.clone(),
+        "work-result-1111111111",
+        order.task_kind,
+        order.required_capabilities.clone(),
+        patches,
+    )
+}
+
+fn valid_element_patch(patch_id: &str) -> work::WorkPatch {
+    let element = crate::core::knowledge::KnowledgeElement {
+        id: "element-command-string-4444444444".to_string(),
+        element_class: "Context cue".to_string(),
+        label: crate::core::knowledge::LocalizedText::plain("Command-like source phrase"),
+        actual_form: crate::core::knowledge::LocalizedText::plain(
+            "A shell-like phrase remains evidence text only.",
+        ),
+        semantic_roles: vec![crate::core::knowledge::SemanticRole::Context],
+        role_note: "untrusted source text".to_string(),
+        relation_ids: Vec::new(),
+        load_bearing_relations: String::new(),
+        source_ids: vec!["src-quantum-sensing-explained-1111111111".to_string()],
+        confidence: Some(crate::core::knowledge::Confidence::Low),
+    };
+    work::WorkPatch::add(
+        patch_id,
+        work::CorePackageArea::Knowledge,
+        "/knowledge/elements/-",
+        serde_json::to_value(element).unwrap(),
+    )
+}
+
+fn core_fixture_packages() -> crate::core::CorePackages {
+    crate::core::CorePackages {
+        knowledge: report::read_json_file(repo_path(
+            "cli/tests/fixtures/core/knowledge-valid.json",
+        ))
+        .unwrap(),
+        evidence: report::read_json_file(repo_path("cli/tests/fixtures/core/evidence-valid.json"))
+            .unwrap(),
+        pedagogy: report::read_json_file(repo_path("cli/tests/fixtures/core/pedagogy-valid.json"))
+            .unwrap(),
+    }
+}
+
+fn core_projection_context() -> report::ReportDocument {
+    report::ReportDocument {
+        metadata: report::ReportMetadata {
+            schema_version: "sok-report/v2".to_string(),
+            generated_at: "2026-07-16T00:00:00Z".to_string(),
+            report_type: report::ReportType::HumanReport,
+            temporal_review: report::TemporalMarker {
+                as_of: "2026-07-16".to_string(),
+                review_after: "2027-01-16".to_string(),
+                temporal_status: report::TemporalStatus::Current,
+                rationale: "Projection fixture context.".to_string(),
+            },
+            generator: Some(report::GeneratorInfo {
+                name: "core projection fixture".to_string(),
+                version: "1".to_string(),
+            }),
+        },
+        report: report::PublicReport {
+            field: "Unset field".to_string(),
+            scope: report::Scope {
+                summary: "Quantum sensing is read as a measurement chain.".to_string(),
+                included: vec!["Core measurement-chain concepts".to_string()],
+                excluded: Vec::new(),
+                assumptions: Vec::new(),
+                interpretive_notes: Vec::new(),
+            },
+            domain_profile: report::DomainProfile {
+                classification: report::DomainClassification::InstrumentBound,
+                rationale: "The fixture follows instrument-mediated measurement.".to_string(),
+                ..report::DomainProfile::default()
+            },
+            presentation: Some(report::ReportPresentation {
+                thesis: "Quantum sensing claims become legible as a measurement chain.".to_string(),
+                organizing_form: "Measurement-chain path".to_string(),
+                rationale: "This follows how a quantity becomes an estimate.".to_string(),
+                alternatives_considered:
+                    "A glossary-only report was rejected because it hides support relations."
+                        .to_string(),
+                sections: vec![report::ReportSection {
+                    id: "section-measurement-chain-1111111111".to_string(),
+                    title: "Measurement Chain".to_string(),
+                    purpose: "Introduce the projected public narrative.".to_string(),
+                    body_markdown:
+                        "A physical quantity is encoded, disturbed, calibrated, and estimated."
+                            .to_string(),
+                    visual_view_ids: Vec::new(),
+                }],
+            }),
+            evidence_standards: report::EvidenceStandards {
+                summary: "Claims require reviewed support links in the evidence package."
+                    .to_string(),
+                claim_policy:
+                    "Reviewed supports links need reviewed_at plus a locator or support note."
+                        .to_string(),
+                source_role_requirements: Vec::new(),
+            },
+            structure_waivers: vec![report::StructureWaiver {
+                scope: report::StructureWaiverScope::Relations,
+                rationale:
+                    "Core projection fixture omits relation graph until canonical relation tests."
+                        .to_string(),
+            }],
+            ..report::PublicReport::default()
+        },
+        internal_context: None,
+        diagnostics: None,
+    }
+}
+
 fn legacy_v1_report_value() -> Value {
     let mut value = current_human_report_value();
     value["metadata"]["schema_version"] = json!("sok-report/v1");
@@ -4618,6 +6609,18 @@ fn report_relation_index_between(report_value: &Value, from_id: &str, to_id: &st
         })
 }
 
+fn first_hard_curriculum_relation_index(report_value: &Value) -> usize {
+    report_value["report"]["relations"]
+        .as_array()
+        .expect("report.relations should be an array")
+        .iter()
+        .position(|relation| {
+            relation["kind"].as_str() == Some("requires_before")
+                && relation["to"]["entity_type"].as_str() == Some("curriculum_step")
+        })
+        .expect("report should contain a hard relation projected to curriculum")
+}
+
 fn load_repo_json(relative: &str) -> Value {
     let path = repo_path(relative);
     let data =
@@ -4686,6 +6689,7 @@ fn validate_sok_report_smoke(value: &Value) -> std::result::Result<(), String> {
         "original_goal",
         "prompt_derived_assumptions",
         "placeholder_state",
+        "profile_proposals",
         "handoff_notes",
         "research_frame",
         "scaffold_quality_notes",
@@ -5145,6 +7149,16 @@ fn assert_validation_check(
             .iter()
             .any(|check| check.check_id == check_id && check.severity == severity),
         "expected validation diagnostics to include {severity:?} {check_id}; got {:?}",
+        validation.diagnostics.checks
+    );
+}
+
+fn assert_work_check(validation: &work::WorkValidationReport, check_id: &str) {
+    assert!(
+        validation.diagnostics.checks.iter().any(|check| {
+            check.check_id == check_id && check.severity == report::DiagnosticSeverity::Error
+        }),
+        "expected work validation diagnostics to include error {check_id}; got {:?}",
         validation.diagnostics.checks
     );
 }

@@ -1,0 +1,194 @@
+{
+  "knowledge": {
+    "schema_version": "sok-knowledge/v1",
+    "field": "Quantum sensing",
+    "elements": [
+      {
+        "id": "element-physical-quantity-1111111111",
+        "element_class": "Object or phenomenon",
+        "label": {
+          "text": "Physical quantity"
+        },
+        "actual_form": {
+          "text": "A property made observable only through a measurement interaction."
+        },
+        "semantic_roles": ["core", "concept", "object"],
+        "role_note": "core",
+        "relation_ids": ["rel-quantity-before-calibration-1111111111"],
+        "load_bearing_relations": "The quantity must be encoded before it can be estimated.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"],
+        "confidence": "high"
+      },
+      {
+        "id": "element-calibration-transfer-2222222222",
+        "element_class": "Method or operation",
+        "label": {
+          "text": "Calibration transfer"
+        },
+        "actual_form": {
+          "text": "A procedure that carries source traceability into the sensor output."
+        },
+        "semantic_roles": ["core", "method"],
+        "role_note": "core",
+        "relation_ids": [
+          "rel-quantity-before-calibration-1111111111",
+          "rel-calibration-deepens-noise-model-2222222222",
+          "rel-calibration-before-check-3333333333"
+        ],
+        "load_bearing_relations": "Calibration qualifies the estimated physical quantity.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"],
+        "confidence": "medium"
+      },
+      {
+        "id": "element-noise-model-3333333333",
+        "element_class": "Representation or model",
+        "label": {
+          "text": "Noise model"
+        },
+        "actual_form": {
+          "text": "A mathematical representation of uncertainty and disturbance sources."
+        },
+        "semantic_roles": ["surrounding", "representation"],
+        "role_note": "surrounding",
+        "relation_ids": ["rel-calibration-deepens-noise-model-2222222222"],
+        "load_bearing_relations": "The model explains when an estimate is trustworthy.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"],
+        "confidence": "medium"
+      }
+    ],
+    "relations": [
+      {
+        "id": "rel-quantity-before-calibration-1111111111",
+        "kind": "requires_before",
+        "from": {
+          "entity_type": "field_element",
+          "id": "element-physical-quantity-1111111111"
+        },
+        "to": {
+          "entity_type": "field_element",
+          "id": "element-calibration-transfer-2222222222"
+        },
+        "description": "Physical quantity framing is needed before calibration can qualify an estimate.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      },
+      {
+        "id": "rel-calibration-deepens-noise-model-2222222222",
+        "kind": "deepens",
+        "from": {
+          "entity_type": "field_element",
+          "id": "element-calibration-transfer-2222222222"
+        },
+        "to": {
+          "entity_type": "field_element",
+          "id": "element-noise-model-3333333333"
+        },
+        "description": "Calibration deepens the noise model by identifying transferable uncertainty.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      },
+      {
+        "id": "rel-calibration-before-check-3333333333",
+        "kind": "requires_before",
+        "from": {
+          "entity_type": "field_element",
+          "id": "element-calibration-transfer-2222222222"
+        },
+        "to": {
+          "entity_type": "curriculum_step",
+          "id": "step-calibration-check-2222222222"
+        },
+        "description": "Calibration transfer is prerequisite knowledge for the calibration check step.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      }
+    ]
+  },
+  "evidence": {
+    "schema_version": "sok-evidence/v1",
+    "sources": [
+      {
+        "id": "src-quantum-sensing-explained-1111111111",
+        "citation": "Quantum Sensing Explained. Fixture source.",
+        "title": "Quantum Sensing Explained",
+        "source_type": "review_article",
+        "identifier": "fixture:quantum-sensing",
+        "url": "https://example.test/quantum-sensing",
+        "date": "2026-01-15",
+        "roles": ["foundation", "method"],
+        "access": {
+          "status": "open_access",
+          "route": "Fixture URL",
+          "budget_estimate": "$0",
+          "license": "CC BY",
+          "metadata_only": false,
+          "notes": "Local fixture metadata."
+        },
+        "why_it_matters": "Explains the measurement chain used by the core projection fixture.",
+        "verification_status": "reviewed",
+        "last_reviewed": "2026-07-16",
+        "notes": "Reviewed from bounded fixture text."
+      }
+    ],
+    "claims": [
+      {
+        "id": "claim-measurement-chain-1111111111",
+        "statement": "Quantum sensing claims become legible as a measurement chain from physical quantity to calibrated estimate.",
+        "claim_type": "structural",
+        "evidence_requirement": "reviewed_source",
+        "evidence_links": [
+          {
+            "evidence_id": "ev-measurement-chain-1111111111",
+            "source_id": "src-quantum-sensing-explained-1111111111",
+            "verification_status": "reviewed",
+            "support_kind": "supports",
+            "locator": "fixture section 1",
+            "support_note": "The fixture source directly describes the measurement-chain framing.",
+            "reviewed_at": "2026-07-16"
+          }
+        ],
+        "confidence": "high",
+        "temporal": {
+          "as_of": "2026-07-16",
+          "review_after": "2027-01-16",
+          "temporal_status": "durable",
+          "rationale": "The fixture claim is structural rather than latest-state dependent."
+        },
+        "notes": "Projection fixture claim."
+      }
+    ]
+  },
+  "pedagogy": {
+    "schema_version": "sok-pedagogy/v1",
+    "reading_ladder": [
+      {
+        "id": "ladder-foundation-1111111111",
+        "layer": "Foundation",
+        "start_here": "Quantum Sensing Explained",
+        "read_for": "How physical quantities become estimated through a measurement chain.",
+        "do_not_infer": "That every sensor uses the same implementation.",
+        "source_ids": ["src-quantum-sensing-explained-1111111111"],
+        "notes": "Small core projection fixture."
+      }
+    ],
+    "learning_path": [
+      {
+        "id": "step-measurement-chain-1111111111",
+        "sequence": 1,
+        "title": "Measurement chain",
+        "learning_goal": "Explain the chain from physical quantity to estimate.",
+        "practice_artifact": "Annotated measurement-chain diagram.",
+        "progress_criteria": ["Identify quantity, encoding, noise, and calibration."],
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      },
+      {
+        "id": "step-calibration-check-2222222222",
+        "sequence": 2,
+        "title": "Calibration check",
+        "learning_goal": "Explain how calibration qualifies the estimate.",
+        "prerequisite_ids": ["element-calibration-transfer-2222222222"],
+        "prerequisite_relation_ids": ["rel-calibration-before-check-3333333333"],
+        "practice_artifact": "Calibration evidence checklist.",
+        "progress_criteria": ["Name the warrant carried by calibration."],
+        "source_ids": ["src-quantum-sensing-explained-1111111111"]
+      }
+    ]
+  }
+}

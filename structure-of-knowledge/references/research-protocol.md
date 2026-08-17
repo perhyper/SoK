@@ -81,6 +81,8 @@ In the JSON-first workflow, keep `sources.csv` and reviewed evidence JSONL disti
 
 Reviewed evidence must also record support semantics. Use `support_kind: supports` only for evidence that affirmatively supports the claim. Use `qualifies` for scope limits or conditions, `contradicts` for conflicts, and `background` or `example` for context. Only reviewed or verified `supports` evidence with `reviewed_at` plus a locator or support note can satisfy final-report claim support.
 
+Typed core sidecars may carry reviewed source roles, evidence links, currentness metadata, relations, and learning-path prerequisites directly into validation. They do not replace source review. WorkResult sidecars are proposed patches, not authoritative edits; accept them only after core validation, and record human corrections separately from validation failures when scoring conformance fixtures.
+
 ## Currentness Rules
 
 - Browse or otherwise verify any claim about "current", "recent", "latest", active standards, tools, datasets, leaderboards, regulations, or open problems.
@@ -109,3 +111,4 @@ For final reports:
 - Separate "recommended first reading" from "historically important but difficult."
 - For every recommended reading, say how to find it. If it is a book, mark it as a book and provide ISBN or publisher/library route when available. If it is a paper, provide DOI, arXiv ID, stable URL, or venue information. If it is paywalled or paid, estimate the budget or state that institutional/library access is the preferred route.
 - Before rendering or publication, export the bounded final report to `sok-report.json` and run `sok validate-report --strict`. Treat that JSON as the structured source of truth; HTML is only a view of validated public fields. Strict validation also checks embedded export diagnostics, relation and visual endpoints, literature-ladder source references, curriculum prerequisites, currentness metadata, and public/internal boundary separation.
+- For regression or migration checks, run `sok eval conformance --fixtures <directory>` over saved fixtures. This scores deterministic validators only; it must not browse, call models, or repair artifacts in place.

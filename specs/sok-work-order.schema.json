@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/sok-work-order.schema.json",
+  "title": "Structure of Knowledge WorkOrder",
+  "description": "Provider-neutral bounded work request for current SoK stages. WorkOrders declare task kind, required capabilities, proposed patch area, bounded file exchange, and a default-deny permission envelope. Unknown schema versions are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "work_order_id",
+    "task_kind",
+    "objective",
+    "allowed_patch_paths"
+  ],
+  "properties": {
+    "schema_version": { "const": "sok-work-order/v1" },
+    "work_order_id": { "$ref": "#/$defs/stable_id" },
+    "task_kind": { "$ref": "#/$defs/task_kind" },
+    "objective": { "$ref": "#/$defs/non_empty_string" },
+    "instructions": { "type": "string" },
+    "source_text": {
+      "description": "Untrusted source data for the worker. It must never be executed.",
+      "type": "string"
+    },
+    "input_files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file_ref" }
+    },
+    "output_files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file_ref" }
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capability" }
+    },
+    "allowed_patch_paths": {
+      "description": "Core package path prefixes the WorkResult may patch.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^/(knowledge|evidence|pedagogy)(/.*)?$" }
+    },
+    "permissions": { "$ref": "#/$defs/permission_envelope" }
+  },
+  "$defs": {
+    "non_empty_string": { "type": "string", "minLength": 1 },
+    "stable_id": {
+      "type": "string",
+      "pattern": "^(?!.*--)[a-z][a-z0-9]*-[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "task_kind": {
+      "type": "string",
+      "enum": [
+        "framing",
+        "source_role_classification",
+        "field_element_extraction",
+        "claim_proposals",
+        "relation_proposals",
+        "curriculum_prerequisite_proposals",
+        "architecture_comparison",
+        "consistency_critique",
+        "report_projection"
+      ]
+    },
+    "capability": {
+      "type": "string",
+      "enum": [
+        "basic_completion",
+        "structured_output",
+        "tool_capable",
+        "long_context_agent"
+      ]
+    },
+    "file_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/non_empty_string" },
+        "path": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
+    "permission_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "network": { "type": "boolean", "default": false },
+        "subprocess": { "type": "boolean", "default": false },
+        "read_roots": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/non_empty_string" },
+          "default": []
+        },
+        "write_roots": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/non_empty_string" },
+          "default": []
+        }
+      }
+    }
+  }
+}

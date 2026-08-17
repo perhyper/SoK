@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.org/sok-report.schema.json",
   "title": "Structure of Knowledge JSON Report",
-  "description": "Public SoK report payload with a metadata envelope plus optional non-public internal context and diagnostics.",
+  "description": "Public SoK report payload with a metadata envelope plus optional non-public internal context and diagnostics. sok-report/v1 and sok-report/v2 remain readable; unknown report versions are rejected. For new typed lanes, sok-report/v2 is a compatibility projection from validated sok-knowledge/v1, sok-evidence/v1, and sok-pedagogy/v1 core packages; this schema intentionally does not embed those packages.",
   "type": "object",
   "additionalProperties": false,
   "required": ["metadata", "report"],
@@ -66,7 +66,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "pattern": "^sok-report/v[0-9]+$"
+          "enum": ["sok-report/v1", "sok-report/v2"]
         },
         "generated_at": {
           "type": "string",
@@ -133,7 +133,7 @@
           "$ref": "#/$defs/report_presentation"
         },
         "field_elements": {
-          "description": "Field-native elements preserved from the reviewed inventory before compatibility projection into core_ideas, methods, and representations. Free-form classes keep cases, instruments, institutions, datasets, practices, disputes, and other domain-specific forms intact.",
+          "description": "Field-native elements preserved from the reviewed inventory before compatibility projection into core_ideas, methods, and representations. relation_ids point to canonical semantic relations; load_bearing_relations is a derived human-readable compatibility summary.",
           "type": "array",
           "items": { "$ref": "#/$defs/field_element" }
         },
@@ -164,12 +164,12 @@
           "items": { "$ref": "#/$defs/claim" }
         },
         "relations": {
-          "description": "Explicit semantic relations exported from structured relation rows. Relations are not inferred from Mermaid arrows, visual proximity, or node ordering.",
+          "description": "Canonical typed semantic relations exported from structured relation rows and explicit prerequisite surfaces. Relations are not inferred from Mermaid arrows, visual proximity, or node ordering. Legacy v1/v2 relation kinds are accepted by readers through explicit compatibility mapping.",
           "type": "array",
           "items": { "$ref": "#/$defs/relation" }
         },
         "curriculum_path": {
-          "description": "Optional curriculum sequence exported from a curriculum surface or compatible canonical heading. prerequisite_ids carry explicit references resolved from Prerequisite IDs or Prerequisites columns.",
+          "description": "Optional curriculum sequence exported from a curriculum surface or compatible canonical heading. prerequisite_ids are compatibility projections of canonical requires_before relation IDs.",
           "type": "array",
           "items": { "$ref": "#/$defs/curriculum_step" }
         },
@@ -309,7 +309,14 @@
         "label": { "$ref": "#/$defs/non_empty_string" },
         "actual_form": { "$ref": "#/$defs/non_empty_string" },
         "role": { "type": "string" },
-        "load_bearing_relations": { "type": "string" },
+        "relation_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/stable_id" }
+        },
+        "load_bearing_relations": {
+          "description": "Derived human-readable summary of relation_ids for compatibility with v1/v2 reports.",
+          "type": "string"
+        },
         "source_ids": {
           "type": "array",
           "items": { "$ref": "#/$defs/stable_id" }
@@ -553,7 +560,7 @@
       }
     },
     "relation": {
-      "description": "Explicit semantic relation between public report entities. field_element endpoints preserve field-native types; compatibility endpoint types remain available for concepts, methods, representations, claims, sources, curriculum steps, and frontier/debate items.",
+      "description": "Canonical typed semantic relation between public report entities. field_element endpoints preserve field-native types; compatibility endpoint types remain available for concepts, methods, representations, claims, sources, curriculum steps, and frontier/debate items.",
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "kind", "from", "to"],
@@ -562,18 +569,13 @@
         "kind": {
           "type": "string",
           "enum": [
-            "depends_on",
-            "supports",
-            "qualifies",
-            "contradicts",
-            "precedes",
-            "introduces",
-            "uses_method",
-            "represented_by",
-            "grounds",
-            "motivates",
-            "part_of",
-            "maps_to"
+            "requires_before",
+            "introduced_by",
+            "revisits",
+            "deepens",
+            "applies",
+            "assessed_by",
+            "remediates"
           ]
         },
         "from": { "$ref": "#/$defs/relation_endpoint" },
@@ -627,7 +629,7 @@
         "title": { "$ref": "#/$defs/non_empty_string" },
         "learning_goal": { "$ref": "#/$defs/non_empty_string" },
         "prerequisite_ids": {
-          "description": "Explicit prerequisite references resolved from curriculum-surface Prerequisite IDs or Prerequisites columns. IDs may point to curriculum steps or other public report entities.",
+          "description": "Compatibility projection of canonical requires_before relations. IDs may point to curriculum steps or other public report entities.",
           "type": "array",
           "items": { "$ref": "#/$defs/stable_id" }
         },
@@ -777,6 +779,30 @@
         "rationale": { "$ref": "#/$defs/non_empty_string" }
       }
     },
+    "profile_proposal": {
+      "description": "Advisory scaffold-stage proposal for which declarative discovery profile to test during source review. It is not authoritative public report semantics.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposer_type",
+        "profile_id",
+        "profile_version",
+        "locale",
+        "confidence",
+        "rationale"
+      ],
+      "properties": {
+        "proposer_type": {
+          "type": "string",
+          "enum": ["user", "agent", "inference", "unknown"]
+        },
+        "profile_id": { "$ref": "#/$defs/non_empty_string" },
+        "profile_version": { "$ref": "#/$defs/non_empty_string" },
+        "locale": { "$ref": "#/$defs/non_empty_string" },
+        "confidence": { "$ref": "#/$defs/non_empty_string" },
+        "rationale": { "$ref": "#/$defs/non_empty_string" }
+      }
+    },
     "internal_context": {
       "type": "object",
       "additionalProperties": false,
@@ -787,6 +813,10 @@
         "placeholder_state": {
           "type": "object",
           "additionalProperties": true
+        },
+        "profile_proposals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/profile_proposal" }
         },
         "handoff_notes": { "$ref": "#/$defs/string_list" }
       }
