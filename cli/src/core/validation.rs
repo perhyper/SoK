@@ -1,4 +1,5 @@
 use super::*;
+use crate::checks::{is_stable_id, sort_diagnostics};
 
 pub const CHECK_CORE_VERSION: &str = "core.version";
 pub const CHECK_CORE_REQUIRED: &str = "core.required";
@@ -660,68 +661,6 @@ fn core_endpoint_key(endpoint: &relations::RelationEndpoint) -> String {
     )
 }
 
-fn hard_prerequisite_cycle(relations: &[relations::Relation]) -> Option<Vec<String>> {
-    let mut graph = BTreeMap::<String, BTreeSet<String>>::new();
-    for relation in relations {
-        if !relations::is_hard_prerequisite(relation.kind) || relation.from == relation.to {
-            continue;
-        }
-        let from = core_endpoint_key(&relation.from);
-        let to = core_endpoint_key(&relation.to);
-        graph.entry(from.clone()).or_default().insert(to.clone());
-        graph.entry(to).or_default();
-    }
-
-    let mut visited = BTreeSet::new();
-    let mut stack = Vec::<String>::new();
-    let mut in_stack = BTreeSet::new();
-    for node in graph.keys() {
-        if visited.contains(node) {
-            continue;
-        }
-        if let Some(cycle) =
-            hard_prerequisite_cycle_from(node, &graph, &mut visited, &mut stack, &mut in_stack)
-        {
-            return Some(cycle);
-        }
-    }
-    None
-}
-
-fn hard_prerequisite_cycle_from(
-    node: &str,
-    graph: &BTreeMap<String, BTreeSet<String>>,
-    visited: &mut BTreeSet<String>,
-    stack: &mut Vec<String>,
-    in_stack: &mut BTreeSet<String>,
-) -> Option<Vec<String>> {
-    visited.insert(node.to_string());
-    stack.push(node.to_string());
-    in_stack.insert(node.to_string());
-
-    if let Some(next_nodes) = graph.get(node) {
-        for next in next_nodes {
-            if !visited.contains(next.as_str()) {
-                if let Some(cycle) =
-                    hard_prerequisite_cycle_from(next, graph, visited, stack, in_stack)
-                {
-                    return Some(cycle);
-                }
-            } else if in_stack.contains(next.as_str()) {
-                if let Some(position) = stack.iter().position(|item| item == next) {
-                    let mut cycle = stack[position..].to_vec();
-                    cycle.push(next.clone());
-                    return Some(cycle);
-                }
-            }
-        }
-    }
-
-    in_stack.remove(node);
-    stack.pop();
-    None
-}
-
 fn validate_source_refs(
     ids: &[String],
     source_ids: &BTreeSet<&str>,
@@ -771,35 +710,17 @@ fn validate_stable_id(id: &str, path: &str, checks: &mut Vec<report::DiagnosticC
     }
 }
 
-fn is_stable_id(id: &str) -> bool {
-    id.contains('-')
-        && !id.ends_with('-')
-        && !id.contains("--")
-        && id
-            .chars()
-            .next()
-            .map(|first| first.is_ascii_lowercase())
-            .unwrap_or(false)
-        && id
-            .chars()
-            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
-}
-
-fn sort_diagnostics(checks: &mut [report::DiagnosticCheck]) {
-    checks.sort_by(|left, right| {
-        severity_sort_key(left.severity)
-            .cmp(&severity_sort_key(right.severity))
-            .then_with(|| left.check_id.cmp(&right.check_id))
-            .then_with(|| left.target_path.cmp(&right.target_path))
-            .then_with(|| left.entity_id.cmp(&right.entity_id))
-            .then_with(|| left.message.cmp(&right.message))
-    });
-}
-
-fn severity_sort_key(severity: report::DiagnosticSeverity) -> u8 {
-    match severity {
-        report::DiagnosticSeverity::Error => 0,
-        report::DiagnosticSeverity::Warning => 1,
-        report::DiagnosticSeverity::Info => 2,
-    }
+fn hard_prerequisite_cycle(relations: &[relations::Relation]) -> Option<Vec<String>> {
+    let edges = relations
+        .iter()
+        .filter(|relation| {
+            relations::is_hard_prerequisite(relation.kind) && relation.from != relation.to
+        })
+        .map(|relation| {
+            (
+                core_endpoint_key(&relation.from),
+                core_endpoint_key(&relation.to),
+            )
+        });
+    crate::graph::directed_cycle(edges)
 }

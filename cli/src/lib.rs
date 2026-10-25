@@ -1,10 +1,12 @@
 //! Core implementation for the Rust SoK CLI.
 
+mod checks;
 mod cli;
 mod commands;
 pub mod core;
 mod downloader;
 pub mod eval;
+mod graph;
 mod profiles;
 pub mod report;
 pub mod run_manifest;

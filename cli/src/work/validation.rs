@@ -1,3 +1,4 @@
+use crate::checks::{is_stable_id, sort_diagnostics};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -618,42 +619,9 @@ pub(crate) fn validate_stable_id(
     }
 }
 
-fn is_stable_id(id: &str) -> bool {
-    id.contains('-')
-        && !id.ends_with('-')
-        && !id.contains("--")
-        && id
-            .chars()
-            .next()
-            .map(|first| first.is_ascii_lowercase())
-            .unwrap_or(false)
-        && id
-            .chars()
-            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
-}
-
 fn capability_labels(capabilities: &[WorkCapability]) -> Vec<&'static str> {
     capabilities
         .iter()
         .map(|capability| work_capability_label(*capability))
         .collect()
-}
-
-fn sort_diagnostics(checks: &mut [report::DiagnosticCheck]) {
-    checks.sort_by(|left, right| {
-        severity_sort_key(left.severity)
-            .cmp(&severity_sort_key(right.severity))
-            .then_with(|| left.check_id.cmp(&right.check_id))
-            .then_with(|| left.target_path.cmp(&right.target_path))
-            .then_with(|| left.entity_id.cmp(&right.entity_id))
-            .then_with(|| left.message.cmp(&right.message))
-    });
-}
-
-fn severity_sort_key(severity: report::DiagnosticSeverity) -> u8 {
-    match severity {
-        report::DiagnosticSeverity::Error => 0,
-        report::DiagnosticSeverity::Warning => 1,
-        report::DiagnosticSeverity::Info => 2,
-    }
 }

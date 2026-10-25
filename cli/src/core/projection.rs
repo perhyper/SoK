@@ -10,6 +10,7 @@ use super::relations::{
 use super::validation::validate_core_packages;
 use super::*;
 use crate::profiles::{self, ProjectionRole};
+use crate::report::{collapse_whitespace, first_non_empty};
 use anyhow::{bail, Result};
 
 pub fn core_packages_from_report(document: &report::ReportDocument) -> CorePackages {
@@ -448,17 +449,4 @@ fn report_endpoint_type_from_core(entity_type: RelationEndpointType) -> report::
         RelationEndpointType::Method => report::EntityType::Method,
         RelationEndpointType::Representation => report::EntityType::Representation,
     }
-}
-
-fn first_non_empty<const N: usize>(values: [&str; N]) -> String {
-    values
-        .into_iter()
-        .find(|value| !value.trim().is_empty())
-        .unwrap_or_default()
-        .trim()
-        .to_string()
-}
-
-fn collapse_whitespace(raw: &str) -> String {
-    raw.split_whitespace().collect::<Vec<_>>().join(" ")
 }

@@ -1,114 +1,99 @@
-# SoK Research Protocol
+# Research Protocol
 
 ## Research Loop
 
-1. Seed the field.
-   - Search for handbooks, graduate syllabi, introductory textbooks, field encyclopedias, professional societies, and major venues.
-   - Capture alternate names, subfield names, and historical terms.
-   - Create a preliminary domain profile: formal, interpretive, empirical, computational, infrastructure-bound, professional, emerging, interdisciplinary, or mixed. Treat it as a hypothesis to revise, not a final label.
+1. Establish names and boundaries through handbooks, textbooks, field
+   encyclopedias, societies, venues, and graduate syllabi. Capture alternate
+   names, subfields, historical terms, and a revisable domain profile.
+2. Find canonical foundations: seminal papers, books, experiments, cases,
+   standards, and methods. Check centrality through independent reviews,
+   syllabi recurrence, citations, and expert retrospectives.
+3. When currentness matters, inspect recent surveys, annual reviews, open-problem
+   lists, benchmarks, standards, and conference material. Distinguish established
+   foundations from changing frontier claims and record absolute dates.
+4. Compare schools, methodological splits, critiques, and dissent when they
+   affect interpretation or learning. For interdisciplinary work, inspect each
+   parent field and the bridge literature.
+5. Assign each source a role in the scaffold and requested artifact. Record
+   access while researching; choose the report architecture after reviewing the
+   field's elements and relations.
 
-2. Find canonical foundations.
-   - Look for seminal papers, foundational books, classic experiments, canonical cases, standards, and widely taught methods.
-   - Confirm centrality through citations, syllabi recurrence, review papers, and expert retrospectives.
-
-3. Find the current frontier when the goal requires current state, research entry, active tools, standards, or debates.
-   - Search for recent survey papers, annual reviews, "open problems", "grand challenges", "state of the art", benchmark reports, standards updates, and major conference keynotes or tutorials.
-   - Use absolute dates for current claims.
-
-4. Compare perspectives when disagreements, cases, schools, or warrant differences organize the field.
-   - Identify schools, debates, methodological splits, and critiques.
-   - Include dissent where it changes the curriculum or interpretation of evidence.
-
-5. Convert sources into artifact roles.
-   - For each important source, decide whether it is best used as orientation, foundation, method, canonical case, synthesis, frontier, critique, or pedagogical sequence when the goal calls for one.
-   - Record how the user can actually obtain the source: book, paper, preprint, lecture notes, standard, dataset, software, DOI, arXiv ID, ISBN, publisher page, library route, open URL, or expected purchase/subscription cost.
-   - Treat syllabi and existing curricula as evidence of pedagogical consensus, not as the field boundary.
+Useful query terms include `[field] handbook`, `foundational papers`, `methods`,
+`graduate syllabus`, `survey open problems`, `history`, `benchmark standard`,
+and `controversy`. Adapt searches to gaps in the role probe below.
 
 ## Source Role Probe
 
-Use source roles as diagnostics, not quotas. The goal is to discover which evidence roles are necessary for this field and user goal.
+Roles diagnose missing evidence; they are not source-count quotas.
 
-Usually required:
+- **Orientation/boundary:** expert scope, vocabulary, questions, and interfaces.
+- **Canonical foundation:** durable concepts, results, cases, or practices.
+- **Method/warrant:** how claims, proofs, performances, or designs are validated.
 
-- Orientation / boundary: identifies field scope, subfields, vocabulary, and adjacent-field boundaries.
-- Canonical foundation: anchors durable concepts, objects, examples, cases, methods, or standards.
-- Method / warrant: shows how the field validates claims, performances, interpretations, proofs, measurements, or designs.
-Conditional:
+These are normally required. Conditional roles depend on the field and goal:
 
-- Pedagogical sequence evidence: required when the goal includes learning, curriculum, onboarding, or staged practice.
-- Recent survey / frontier: required for research-entry, current-tool, active-debate, recent-standard, or open-problem claims. It may be waived for stable core-skill paths such as basic language competence, with rationale.
-- Dataset / standard / infrastructure: required when instruments, repositories, standards, software, benchmarks, or institutions mediate the field's knowledge.
-- Primary corpus / canonical case: required for philology, law, history, literature, design, interpretive domains, case-based professions, and fields where expert judgment is taught through exemplars.
-- Review / synthesis: useful when subfields are fragmented or when the learner needs a bridge across parent disciplines.
+- **Pedagogical sequence:** learning, curriculum, onboarding, or staged practice.
+  Syllabi show stabilized teaching consensus, not the limits of the field.
+- **Frontier:** research entry, current tools, active debates, standards, or open
+  problems. Stable core-skill paths may waive it with a goal-specific rationale.
+- **Data/standards/infrastructure:** instruments, repositories, collaborations,
+  facilities, statistical conventions, and review bodies that mediate knowledge.
+- **Primary corpus/canonical case:** interpretive and case-based fields such as
+  history, philology, literature, law, design, and professional practice.
+- **Synthesis:** bridges across fragmented subfields or parent disciplines.
 
-For every conditional role, mark it as `required`, `conditional`, `optional`, or `waived`, and explain the rationale. Do not fill source baskets by count alone.
+Mark conditional roles required, conditional, optional, or waived, with rationale.
+Split roles by community when warrant standards differ.
 
-## Search Query Patterns
+## Ranking and Inclusion
 
-Use combinations like:
+Prefer primary literature, foundational books, standards, official documentation,
+and field societies; then peer-reviewed syntheses and handbooks; then expert
+university notes, syllabi, and publisher pages. Use expert blogs for context or
+recent practice, and general explainers only for orientation, never sole support
+for key claims.
 
-- `[field] handbook core concepts`
-- `[field] graduate syllabus foundational papers`
-- `[field] survey paper open problems`
-- `[field] annual review recent advances`
-- `[field] textbook prerequisites`
-- `[field] history seminal paper`
-- `[field] methods benchmark standard`
-- `[field] controversy debate critique`
-- `[field] roadmap grand challenges`
+Include sources that define core objects or warrants, supply canonical cases,
+mark conceptual changes, synthesize scattered work, represent meaningful disputes
+or frontiers, or provide usable datasets, tools, protocols, and standards.
+Separate good first readings from historically important but difficult works.
 
-For interdisciplinary fields, repeat searches for each parent discipline and then search the bridge terms.
+## Source Manifest and Access
 
-## Source Ranking
+Keep these fields in `sources.csv` (the CLI supplies a header-only template):
 
-Prefer sources in this order when available:
+- Identity: `title`, `type`, `identifier`, `url`, publication/update `date`.
+- Access: `access_status`, `access_route`, `budget_estimate`, `license`.
+- Role: `layer`, `why_it_matters`, `use_in_curriculum`.
 
-1. Primary literature, foundational books, standards, official documentation, or field society publications.
-2. Peer-reviewed reviews, surveys, annual reviews, and major handbooks.
-3. University syllabi from recognized programs, lecture notes by field experts, and publisher textbook pages.
-4. High-quality technical blogs or essays by recognized researchers, mainly for context or recent tool practice.
-5. General web explainers only for orientation, never as sole support for key claims.
+Types include book, paper, preprint, notes, course, standard, dataset, software,
+archive, report, and syllabus. Use DOI, arXiv ID, ISBN, official URL, or a stable
+catalog record. Mark books as books and provide publisher/library routes;
+provide direct official links for open notes, standards, datasets, and software.
 
-## Evidence Matrix
+Record free, paid, paywalled, subscription, restricted, or unknown access using
+the CLI's statuses. Give visible prices or `budget unknown; library preferred`,
+with institutional access or interlibrary loan guidance where appropriate.
+Explain accessible substitutes for inaccessible recommendations. Download policy
+is in [agent-collaboration.md](agent-collaboration.md#source-downloads).
 
-Maintain a compact matrix while researching:
+A research matrix may add confidence to these fields. Record why each source
+matters and how it will be used, rather than merely collecting bibliography.
 
-| Source | Date | Type | Identifier | Access route | Budget | Layer | Why it matters | Confidence | Use in curriculum |
-|---|---:|---|---|---|---:|---|---|---|---|
-|  |  | book/paper/preprint/review/syllabus/standard | DOI/arXiv/ISBN/URL | open/publisher/library/purchase/subscription |  | orientation/foundation/method/frontier/debate |  | high/medium/low |  |
+## Evidence and Currentness
 
-In the JSON-first workflow, keep `sources.csv` and reviewed evidence JSONL distinct. `sok ingest last` may normalize source rows into `cataloged` evidence candidates for the current run, but cataloged entries do not satisfy claim evidence. A claim is supported only by reviewed or verified evidence with a usable locator or support note.
+Keep source metadata separate from reviewed evidence JSONL. Ingestion produces
+`cataloged` candidates; it does not establish claim support. Apply the precise
+support-link requirements in [output-contract.md](output-contract.md#strict-final-validation).
+Typed sidecars carry reviewed findings but do not replace source review.
 
-Reviewed evidence must also record support semantics. Use `support_kind: supports` only for evidence that affirmatively supports the claim. Use `qualifies` for scope limits or conditions, `contradicts` for conflicts, and `background` or `example` for context. Only reviewed or verified `supports` evidence with `reviewed_at` plus a locator or support note can satisfy final-report claim support.
+Browse or otherwise verify claims about current literature, recent results,
+active debates, tools, standards, datasets, leaderboards, regulations, and open
+problems. Record absolute dates and distinguish publication status and durable
+foundations from frontier findings. Report conflicting evidence and its effect
+on interpretation or the learning path.
 
-Typed core sidecars may carry reviewed source roles, evidence links, currentness metadata, relations, and learning-path prerequisites directly into validation. They do not replace source review. WorkResult sidecars are proposed patches, not authoritative edits; accept them only after core validation, and record human corrections separately from validation failures when scoring conformance fixtures.
-
-## Currentness Rules
-
-- Browse or otherwise verify any claim about "current", "recent", "latest", active standards, tools, datasets, leaderboards, regulations, or open problems.
-- Use absolute dates for time-sensitive claims.
-- Distinguish durable foundations from current frontier items.
-- If sources conflict, report the disagreement and explain what would change the learning path.
-
-## Inclusion Criteria
-
-Include a source when it satisfies at least one criterion:
-
-- It defines a core object, method, or standard of evidence.
-- It is a canonical case through which experts teach the field.
-- It marks a historical turn or conceptual reorganization.
-- It synthesizes scattered work for learners.
-- It represents a live frontier, open problem, or major disagreement.
-- It provides a practical artifact: dataset, tool, protocol, benchmark, or standard.
-
-## Citation Expectations
-
-For final reports:
-
-- Cite every non-obvious factual claim about literature, history, current state, and controversies.
-- Do not overquote. Prefer paraphrase with links.
-- Give enough bibliographic detail for the user to find the source.
-- Separate "recommended first reading" from "historically important but difficult."
-- For every recommended reading, say how to find it. If it is a book, mark it as a book and provide ISBN or publisher/library route when available. If it is a paper, provide DOI, arXiv ID, stable URL, or venue information. If it is paywalled or paid, estimate the budget or state that institutional/library access is the preferred route.
-- Before rendering or publication, export the bounded final report to `sok-report.json` and run `sok validate-report --strict`. Treat that JSON as the structured source of truth; HTML is only a view of validated public fields. Strict validation also checks embedded export diagnostics, relation and visual endpoints, literature-ladder source references, curriculum prerequisites, currentness metadata, and public/internal boundary separation.
-- For regression or migration checks, run `sok eval conformance --fixtures <directory>` over saved fixtures. This scores deterministic validators only; it must not browse, call models, or repair artifacts in place.
+Cite every non-obvious factual claim about literature, history, current state,
+and controversies. Prefer paraphrase with links, enough bibliographic detail to
+find the source, and explicit uncertainty. Before final delivery, use the
+[CLI validation lane](cli-workflow.md#artifact-lanes).

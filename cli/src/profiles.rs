@@ -23,10 +23,6 @@ pub(crate) struct DiscoveryProfile {
     lenses: Vec<DiscoveryLens>,
     #[serde(default, rename = "scaffold_questions")]
     questions: Vec<String>,
-    #[serde(default, rename = "source_role_probes")]
-    source_roles: Vec<SourceRoleProbe>,
-    #[serde(default)]
-    projection_keyword_mappings: Vec<ProjectionKeywordMapping>,
     #[serde(default)]
     fallback_behavior: ProfileFallbackBehavior,
     #[serde(skip)]
@@ -59,6 +55,8 @@ struct DiscoveryProfilesFile {
     fallback_profile_id: String,
     inference_order: Vec<String>,
     profiles: Vec<DiscoveryProfile>,
+    source_role_probes: Vec<SourceRoleProbe>,
+    projection_keyword_mappings: Vec<ProjectionKeywordMapping>,
     #[serde(default)]
     domain_classification_terms: Vec<DomainClassificationTerm>,
 }
@@ -119,7 +117,8 @@ impl DiscoveryProfile {
     }
 
     pub(crate) fn render_source_roles(&self) -> String {
-        self.source_roles
+        discovery_profiles()
+            .source_role_probes
             .iter()
             .map(|role| {
                 format!(
@@ -191,14 +190,12 @@ pub(crate) fn domain_classification_ids_from_text(raw: &str) -> Vec<String> {
 
 pub(crate) fn projection_for_element_class(raw: &str) -> ProjectionMatch {
     let text = normalize_profile_text(raw);
-    for profile in &discovery_profiles().profiles {
-        for mapping in &profile.projection_keyword_mappings {
-            if first_matching_term(&text, &mapping.terms).is_some() {
-                return ProjectionMatch {
-                    role: projection_role(&mapping.projection),
-                    item_prefix: mapping.item_prefix.clone(),
-                };
-            }
+    for mapping in &discovery_profiles().projection_keyword_mappings {
+        if first_matching_term(&text, &mapping.terms).is_some() {
+            return ProjectionMatch {
+                role: projection_role(&mapping.projection),
+                item_prefix: mapping.item_prefix.clone(),
+            };
         }
     }
 

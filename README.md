@@ -1,30 +1,44 @@
 # Structure of Knowledge (SoK)
 
-Structure of Knowledge, or SoK, is a Codex skill and orchestration harness for turning an unfamiliar field into a reusable knowledge scaffold: field structure, source layers, evidence standards, visual maps, and next-step task plans.
+Structure of Knowledge, or SoK, is a Codex skill and orchestration harness for turning
+an unfamiliar field into a reusable knowledge scaffold: field structure, source layers,
+evidence standards, visual maps, and next-step task plans.
 
-SoK was originally developed for research-oriented field mapping. Its more general role is to produce a structured intermediate artifact that other agents, research systems, writing tools, curriculum tools, or visualization layers can adapt for many audiences and formats.
+SoK was originally developed for research-oriented field mapping. Its more general role
+is to produce a structured intermediate artifact that other agents, research systems,
+writing tools, curriculum tools, or visualization layers can adapt for many audiences
+and formats.
 
-The core scaffold idea is inspired by pedagogical ideas of Jerome Bruner and the structure-of-knowledge curriculum tradition: decompose a domain into the concepts, representations, methods, and warrants that make it intelligible, then recompose that structure into a scaffold for learning, research, and downstream generation.
+The core scaffold idea is inspired by pedagogical ideas of Jerome Bruner and the
+structure-of-knowledge curriculum tradition: decompose a domain into the concepts,
+representations, methods, and warrants that make it intelligible, then recompose that
+structure into a scaffold for learning, research, and downstream generation.
 
 ![Rendered SoK quantum sensing report with a relation-backed measurement chain](docs/assets/sok-quantum-sensing-report.png)
 
-This current-version example organizes quantum sensing around its measurement chain and places the validated field-element map inside the relevant section.
+This current-version example organizes quantum sensing around its measurement chain and
+places the validated field-element map inside the relevant section.
 
 ## What SoK Does
 
 SoK helps an agent:
 
 - review how a field defines its boundary and warrants claims;
-- identify its actual questions, objects, cases, representations, methods, institutions, instruments, data, and disputes;
+- identify its actual questions, objects, cases, representations, methods, institutions,
+  instruments, data, and disputes;
 - separate core ideas from the surrounding elements needed to understand them;
 - compare possible organizing forms before choosing a report structure;
-- connect sources, claims, relations, curricula, and visual views in a validated JSON artifact.
+- connect sources, claims, relations, curricula, and visual views in a validated JSON
+  artifact.
 
-The generated scaffold is a discovery canvas, not a report template. The final report chooses its own thesis, section order, and visual logic after source review.
+The generated scaffold is a discovery canvas, not a report template. The final report
+chooses its own thesis, section order, and visual logic after source review.
 
 ## Installation
 
-The macOS/Linux installer requires Rust with Cargo, `curl`, and `tar`. It downloads the selected Git revision, builds the CLI locally, and installs the skill to `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge`.
+The macOS/Linux installer requires Rust with Cargo, `curl` , and `tar` . It downloads
+the selected Git revision, builds the CLI locally, and installs the skill to
+`${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge` .
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/perhyper/SoK/main/install.sh | sh
@@ -65,13 +79,17 @@ cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- scaffold \
   --output /tmp/sok-scaffold.md
 ```
 
-The scaffold guides source review, field-element extraction, organizing-form comparison, and a final report-architecture decision. `handoff-report` packages that working context for another agent without exposing it in the public report.
+The scaffold guides source review, field-element extraction, organizing-form comparison,
+and a final report-architecture decision. `handoff-report` packages that working context
+for another agent without exposing it in the public report.
 
 ## Validated Report Workflow
 
-Each run is bounded to its Markdown, source manifest, and reviewed evidence. It creates no persistent database or cross-run evidence store.
+Each run is bounded to its Markdown, source manifest, and reviewed evidence. It creates
+no persistent database or cross-run evidence store.
 
-From a development checkout, run `make build` before using the release-binary paths below. An installed copy can use `$SOK_CLI` instead.
+From a development checkout, run `make build` before using the release-binary paths
+below. An installed copy can use `$SOK_CLI` instead.
 
 ```bash
 REPORT=/path/to/report.md
@@ -90,17 +108,31 @@ cli/target/release/sok render-html \
   --input /tmp/sok-report.json --output /tmp/sok-report.html
 ```
 
-Public `##` sections are preserved in their authored order. Structured tables can keep their canonical headings or use `<!-- sok:surface ... -->` markers, so validation does not dictate the table of contents. Relation-backed views can be placed in a section with `<!-- sok:visual-view view-id -->`.
+Public `##` sections are preserved in their authored order. Structured tables can keep
+their canonical headings or use `<!-- sok:surface ... -->` markers, so validation does
+not dictate the table of contents. Relation-backed views can be placed in a section with
+`<!-- sok:visual-view view-id -->` .
 
-`sok-report.json` is the structured source of truth: `field_elements` preserves field-native classes, while HTML is a self-contained public view rendered only from validated `human_report` JSON.
+`sok-report.json` is the structured source of truth: `field_elements` preserves
+field-native classes, while HTML is a self-contained public view rendered only from
+validated `human_report` JSON.
 
 ## Compatibility and Sidecars
 
-SoK continues to read public `sok-report/v1` and `sok-report/v2` artifacts. New human-report exports use `sok-report/v2`; the public report payload does not embed private run manifests, WorkOrder/WorkResult exchanges, executor metadata, or local paths.
+SoK continues to read public `sok-report/v1` and `sok-report/v2` artifacts. New
+human-report exports use `sok-report/v2` ; the public report payload does not embed
+private run manifests, WorkOrder/WorkResult exchanges, executor metadata, or local
+paths.
 
-ASCII stable IDs remain stable. For older non-ASCII IDs, run `sok migrate-ids --input <sok-report.json> --output <id-map.json>` to write a reviewable old-to-new map; the command never rewrites the source report in place.
+ASCII stable IDs remain stable. For older non-ASCII IDs, run
+`sok migrate-ids --input <sok-report.json> --output <id-map.json>` to write a reviewable
+old-to-new map; the command never rewrites the source report in place.
 
-Typed `sok-knowledge/v1`, `sok-evidence/v1`, and `sok-pedagogy/v1` core sidecars are additive machine inputs for `export-json`. Private `sok-run/v1` manifests and provider-neutral `sok-work-order/v1` / `sok-work-result/v1` files are sidecars for reproducibility and bounded work exchange. Removing these sidecars rolls back to the Markdown-to-report workflow without changing public report payloads.
+Typed `sok-knowledge/v1` , `sok-evidence/v1` , and `sok-pedagogy/v1` core sidecars are
+additive machine inputs for `export-json` . Private `sok-run/v1` manifests and
+provider-neutral `sok-work-order/v1` / `sok-work-result/v1` files are sidecars for
+reproducibility and bounded work exchange. Removing these sidecars rolls back to the
+Markdown-to-report workflow without changing public report payloads.
 
 ## CLI
 
@@ -127,11 +159,16 @@ Run `sok <command> --help` for flags.
 
 ## Source Access
 
-Downloads are conservative. By default, only `open_access`, `free_web`, `public_domain`, `cc_by`, `cc_by_sa`, `official_open`, and `user_provided` sources are downloaded. Paid, paywalled, subscription-only, restricted, unknown, and blank statuses remain metadata-only unless an explicit flag permits the attempt; flags never grant legal access.
+Downloads are conservative. By default, only `open_access` , `free_web` ,
+`public_domain` , `cc_by` , `cc_by_sa` , `official_open` , and `user_provided` sources
+are downloaded. Paid, paywalled, subscription-only, restricted, unknown, and blank
+statuses remain metadata-only unless an explicit flag permits the attempt; flags never
+grant legal access.
 
 ## Development
 
-The portable skill lives in `structure-of-knowledge/`; the Rust crate lives in `cli/`. Build output is not tracked.
+The portable skill lives in `structure-of-knowledge/` ; the Rust crate lives in `cli/` .
+Build output is not tracked.
 
 ```bash
 make test
@@ -140,8 +177,9 @@ make test-install
 make build
 ```
 
-The implementation-neutral contracts are in `specs/`, and detailed research and output rules are in `structure-of-knowledge/references/`.
+The implementation-neutral contracts are in `specs/` , and detailed research and output
+rules are in `structure-of-knowledge/references/` .
 
 ## License
 
-MIT License. See `LICENSE`.
+MIT License. See `LICENSE` .

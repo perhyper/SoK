@@ -236,7 +236,8 @@ pub(crate) fn resolve_relation_endpoint_from_row(
                     if candidate.entity_type != entity_type =>
                 {
                     format!(
-                        "; the field-element inventory exports this reference as {}, so revise the declared endpoint type if that classification is intended",
+                        "; the field-element inventory exports this reference as {}, so revise \
+                            the declared endpoint type if that classification is intended",
                         entity_type_label(candidate.entity_type)
                     )
                 }
@@ -801,7 +802,8 @@ fn validate_curriculum_relation_projection(
                 DiagnosticCheck::error(
                     CHECK_VALIDATE_CURRICULUM_REFERENCE,
                     format!(
-                        "canonical requires_before relation {} is not projected in curriculum step {} prerequisite_ids",
+                        "canonical requires_before relation {} is not projected in curriculum \
+                            step {} prerequisite_ids",
                         relation.id, step.id
                     ),
                 )
@@ -809,70 +811,6 @@ fn validate_curriculum_relation_projection(
             );
         }
     }
-}
-
-fn hard_prerequisite_cycle(relations: &[Relation]) -> Option<Vec<String>> {
-    let mut graph = BTreeMap::<String, BTreeSet<String>>::new();
-    for relation in relations {
-        if !crate::core::relations::is_hard_prerequisite(relation.kind)
-            || relation.from == relation.to
-        {
-            continue;
-        }
-        let from = report_endpoint_key(&relation.from);
-        let to = report_endpoint_key(&relation.to);
-        graph.entry(from.clone()).or_default().insert(to.clone());
-        graph.entry(to).or_default();
-    }
-
-    let mut visited = BTreeSet::new();
-    let mut stack = Vec::<String>::new();
-    let mut in_stack = BTreeSet::new();
-    for node in graph.keys() {
-        if visited.contains(node) {
-            continue;
-        }
-        if let Some(cycle) =
-            hard_prerequisite_cycle_from(node, &graph, &mut visited, &mut stack, &mut in_stack)
-        {
-            return Some(cycle);
-        }
-    }
-    None
-}
-
-fn hard_prerequisite_cycle_from(
-    node: &str,
-    graph: &BTreeMap<String, BTreeSet<String>>,
-    visited: &mut BTreeSet<String>,
-    stack: &mut Vec<String>,
-    in_stack: &mut BTreeSet<String>,
-) -> Option<Vec<String>> {
-    visited.insert(node.to_string());
-    stack.push(node.to_string());
-    in_stack.insert(node.to_string());
-
-    if let Some(next_nodes) = graph.get(node) {
-        for next in next_nodes {
-            if !visited.contains(next.as_str()) {
-                if let Some(cycle) =
-                    hard_prerequisite_cycle_from(next, graph, visited, stack, in_stack)
-                {
-                    return Some(cycle);
-                }
-            } else if in_stack.contains(next.as_str()) {
-                if let Some(position) = stack.iter().position(|item| item == next) {
-                    let mut cycle = stack[position..].to_vec();
-                    cycle.push(next.clone());
-                    return Some(cycle);
-                }
-            }
-        }
-    }
-
-    in_stack.remove(node);
-    stack.pop();
-    None
 }
 
 pub(crate) fn validate_relation_endpoint_consistency(
@@ -1101,7 +1039,8 @@ pub(crate) fn validate_visual_references(
                         DiagnosticCheck::error(
                             CHECK_VALIDATE_VISUAL_REFERENCE,
                             format!(
-                                "visual view {} edge {} -> {} relation {} does not match the endpoint entity references",
+                                "visual view {} edge {} -> {} relation {} does not match the \
+                                    endpoint entity references",
                                 view.id, edge.from, edge.to, edge.relation_id
                             ),
                         )
@@ -1185,4 +1124,20 @@ fn report_endpoint_key(endpoint: &RelationEndpoint) -> String {
         entity_type_label(endpoint.entity_type),
         endpoint.id
     )
+}
+
+fn hard_prerequisite_cycle(relations: &[Relation]) -> Option<Vec<String>> {
+    let edges = relations
+        .iter()
+        .filter(|relation| {
+            crate::core::relations::is_hard_prerequisite(relation.kind)
+                && relation.from != relation.to
+        })
+        .map(|relation| {
+            (
+                report_endpoint_key(&relation.from),
+                report_endpoint_key(&relation.to),
+            )
+        });
+    crate::graph::directed_cycle(edges)
 }

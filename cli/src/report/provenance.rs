@@ -24,7 +24,9 @@ impl EvidenceEntry {
             support_kind: SupportKind::Background,
             locator: String::new(),
             support_note: String::new(),
-            notes: "Cataloged from source manifest only; this row has not been read, crawled, or externally verified and cannot satisfy claim evidence.".to_string(),
+            notes: "Cataloged from source manifest only; this row has not been read, crawled, or \
+                externally verified and cannot satisfy claim evidence."
+                .to_string(),
             claim_ids: Vec::new(),
             source_roles: report_source.roles.clone(),
             source_access: Some(report_source.access.clone()),

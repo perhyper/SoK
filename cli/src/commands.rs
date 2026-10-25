@@ -258,7 +258,10 @@ pub(crate) fn run_source_template(args: &[String]) -> Result<()> {
 
 pub(crate) fn run_ingest(args: &[String]) -> Result<()> {
     let Some(command) = args.first() else {
-        bail!("ingest subcommand is required; usage: sok ingest last --sources <sources.csv|sources.tsv|sources.json> --output <evidence.jsonl>");
+        bail!(
+            "ingest subcommand is required; usage: sok ingest last --sources \
+            <sources.csv|sources.tsv|sources.json> --output <evidence.jsonl>"
+        );
     };
     match command.as_str() {
         "-h" | "--help" | "help" => {

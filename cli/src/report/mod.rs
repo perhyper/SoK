@@ -57,3 +57,6 @@ pub use validation::{
     CHECK_VALIDATE_SOURCE_ROLE_REQUIRED, CHECK_VALIDATE_SOURCE_ROLE_WAIVER,
     CHECK_VALIDATE_STRUCTURE_REQUIRED, CHECK_VALIDATE_VISUAL_REFERENCE,
 };
+
+pub(crate) use import::collapse_whitespace;
+pub(crate) use provenance::first_non_empty;

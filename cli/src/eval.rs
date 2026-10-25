@@ -1,5 +1,6 @@
 //! Deterministic conformance scoring over saved SoK fixtures.
 
+use crate::checks::{is_stable_id, severity_sort_key};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -663,26 +664,4 @@ fn unique_check_ids(checks: &[report::DiagnosticCheck]) -> Vec<String> {
 
 fn ratio_string(numerator: usize, denominator: usize) -> String {
     format!("{numerator}/{denominator}")
-}
-
-fn is_stable_id(id: &str) -> bool {
-    id.contains('-')
-        && !id.ends_with('-')
-        && !id.contains("--")
-        && id
-            .chars()
-            .next()
-            .map(|first| first.is_ascii_lowercase())
-            .unwrap_or(false)
-        && id
-            .chars()
-            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
-}
-
-fn severity_sort_key(severity: report::DiagnosticSeverity) -> u8 {
-    match severity {
-        report::DiagnosticSeverity::Error => 0,
-        report::DiagnosticSeverity::Warning => 1,
-        report::DiagnosticSeverity::Info => 2,
-    }
 }

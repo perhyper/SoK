@@ -126,712 +126,9 @@ pub fn render_html_report(document: &ReportDocument) -> Result<String> {
     Ok(html)
 }
 
-pub(crate) const REPORT_CSS: &str = r#":root {
-  color-scheme: light dark;
-  --bg: #f6f7f8;
-  --paper: #ffffff;
-  --panel: #fbfcfd;
-  --ink: #1b252f;
-  --muted: #5d6b78;
-  --line: #d8dee4;
-  --accent: #2364aa;
-  --accent-soft: #e8f1fb;
-  --success: #1f7a4d;
-  --warn: #8a5a00;
-  --danger: #a33a3a;
-  --focus: #9b5de5;
-  --shadow: 0 1px 2px rgba(24, 34, 45, 0.08);
-}
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 16px;
-  line-height: 1.55;
-}
-.skip-link {
-  position: absolute;
-  left: 1rem;
-  top: -4rem;
-  z-index: 10;
-  background: var(--paper);
-  border: 2px solid var(--focus);
-  color: var(--ink);
-  padding: 0.5rem 0.75rem;
-}
-.skip-link:focus { top: 1rem; }
-.report-shell {
-  width: min(1120px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 28px 0 56px;
-}
-.report-header {
-  padding: 28px 0 18px;
-  border-bottom: 1px solid var(--line);
-}
-.eyebrow {
-  margin: 0 0 0.45rem;
-  color: var(--accent);
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-h1, h2, h3, h4 {
-  color: var(--ink);
-  line-height: 1.2;
-  letter-spacing: 0;
-}
-h1 {
-  margin: 0;
-  font-size: clamp(2rem, 5vw, 3.7rem);
-}
-h2 {
-  margin: 0 0 0.9rem;
-  font-size: 1.55rem;
-}
-h3 {
-  margin: 0 0 0.55rem;
-  font-size: 1.08rem;
-}
-h4 {
-  margin: 0.8rem 0 0.4rem;
-  font-size: 0.95rem;
-}
-.summary {
-  max-width: 860px;
-  margin: 0.9rem 0 0;
-  color: var(--muted);
-  font-size: 1.08rem;
-}
-.section-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-top: 1.35rem;
-}
-.section-nav a {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--paper);
-  color: var(--ink);
-  padding: 0.35rem 0.55rem;
-  font-size: 0.9rem;
-  text-decoration: none;
-}
-.section-nav a:focus,
-.section-nav a:hover {
-  border-color: var(--accent);
-  outline: 2px solid transparent;
-}
-.report-section {
-  padding: 28px 0;
-  border-bottom: 1px solid var(--line);
-}
-.architecture-note {
-  display: grid;
-  grid-template-columns: minmax(180px, 0.32fr) minmax(0, 1fr);
-  gap: 14px;
-  margin: 24px 0 0;
-  padding: 14px 16px;
-  border-left: 4px solid var(--accent);
-  background: var(--accent-soft);
-}
-.architecture-note p { margin: 0; }
-.architecture-note span {
-  display: block;
-  margin-bottom: 0.2rem;
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-.section-purpose {
-  max-width: 820px;
-  margin: -0.35rem 0 1rem;
-  color: var(--muted);
-  font-size: 0.94rem;
-}
-.narrative-body {
-  max-width: 880px;
-  min-width: 0;
-  overflow-x: auto;
-  font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
-  font-size: 1.04rem;
-}
-.narrative-body h3,
-.narrative-body h4 { margin-top: 1.4rem; }
-.narrative-body p,
-.narrative-body ul,
-.narrative-body ol,
-.narrative-body blockquote { max-width: 78ch; }
-.narrative-body blockquote {
-  margin-left: 0;
-  padding-left: 1rem;
-  border-left: 3px solid var(--line);
-  color: var(--muted);
-}
-.structured-appendix {
-  margin-top: 36px;
-  padding: 16px 18px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.structured-appendix > summary {
-  cursor: pointer;
-  color: var(--ink);
-  font-weight: 700;
-}
-.prose {
-  max-width: 860px;
-  margin: 0.35rem 0 0;
-}
-.muted { color: var(--muted); }
-.guide-list,
-.ladder-list,
-.curriculum-path {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.guide-list li {
-  display: grid;
-  grid-template-columns: minmax(170px, 0.34fr) minmax(0, 1fr);
-  gap: 12px;
-  padding: 12px 14px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-}
-.guide-list span { color: var(--muted); }
-.split-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-.item-grid,
-.claim-grid,
-.source-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-.item-card,
-.visual-card,
-.claim-card,
-.path-card,
-.ladder-card,
-.source-card,
-.frontier-card,
-.relation-card {
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: var(--shadow);
-}
-.item-card p,
-.visual-card p,
-.claim-card p,
-.path-card p,
-.ladder-card p,
-.source-card p,
-.frontier-card p,
-.relation-card p {
-  margin: 0.35rem 0 0;
-}
-.badge-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin: 0.55rem 0 0.75rem;
-}
-.badge {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  min-height: 1.65rem;
-  padding: 0.15rem 0.45rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 0.78rem;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
-.meta {
-  margin-top: 0.7rem;
-  color: var(--muted);
-  font-size: 0.92rem;
-}
-.curriculum-path {
-  position: relative;
-  gap: 16px;
-}
-.path-step {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-.path-marker {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 800;
-}
-.reader-dl,
-.compact-dl {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.24fr) minmax(0, 1fr);
-  gap: 0.35rem 0.8rem;
-  margin: 0.65rem 0 0;
-}
-.reader-dl dt,
-.compact-dl dt {
-  color: var(--muted);
-  font-weight: 700;
-}
-.reader-dl dd,
-.compact-dl dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.reference-block { margin-top: 0.75rem; }
-.reference-list,
-.evidence-list {
-  margin: 0.35rem 0 0 1.1rem;
-  padding: 0;
-}
-.reference-list li,
-.evidence-list li {
-  margin: 0.35rem 0;
-}
-.evidence-group {
-  margin-top: 0.85rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--line);
-}
-.evidence-meta {
-  display: block;
-  margin-top: 0.15rem;
-  color: var(--muted);
-  font-size: 0.88rem;
-}
-.text-fallback,
-.visual-fallback {
-  margin-top: 0.9rem;
-  padding: 0.85rem;
-  border-left: 4px solid var(--accent);
-  background: var(--panel);
-}
-.raw-identifiers {
-  margin-top: 0.85rem;
-  color: var(--muted);
-}
-.raw-identifiers summary {
-  cursor: pointer;
-  color: var(--ink);
-  font-weight: 700;
-}
-.frontier-list,
-.relation-list {
-  display: grid;
-  gap: 14px;
-}
-.table-scroll {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--paper);
-}
-table {
-  width: 100%;
-  min-width: 760px;
-  border-collapse: collapse;
-}
-th,
-td {
-  padding: 0.7rem 0.75rem;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-th {
-  background: #eef3f7;
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0;
-}
-td {
-  font-size: 0.94rem;
-  white-space: pre-wrap;
-}
-tr:last-child td { border-bottom: 0; }
-.visual-canvas {
-  min-height: 380px;
-  margin-top: 0.9rem;
-}
-.visual-svg {
-  display: block;
-  width: 100%;
-  height: 360px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fbfcfd;
-}
-.visual-node circle,
-.visual-node rect {
-  fill: var(--accent-soft);
-  stroke: var(--accent);
-  stroke-width: 2;
-}
-.visual-node text {
-  fill: var(--ink);
-  font-size: 13px;
-  pointer-events: none;
-}
-.visual-edge {
-  stroke: #6f7f8f;
-  stroke-width: 2;
-}
-.visual-node.is-active circle,
-.visual-node.is-active rect {
-  fill: #fff4cc;
-  stroke: #a15c00;
-}
-.visual-edge.is-active {
-  stroke: #a15c00;
-  stroke-width: 3;
-}
-.visual-fallback ul {
-  margin: 0.4rem 0 0.8rem 1.1rem;
-  padding: 0;
-}
-.visual-fallback li { margin: 0.2rem 0; }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #11161c;
-    --paper: #18212a;
-    --panel: #141c24;
-    --ink: #edf2f7;
-    --muted: #aeb9c5;
-    --line: #344250;
-    --accent: #8fc5ff;
-    --accent-soft: #17324f;
-    --success: #7bd6a3;
-    --warn: #f0c36a;
-    --danger: #ff9b9b;
-    --focus: #d2a8ff;
-    --shadow: none;
-  }
-  th,
-  .visual-svg {
-    background: var(--panel);
-  }
-  .visual-edge {
-    stroke: #9aa8b6;
-  }
-  .visual-node.is-active rect {
-    fill: #3b2e17;
-    stroke: var(--warn);
-  }
-  .visual-edge.is-active {
-    stroke: var(--warn);
-  }
-}
-@media (max-width: 720px) {
-  .report-shell {
-    width: min(100% - 20px, 1120px);
-    padding-top: 16px;
-  }
-  .report-header { padding-top: 20px; }
-  .split-list,
-  .item-grid,
-  .claim-grid,
-  .source-grid {
-    grid-template-columns: 1fr;
-  }
-  .guide-list li,
-  .path-step,
-  .architecture-note,
-  .reader-dl,
-  .compact-dl {
-    grid-template-columns: 1fr;
-  }
-  table { min-width: 640px; }
-  .visual-canvas { min-height: 320px; }
-  .visual-svg { height: 300px; }
-}
-@media print {
-  body {
-    background: #ffffff;
-    color: #000000;
-    font-size: 11pt;
-  }
-  .report-shell {
-    width: 100%;
-    padding: 0;
-  }
-  .section-nav,
-  .skip-link,
-  .visual-canvas,
-  script {
-    display: none !important;
-  }
-  .report-header,
-  .report-section {
-    border-color: #bbbbbb;
-  }
-  .item-card,
-  .visual-card,
-  .claim-card,
-  .path-card,
-  .ladder-card,
-  .source-card,
-  .frontier-card,
-  .relation-card,
-  .table-scroll {
-    border-color: #bbbbbb;
-    break-inside: avoid;
-  }
-  .table-scroll {
-    overflow: visible;
-  }
-  details.structured-appendix > summary {
-    display: none;
-  }
-  details.structured-appendix:not([open]) > :not(summary) {
-    display: block !important;
-  }
-  table {
-    min-width: 0;
-    font-size: 9pt;
-  }
-  a {
-    color: inherit;
-    text-decoration: none;
-  }
-}"#;
+pub(crate) const REPORT_CSS: &str = include_str!("assets/report.css");
 
-pub(crate) const REPORT_JS: &str = r##"(function () {
-  var dataNode = document.getElementById("sok-visual-data");
-  if (!dataNode) return;
-  var views;
-  try {
-    views = JSON.parse(dataNode.textContent || "[]");
-  } catch (error) {
-    return;
-  }
-  if (!Array.isArray(views) || views.length === 0) return;
-
-  var svgNs = "http://www.w3.org/2000/svg";
-  function el(name, attrs) {
-    var node = document.createElementNS(svgNs, name);
-    Object.keys(attrs || {}).forEach(function (key) {
-      node.setAttribute(key, attrs[key]);
-    });
-    return node;
-  }
-  function textNode(value) {
-    return document.createTextNode(value == null ? "" : String(value));
-  }
-  function labelLines(node) {
-    if (Array.isArray(node.label_lines) && node.label_lines.length > 0) {
-      return node.label_lines.slice(0, 2);
-    }
-    var label = String(node.label || node.id || "");
-    return [label.length > 20 ? label.slice(0, 19) + "\u2026" : label];
-  }
-  function layout(view) {
-    var nodes = view.nodes || [];
-    if (view.kind === "knowledge_spine" || view.kind === "dependency_path") {
-      var ranked = {};
-      var hasCompleteLayout = nodes.length > 0;
-      nodes.forEach(function (node) {
-        if (!node.layout || typeof node.layout.x !== "number" || typeof node.layout.y !== "number") {
-          hasCompleteLayout = false;
-          return;
-        }
-        ranked[node.id] = { x: node.layout.x, y: node.layout.y };
-      });
-      if (hasCompleteLayout) return ranked;
-    }
-    if (view.kind === "concept_source") {
-      var left = nodes.filter(function (node) { return node.entity_type === "source"; });
-      var right = nodes.filter(function (node) { return node.entity_type !== "source"; });
-      var positions = {};
-      left.forEach(function (node, index) {
-        positions[node.id] = { x: 190, y: 85 + index * (210 / Math.max(1, left.length - 1)) };
-      });
-      right.forEach(function (node, index) {
-        positions[node.id] = { x: 720, y: 85 + index * (210 / Math.max(1, right.length - 1)) };
-      });
-      return positions;
-    }
-    if (view.kind === "frontier_debate") {
-      var cx = 480;
-      var cy = 180;
-      var radius = 125;
-      var out = {};
-      nodes.forEach(function (node, index) {
-        if (index === 0) {
-          out[node.id] = { x: cx, y: cy };
-        } else {
-          var angle = -Math.PI / 2 + (2 * Math.PI * (index - 1)) / Math.max(1, nodes.length - 1);
-          out[node.id] = { x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
-        }
-      });
-      return out;
-    }
-    var step = 720 / Math.max(1, nodes.length - 1);
-    var base = {};
-    nodes.forEach(function (node, index) {
-      base[node.id] = { x: 120 + index * step, y: 180 + (index % 2 === 0 ? -38 : 38) };
-    });
-    return base;
-  }
-  function connectedIds(view, nodeId) {
-    var ids = {};
-    (view.edges || []).forEach(function (edge) {
-      if (edge.from === nodeId) ids[edge.to] = true;
-      if (edge.to === nodeId) ids[edge.from] = true;
-    });
-    ids[nodeId] = true;
-    return ids;
-  }
-  function render(mount, view) {
-    var positions = layout(view);
-    var markerId = "arrowhead-" + view.id;
-    var svg = el("svg", {
-      "class": "visual-svg",
-      "role": "img",
-      "aria-labelledby": "svg-title-" + view.id + " svg-desc-" + view.id,
-      "viewBox": "0 0 960 360",
-      "preserveAspectRatio": "xMidYMid meet"
-    });
-    var title = el("title", { "id": "svg-title-" + view.id });
-    title.appendChild(textNode(view.title || "Visual view"));
-    svg.appendChild(title);
-    var desc = el("desc", { "id": "svg-desc-" + view.id });
-    desc.appendChild(textNode(view.alt || view.justification || ""));
-    svg.appendChild(desc);
-    var defs = el("defs", {});
-    var marker = el("marker", {
-      "id": markerId,
-      "viewBox": "0 0 10 10",
-      "refX": "9",
-      "refY": "5",
-      "markerWidth": "7",
-      "markerHeight": "7",
-      "orient": "auto-start-reverse"
-    });
-    marker.appendChild(el("path", { "d": "M 0 0 L 10 5 L 0 10 z", "fill": "#6f7f8f" }));
-    defs.appendChild(marker);
-    svg.appendChild(defs);
-
-    (view.edges || []).forEach(function (edge, index) {
-      var from = positions[edge.from];
-      var to = positions[edge.to];
-      if (!from || !to) return;
-      var line = el("line", {
-        "class": "visual-edge",
-        "tabindex": "0",
-        "role": "img",
-        "data-from": edge.from,
-        "data-to": edge.to,
-        "x1": from.x,
-        "y1": from.y,
-        "x2": to.x,
-        "y2": to.y,
-        "marker-end": "url(#" + markerId + ")",
-        "aria-label": (edge.label || edge.kind || "edge") + ": " + (edge.from_label || edge.from) + " to " + (edge.to_label || edge.to)
-      });
-      line.setAttribute("data-edge-index", String(index));
-      var edgeTitle = el("title", {});
-      edgeTitle.appendChild(textNode((edge.label || edge.kind || "edge") + ": " + (edge.from_label || edge.from) + " to " + (edge.to_label || edge.to)));
-      line.appendChild(edgeTitle);
-      svg.appendChild(line);
-    });
-
-    (view.nodes || []).forEach(function (node) {
-      var point = positions[node.id];
-      if (!point) return;
-      var group = el("g", {
-        "class": "visual-node",
-        "tabindex": "0",
-        "role": "img",
-        "aria-label": node.label + ". " + (node.description || node.entity_type || "node"),
-        "data-node-id": node.id
-      });
-      group.appendChild(el("rect", {
-        "x": point.x - 82,
-        "y": point.y - 24,
-        "width": "164",
-        "height": "48",
-        "rx": "7"
-      }));
-      var text = el("text", {
-        "x": point.x,
-        "y": point.y,
-        "text-anchor": "middle"
-      });
-      var lines = labelLines(node);
-      lines.forEach(function (line, index) {
-        var tspan = el("tspan", {
-          "x": point.x,
-          "dy": index === 0 ? (lines.length === 1 ? "4" : "-4") : "15"
-        });
-        tspan.appendChild(textNode(line));
-        text.appendChild(tspan);
-      });
-      group.appendChild(text);
-      group.addEventListener("mouseenter", function () { activate(svg, view, node.id); });
-      group.addEventListener("focus", function () { activate(svg, view, node.id); });
-      group.addEventListener("mouseleave", function () { clearActive(svg); });
-      group.addEventListener("blur", function () { clearActive(svg); });
-      svg.appendChild(group);
-    });
-    mount.innerHTML = "";
-    mount.appendChild(svg);
-  }
-  function activate(svg, view, nodeId) {
-    var active = connectedIds(view, nodeId);
-    Array.prototype.forEach.call(svg.querySelectorAll(".visual-node"), function (node) {
-      node.classList.toggle("is-active", !!active[node.getAttribute("data-node-id")]);
-    });
-    Array.prototype.forEach.call(svg.querySelectorAll(".visual-edge"), function (edge) {
-      var from = edge.getAttribute("data-from");
-      var to = edge.getAttribute("data-to");
-      edge.classList.toggle("is-active", from === nodeId || to === nodeId);
-    });
-  }
-  function clearActive(svg) {
-    Array.prototype.forEach.call(svg.querySelectorAll(".is-active"), function (node) {
-      node.classList.remove("is-active");
-    });
-  }
-  Array.prototype.forEach.call(document.querySelectorAll("[data-visual-mount]"), function (mount) {
-    var id = mount.getAttribute("data-visual-mount");
-    var view = views.find(function (item) { return item.id === id; });
-    if (view) render(mount, view);
-  });
-})();"##;
+pub(crate) const REPORT_JS: &str = include_str!("assets/report.js");
 
 #[derive(Debug, Serialize)]
 pub(crate) struct RenderVisualView {
@@ -1521,7 +818,8 @@ pub(crate) fn push_presentation_report(
 
     html.push_str("<details class=\"structured-appendix\" id=\"evidence-appendix\">\n");
     html.push_str("<summary>Evidence and structured data</summary>\n");
-    html.push_str("<p class=\"muted\">Machine-verifiable support for the narrative above. It is kept separate so the evidence contract does not dictate the report's reading order.</p>\n");
+    html.push_str("<p class=\"muted\">Machine-verifiable support for the narrative above. It is kept separate \
+        so the evidence contract does not dictate the report's reading order.</p>\n");
     let unassigned_views = views
         .iter()
         .filter(|view| !assigned_view_ids.contains(view.id.as_str()))
@@ -1709,18 +1007,21 @@ pub(crate) fn push_reading_guide_section(
     push_guide_item(
         html,
         "Use the reading ladder",
-        "Start from the layer guidance and read sources for the stated purpose, including the explicit do-not-infer caveats.",
+        "Start from the layer guidance and read sources for the stated purpose, including the \
+            explicit do-not-infer caveats.",
     );
     push_guide_item(
         html,
         "Check claims against evidence",
-        "Read each claim with its supporting, qualifying, and contradictory evidence before treating it as settled.",
+        "Read each claim with its supporting, qualifying, and contradictory evidence before \
+            treating it as settled.",
     );
     if !report.frontier_debates.is_empty() {
         push_guide_item(
             html,
             "Handle frontier guidance last",
-            "Treat current or debate-facing material as time-bound and review the stated background and source support.",
+            "Treat current or debate-facing material as time-bound and review the stated \
+                background and source support.",
         );
     }
     html.push_str("</ol>\n");
@@ -2048,7 +1349,10 @@ pub(crate) fn push_curriculum_section(
             html.push_str("</article>\n</li>\n");
         }
         html.push_str("</ol>\n");
-        html.push_str("<div class=\"text-fallback\" role=\"group\" aria-label=\"Text alternative for curriculum path\">\n<h3>Text Alternative</h3>\n<ol>\n");
+        html.push_str(
+            "<div class=\"text-fallback\" role=\"group\" aria-label=\"Text alternative for \
+            curriculum path\">\n<h3>Text Alternative</h3>\n<ol>\n",
+        );
         for step in steps {
             html.push_str("<li>");
             push_escaped(html, &step.title);
@@ -2154,7 +1458,8 @@ pub(crate) fn push_source_ladder(html: &mut String, sources: &[ReportSource]) {
         push_empty_note(html);
         return;
     }
-    html.push_str("<p class=\"prose\">No explicit literature ladder is present; use the source metadata below as the public source ladder.</p>\n");
+    html.push_str("<p class=\"prose\">No explicit literature ladder is present; use the source metadata below \
+        as the public source ladder.</p>\n");
     html.push_str("<ol class=\"ladder-list\">\n");
     for source in sources {
         let start_point = source_display_label(source);
@@ -2248,7 +1553,8 @@ pub(crate) fn push_visual_card(html: &mut String, view: &RenderVisualView) {
     html.push_str("\" role=\"region\" aria-label=\"Interactive visual view: ");
     push_escaped_attr(html, &view.title);
     html.push_str("\"></div>\n");
-    html.push_str("<noscript><p class=\"muted\">The text alternative below contains the same graph nodes and edges.</p></noscript>\n");
+    html.push_str("<noscript><p class=\"muted\">The text alternative below contains the same graph nodes and \
+        edges.</p></noscript>\n");
     html.push_str(
         "<div class=\"visual-fallback\" role=\"group\" aria-label=\"Text alternative for ",
     );
@@ -2356,7 +1662,10 @@ pub(crate) fn push_table(html: &mut String, headers: &[&str], rows: &[Vec<String
         push_empty_note(html);
         return;
     }
-    html.push_str("<div class=\"table-scroll\" role=\"region\" aria-label=\"Scrollable table\" tabindex=\"0\">\n<table>\n<thead>\n<tr>");
+    html.push_str(
+        "<div class=\"table-scroll\" role=\"region\" aria-label=\"Scrollable table\" \
+        tabindex=\"0\">\n<table>\n<thead>\n<tr>",
+    );
     for header in headers {
         html.push_str("<th scope=\"col\">");
         push_escaped(html, header);
