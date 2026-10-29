@@ -7,6 +7,7 @@ pub(crate) fn validate_claim_evidence_requirements(
 ) {
     for (claim_index, claim) in report.claims.iter().enumerate() {
         let path = format!("/report/claims/{claim_index}");
+        validate_conflict_review(claim, &path, checks);
         let mut usable_reviewed_sources = BTreeSet::new();
         let mut usable_verified_sources = BTreeSet::new();
         let mut saw_cataloged = false;
@@ -38,17 +39,19 @@ pub(crate) fn validate_claim_evidence_requirements(
                     continue;
                 }
                 SupportKind::Contradicts => {
-                    checks.push(
-                        DiagnosticCheck::warning(
-                            CHECK_VALIDATE_EVIDENCE_SUPPORT,
-                            format!(
+                    if claim.conflict_review.is_none() {
+                        checks.push(
+                            DiagnosticCheck::warning(
+                                CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                                format!(
                                 "claim {} has contradictory evidence from {}; record a conflict \
                                     or lower-confidence interpretation",
                                 claim.id, link.source_id
                             ),
-                        )
-                        .with_target(&link_path, &claim.id),
-                    );
+                            )
+                            .with_target(&link_path, &claim.id),
+                        );
+                    }
                     continue;
                 }
                 SupportKind::Background | SupportKind::Example => {
@@ -591,5 +594,44 @@ pub(crate) fn validate_source_access_metadata(
                 .with_target(format!("{path}/metadata_only"), &source.id),
             );
         }
+    }
+}
+
+/// Reviews cover all opposing links and must be renewed after new evidence reviews.
+pub(crate) fn validate_conflict_review(
+    claim: &Claim,
+    path: &str,
+    checks: &mut Vec<DiagnosticCheck>,
+) {
+    let Some(review) = &claim.conflict_review else {
+        return;
+    };
+    let opposing: Vec<_> = claim
+        .evidence_links
+        .iter()
+        .filter(|link| link.support_kind == SupportKind::Contradicts)
+        .collect();
+    let declared: BTreeSet<_> = review.source_ids.iter().collect();
+    let actual: BTreeSet<_> = opposing.iter().map(|link| &link.source_id).collect();
+    if review.explanation.trim().is_empty()
+        || !looks_like_iso_date(&review.reviewed_at)
+        || opposing.is_empty()
+        || declared != actual
+        || declared.len() != review.source_ids.len()
+        || opposing
+            .iter()
+            .any(|link| link.reviewed_at > review.reviewed_at)
+    {
+        checks.push(
+            DiagnosticCheck::error(
+                CHECK_VALIDATE_EVIDENCE_SUPPORT,
+                format!(
+                    "claim {} conflict_review needs an explanation, valid review date, \
+                and exactly the opposing source IDs; renew it after evidence changes",
+                    claim.id
+                ),
+            )
+            .with_target(format!("{path}/conflict_review"), &claim.id),
+        );
     }
 }

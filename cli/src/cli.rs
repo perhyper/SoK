@@ -47,6 +47,7 @@ pub fn run_cli(args: Vec<String>) -> Result<i32> {
         "audit-sources" => run_audit_sources(&args[1..]).map(|_| 0),
         "download-sources" => run_download_sources(&args[1..]).map(|_| 0),
         "ingest" => run_ingest(&args[1..]).map(|_| 0),
+        "export-graph" => run_export_graph(&args[1..]).map(|_| 0),
         "export-json" => run_export_json(&args[1..]).map(|_| 0),
         "lint" => run_lint(&args[1..]),
         "validate-report" => run_validate_report(&args[1..]),
@@ -79,6 +80,7 @@ Commands:
   audit-sources     Audit source access metadata.
   download-sources  Download legally accessible open/free sources from a manifest.
   ingest last       Normalize a current source manifest into cataloged evidence JSONL; overwrites --output.
+  export-graph      Build a report-scoped graph snapshot from a manifest.
   export-json       Convert bounded Markdown plus source/evidence files to sok-report.json.
   lint              Check Markdown, source, and evidence inputs before JSON export.
   validate-report   Validate sok-report.json reliability gates.
@@ -102,6 +104,9 @@ pub(crate) fn print_command_usage(command: &str) -> Result<()> {
         "audit-sources" => print_audit_sources_usage(),
         "download-sources" => print_download_sources_usage(),
         "ingest" => print_ingest_usage(),
+        "export-graph" => {
+            println!("Usage: sok export-graph --input <manifest.json> --output <graph.json>")
+        }
         "export-json" => print_export_json_usage(),
         "lint" => print_lint_usage(),
         "validate-report" => print_validate_report_usage(),

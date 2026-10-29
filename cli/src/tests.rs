@@ -14,6 +14,7 @@ mod cli;
 mod contracts;
 #[path = "tests/profiles.rs"]
 mod discovery;
+mod graph_snapshot;
 mod identity;
 mod import;
 mod lint;

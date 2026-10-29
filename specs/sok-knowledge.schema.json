@@ -98,7 +98,20 @@
         "deepens",
         "applies",
         "assessed_by",
-        "remediates"
+        "remediates",
+            "supports",
+            "qualifies",
+            "contradicts",
+            "part_of",
+            "represented_by",
+            "maps_to",
+            "grounds",
+            "motivates",
+            "uses_method",
+            "extends",
+            "limits",
+            "conditions",
+            "corresponds_to"
       ]
     },
     "relation_endpoint_type": {

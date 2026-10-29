@@ -230,7 +230,6 @@ fn validate_relation_graph(
     checks: &mut Vec<report::DiagnosticCheck>,
 ) {
     let mut seen_ids = BTreeSet::new();
-    let mut seen_semantics = BTreeSet::new();
     for (index, relation) in relations.iter().enumerate() {
         let path = format!("/knowledge/relations/{index}");
         validate_stable_id(&relation.id, &format!("{path}/id"), checks);
@@ -241,23 +240,6 @@ fn validate_relation_graph(
                     format!("duplicate relation id {}", relation.id),
                 )
                 .with_target(format!("{path}/id"), &relation.id),
-            );
-        }
-        let semantic_key = relation_semantic_key(relation);
-        if !seen_semantics.insert(semantic_key) {
-            checks.push(
-                report::DiagnosticCheck::error(
-                    CHECK_CORE_RELATION,
-                    format!(
-                        "duplicate semantic relation {} {}:{} -> {}:{}",
-                        relations::relation_kind_label(relation.kind),
-                        relations::endpoint_type_label(relation.from.entity_type),
-                        relation.from.id,
-                        relations::endpoint_type_label(relation.to.entity_type),
-                        relation.to.id
-                    ),
-                )
-                .with_target(&path, &relation.id),
             );
         }
         for source_id in &relation.source_ids {
@@ -355,6 +337,7 @@ fn validate_evidence_package(
     let mut seen_claims = BTreeSet::new();
     for (claim_index, claim) in package.claims.iter().enumerate() {
         let path = format!("/evidence/claims/{claim_index}");
+        report::validate_conflict_review(&report::Claim::from(claim), &path, checks);
         validate_stable_id(&claim.id, &format!("{path}/id"), checks);
         if !seen_claims.insert(claim.id.as_str()) {
             checks.push(
@@ -616,17 +599,6 @@ fn validate_learning_step_prerequisite_relations(
             ),
         );
     }
-}
-
-fn relation_semantic_key(relation: &relations::Relation) -> String {
-    format!(
-        "{}|{}:{}|{}:{}",
-        relations::relation_kind_label(relation.kind),
-        relations::endpoint_type_label(relation.from.entity_type),
-        relation.from.id,
-        relations::endpoint_type_label(relation.to.entity_type),
-        relation.to.id
-    )
 }
 
 fn core_endpoint_exists(

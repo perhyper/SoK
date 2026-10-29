@@ -13,6 +13,19 @@ pub enum RelationKind {
     Applies,
     AssessedBy,
     Remediates,
+    Supports,
+    Qualifies,
+    Contradicts,
+    PartOf,
+    RepresentedBy,
+    MapsTo,
+    Grounds,
+    Motivates,
+    UsesMethod,
+    Extends,
+    Limits,
+    Conditions,
+    CorrespondsTo,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,25 +34,11 @@ pub struct RelationKindMapping {
     pub reverse_endpoints: bool,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Relation {
-    pub id: String,
-    pub kind: RelationKind,
-    pub from: RelationEndpoint,
-    pub to: RelationEndpoint,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub description: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub source_ids: Vec<String>,
-}
+mod record;
+pub use record::{Endpoint, RelationRecord};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-#[serde(deny_unknown_fields)]
-pub struct RelationEndpoint {
-    pub entity_type: RelationEndpointType,
-    pub id: String,
-}
+pub type Relation = RelationRecord<RelationEndpointType>;
+pub type RelationEndpoint = Endpoint<RelationEndpointType>;
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
@@ -94,77 +93,51 @@ impl<'de> Deserialize<'de> for RelationKind {
 
 pub fn relation_kind_mapping(raw: &str) -> Option<RelationKindMapping> {
     let normalized = normalize_relation_label(raw);
-    let mapping = match normalized.as_str() {
-        "requires_before" | "precedes" | "precedes_in_curriculum" | "before" | "prior_to" => {
-            RelationKindMapping {
-                kind: RelationKind::RequiresBefore,
-                reverse_endpoints: false,
-            }
+    let (kind, reverse_endpoints) = match normalized.as_str() {
+        "requires_before"
+        | "precedes"
+        | "precedes_in_curriculum"
+        | "before"
+        | "prior_to"
+        | "required_by"
+        | "prerequisite_for" => (RelationKind::RequiresBefore, false),
+        "depends_on" | "depends" | "requires" | "prerequisite" | "prereq" => {
+            (RelationKind::RequiresBefore, true)
         }
-        "depends_on" | "depends" | "requires" | "required_by" | "prerequisite" | "prereq"
-        | "prerequisite_for" => RelationKindMapping {
-            kind: RelationKind::RequiresBefore,
-            reverse_endpoints: true,
-        },
-        "introduced_by" => RelationKindMapping {
-            kind: RelationKind::IntroducedBy,
-            reverse_endpoints: false,
-        },
-        "introduces" | "introduce" => RelationKindMapping {
-            kind: RelationKind::IntroducedBy,
-            reverse_endpoints: true,
-        },
-        "revisits" | "revisit" | "returns_to" => RelationKindMapping {
-            kind: RelationKind::Revisits,
-            reverse_endpoints: false,
-        },
-        "deepens"
-        | "deepens_understanding_of"
-        | "extends"
-        | "elaborates"
-        | "qualifies"
-        | "qualify"
-        | "limits"
-        | "conditions" => RelationKindMapping {
-            kind: RelationKind::Deepens,
-            reverse_endpoints: false,
-        },
-        "applies"
-        | "apply"
-        | "uses_method"
-        | "uses"
-        | "uses_method_or_warrant"
-        | "represented_by"
-        | "represented"
-        | "has_representation"
-        | "maps_to"
-        | "maps"
-        | "corresponds_to"
-        | "supports"
-        | "support"
-        | "supported_by"
-        | "grounds"
-        | "grounded_by"
-        | "motivates"
-        | "motivation"
-        | "part_of"
-        | "contains"
-        | "component_of" => RelationKindMapping {
-            kind: RelationKind::Applies,
-            reverse_endpoints: false,
-        },
+        "introduced_by" => (RelationKind::IntroducedBy, false),
+        "introduces" | "introduce" => (RelationKind::IntroducedBy, true),
+        "revisits" | "revisit" | "returns_to" => (RelationKind::Revisits, false),
+        "deepens" | "deepens_understanding_of" | "elaborates" => (RelationKind::Deepens, false),
+        "applies" | "apply" => (RelationKind::Applies, false),
         "assessed_by" | "assessed" | "assessment" | "tested_by" | "evaluated_by" => {
-            RelationKindMapping {
-                kind: RelationKind::AssessedBy,
-                reverse_endpoints: false,
-            }
+            (RelationKind::AssessedBy, false)
         }
-        "remediates" | "remediate" | "repairs" | "addresses_gap" | "contradicts" | "contradict"
-        | "conflicts" => RelationKindMapping {
-            kind: RelationKind::Remediates,
-            reverse_endpoints: false,
-        },
+        "remediates" | "remediate" | "repairs" | "addresses_gap" => {
+            (RelationKind::Remediates, false)
+        }
+        "supports" | "support" => (RelationKind::Supports, false),
+        "qualifies" | "qualify" => (RelationKind::Qualifies, false),
+        "contradicts" | "contradict" | "conflicts" => (RelationKind::Contradicts, false),
+        "part_of" | "component_of" => (RelationKind::PartOf, false),
+        "represented_by" | "represented" | "has_representation" => {
+            (RelationKind::RepresentedBy, false)
+        }
+        "maps_to" | "maps" => (RelationKind::MapsTo, false),
+        "grounds" => (RelationKind::Grounds, false),
+        "motivates" | "motivation" => (RelationKind::Motivates, false),
+        "uses_method" | "uses" | "uses_method_or_warrant" => (RelationKind::UsesMethod, false),
+        "extends" => (RelationKind::Extends, false),
+        "limits" => (RelationKind::Limits, false),
+        "conditions" => (RelationKind::Conditions, false),
+        "corresponds_to" => (RelationKind::CorrespondsTo, false),
+        "supported_by" => (RelationKind::Supports, true),
+        "grounded_by" => (RelationKind::Grounds, true),
+        "contains" => (RelationKind::PartOf, true),
         _ => return None,
+    };
+    let mapping = RelationKindMapping {
+        kind,
+        reverse_endpoints,
     };
     Some(mapping)
 }
@@ -193,6 +166,19 @@ pub fn relation_kind_label(kind: RelationKind) -> &'static str {
         RelationKind::Applies => "applies",
         RelationKind::AssessedBy => "assessed_by",
         RelationKind::Remediates => "remediates",
+        RelationKind::Supports => "supports",
+        RelationKind::Qualifies => "qualifies",
+        RelationKind::Contradicts => "contradicts",
+        RelationKind::PartOf => "part_of",
+        RelationKind::RepresentedBy => "represented_by",
+        RelationKind::MapsTo => "maps_to",
+        RelationKind::Grounds => "grounds",
+        RelationKind::Motivates => "motivates",
+        RelationKind::UsesMethod => "uses_method",
+        RelationKind::Extends => "extends",
+        RelationKind::Limits => "limits",
+        RelationKind::Conditions => "conditions",
+        RelationKind::CorrespondsTo => "corresponds_to",
     }
 }
 
@@ -205,6 +191,19 @@ pub fn relation_kind_human_label(kind: RelationKind) -> &'static str {
         RelationKind::Applies => "applies",
         RelationKind::AssessedBy => "is assessed by",
         RelationKind::Remediates => "remediates",
+        RelationKind::Supports => "supports",
+        RelationKind::Qualifies => "qualifies",
+        RelationKind::Contradicts => "contradicts",
+        RelationKind::PartOf => "part of",
+        RelationKind::RepresentedBy => "represented by",
+        RelationKind::MapsTo => "maps to",
+        RelationKind::Grounds => "grounds",
+        RelationKind::Motivates => "motivates",
+        RelationKind::UsesMethod => "uses method",
+        RelationKind::Extends => "extends",
+        RelationKind::Limits => "limits",
+        RelationKind::Conditions => "conditions",
+        RelationKind::CorrespondsTo => "corresponds to",
     }
 }
 
@@ -226,59 +225,11 @@ pub fn endpoint_type_label(entity_type: RelationEndpointType) -> &'static str {
 }
 
 pub fn deduplicate_relations(relations: Vec<Relation>) -> Vec<Relation> {
-    let mut by_semantic_key = BTreeMap::<RelationSemanticKey, Relation>::new();
-    for mut relation in relations {
-        relation.source_ids = sorted_unique(relation.source_ids);
-        let key = RelationSemanticKey::from(&relation);
-        by_semantic_key
-            .entry(key)
-            .and_modify(|existing| merge_relation(existing, &relation))
-            .or_insert(relation);
-    }
-    by_semantic_key.into_values().collect()
+    record::deduplicate(relations)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct RelationSemanticKey {
-    kind: RelationKind,
-    from_type: RelationEndpointType,
-    from_id: String,
-    to_type: RelationEndpointType,
-    to_id: String,
-}
-
-impl From<&Relation> for RelationSemanticKey {
-    fn from(relation: &Relation) -> Self {
-        Self {
-            kind: relation.kind,
-            from_type: relation.from.entity_type,
-            from_id: relation.from.id.clone(),
-            to_type: relation.to.entity_type,
-            to_id: relation.to.id.clone(),
-        }
-    }
-}
-
-fn merge_relation(existing: &mut Relation, duplicate: &Relation) {
-    if duplicate.id < existing.id {
-        existing.id = duplicate.id.clone();
-    }
-    if !duplicate.description.trim().is_empty()
-        && (existing.description.trim().is_empty() || duplicate.description < existing.description)
-    {
-        existing.description = duplicate.description.clone();
-    }
-    existing
-        .source_ids
-        .extend(duplicate.source_ids.iter().cloned());
-    existing.source_ids = sorted_unique(std::mem::take(&mut existing.source_ids));
-}
-
-fn sorted_unique(values: Vec<String>) -> Vec<String> {
-    values
-        .into_iter()
-        .filter(|value| !value.trim().is_empty())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
+pub(crate) fn deduplicate_public_relations(
+    relations: Vec<crate::report::Relation>,
+) -> Vec<crate::report::Relation> {
+    record::deduplicate(relations)
 }

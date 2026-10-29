@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "reports",
+    "nodes",
+    "assertions",
+    "identity_links"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "sok-graph/v1"
+    },
+    "reports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "report_id",
+          "revision",
+          "metadata",
+          "field",
+          "scope"
+        ],
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "field": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "data"
+        ],
+        "properties": {
+          "key": {
+            "$ref": "#/$defs/entity_ref"
+          },
+          "data": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "from",
+          "to",
+          "data",
+          "source_refs"
+        ],
+        "properties": {
+          "key": {
+            "$ref": "#/$defs/entity_ref"
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "from": {
+            "$ref": "#/$defs/entity_ref"
+          },
+          "to": {
+            "$ref": "#/$defs/entity_ref"
+          },
+          "data": {
+            "type": "object"
+          },
+          "source_refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/entity_ref"
+            }
+          }
+        }
+      }
+    },
+    "identity_links": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identity_link"
+      }
+    }
+  },
+  "$defs": {
+    "entity_ref": {
+      "$ref": "sok-graph-input.schema.json#/$defs/entity_ref"
+    },
+    "identity_link": {
+      "$ref": "sok-graph-input.schema.json#/$defs/identity_link"
+    }
+  }
+}

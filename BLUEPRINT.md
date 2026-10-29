@@ -56,6 +56,8 @@ once at the top level; individual profiles retain their signals, lenses, and que
 - Keep agent-facing scaffolds separate from human-facing reports.
 - Keep every run bounded to its explicit Markdown, source manifest, and evidence files.
 - Do not create a daemon, database, cross-run evidence ledger, or persistent wiki.
+  Bounded, rebuildable graph snapshots may connect explicitly reviewed report
+  identities; source reports remain authoritative. See `specs/graph-interchange.md`.
 - Treat cataloged sources as discovery metadata until evidence has been reviewed or
   verified.
 - Select visual views only when structured relations justify them; no visualization

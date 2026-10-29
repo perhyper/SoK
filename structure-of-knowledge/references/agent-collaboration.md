@@ -3,8 +3,9 @@
 Use this reference for delegated research, textbook or corpus planning, and
 source-pack assembly. Resolve the executable and follow the artifact lanes in
 [cli-workflow.md](cli-workflow.md). Research and evidence rules live in
-[research-protocol.md](research-protocol.md); schemas, public/private boundaries,
-and compatibility live in [output-contract.md](output-contract.md).
+[research-protocol.md](research-protocol.md); schemas and public/private boundaries
+live in [output-contract.md](output-contract.md). Before using typed work
+exchanges, read [machine-contract.md](machine-contract.md) for compatibility rules.
 
 ## Delegated Work
 

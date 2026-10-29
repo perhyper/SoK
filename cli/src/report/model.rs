@@ -314,9 +314,20 @@ pub struct Claim {
     pub evidence_links: Vec<EvidenceLink>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<ClaimConfidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conflict_review: Option<ConflictReview>,
     pub temporal: TemporalMarker,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub notes: String,
+}
+
+/// Acknowledges a dispute; it does not turn opposing evidence into support.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ConflictReview {
+    pub explanation: String,
+    pub reviewed_at: String,
+    pub source_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -379,61 +390,8 @@ pub enum SupportKind {
     Example,
 }
 
-#[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
-pub struct Relation {
-    pub id: String,
-    pub kind: RelationKind,
-    pub from: RelationEndpoint,
-    pub to: RelationEndpoint,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub description: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub source_ids: Vec<String>,
-}
-
-impl<'de> Deserialize<'de> for Relation {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct RelationWire {
-            id: String,
-            kind: String,
-            from: RelationEndpoint,
-            to: RelationEndpoint,
-            #[serde(default)]
-            description: String,
-            #[serde(default)]
-            source_ids: Vec<String>,
-        }
-
-        let wire = RelationWire::deserialize(deserializer)?;
-        let mapping =
-            crate::core::relations::relation_kind_mapping(&wire.kind).ok_or_else(|| {
-                serde::de::Error::custom(format!("unknown relation kind {:?}", wire.kind))
-            })?;
-        let (from, to) = if mapping.reverse_endpoints {
-            (wire.to, wire.from)
-        } else {
-            (wire.from, wire.to)
-        };
-        Ok(Self {
-            id: wire.id,
-            kind: mapping.kind,
-            from,
-            to,
-            description: wire.description,
-            source_ids: wire.source_ids,
-        })
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RelationEndpoint {
-    pub entity_type: EntityType,
-    pub id: String,
-}
+pub type Relation = crate::core::relations::RelationRecord<EntityType>;
+pub type RelationEndpoint = crate::core::relations::Endpoint<EntityType>;
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]

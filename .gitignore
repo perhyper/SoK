@@ -11,3 +11,6 @@ cli/target/
 
 # Coverage/test outputs
 coverage.out
+
+# Temporary local rendering files
+/tmp/

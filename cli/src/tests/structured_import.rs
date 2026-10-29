@@ -297,7 +297,8 @@ Read every result as material chemistry to measured transport to interface evolu
         .iter()
         .find(|step| step.title == "Interface measurement")
         .unwrap();
-    assert_eq!(exported.report.relations.len(), 4);
+    // Preserve the authored warrant alongside the curriculum-derived assertion.
+    assert_eq!(exported.report.relations.len(), 5);
     let relation = exported
         .report
         .relations

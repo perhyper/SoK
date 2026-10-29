@@ -55,6 +55,8 @@ pub struct EvidenceClaim {
     pub evidence_links: Vec<report::EvidenceLink>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub confidence: Option<report::ClaimConfidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conflict_review: Option<report::ConflictReview>,
     pub temporal: report::TemporalMarker,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub notes: String,
@@ -113,6 +115,7 @@ impl From<&report::Claim> for EvidenceClaim {
             evidence_requirement: value.evidence_requirement,
             evidence_links: value.evidence_links.clone(),
             confidence: value.confidence,
+            conflict_review: value.conflict_review.clone(),
             temporal: value.temporal.clone(),
             notes: value.notes.clone(),
         }
@@ -128,6 +131,7 @@ impl From<&EvidenceClaim> for report::Claim {
             evidence_requirement: value.evidence_requirement,
             evidence_links: value.evidence_links.clone(),
             confidence: value.confidence,
+            conflict_review: value.conflict_review.clone(),
             temporal: value.temporal.clone(),
             notes: value.notes.clone(),
         }

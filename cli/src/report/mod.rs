@@ -60,3 +60,5 @@ pub use validation::{
 
 pub(crate) use import::collapse_whitespace;
 pub(crate) use provenance::first_non_empty;
+
+pub(crate) use validation::validate_conflict_review;

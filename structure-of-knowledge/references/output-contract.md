@@ -38,56 +38,12 @@ Markdown scaffolds and human reports remain the human authoring and compatibilit
 lane for `sok export-json` ; HTML is a rendered public view of validated `human_report`
 JSON. `internal_context` and `diagnostics` are never public report content.
 
-When reproducibility metadata is needed, artifact-producing commands may also write a
-private `sok-run/v1` sidecar with `--run-manifest <sok-run.json>` . The run manifest
-records command metadata, declared permissions, bounded input file hashes, output file
-hashes, optional executor metadata, and a timestamp-independent semantic digest. Treat
-it as disposable private run metadata; do not embed run manifests, executor details, or
-private paths in `sok-report.json` or rendered HTML.
-
-Machine input is opt-in. `sok export-json` may also read typed core sidecars with
-`--knowledge <sok-knowledge.json>` , `--evidence-package <sok-evidence.json>` , and
-`--pedagogy <sok-pedagogy.json>` , or typed fenced blocks in the Markdown:
-
-````markdown
-```sok-json sok-knowledge/v1
-{
-  "schema_version": "sok-knowledge/v1",
-  "elements": []
-}
-```
-````
-
-Typed machine inputs feed directly into the `sok-knowledge/v1` , `sok-evidence/v1` , and
-`sok-pedagogy/v1` core validators. They do not depend on localized Markdown table
-headers. Markdown tables, `sok:surface` markers, and narrative prose remain supported
-for human-authored inputs. When human and machine lanes provide different values for the
-same stable ID or package field, the exporter keeps the first value deterministically
-and emits an `export.machine-input` diagnostic instead of overwriting silently.
-
 ## Compatibility, Migration, and Rollback
 
-Public `sok-report/v1` and `sok-report/v2` remain readable. New final human-report
-exports use `sok-report/v2` ; unknown report, core, run, and work schema versions must
-be rejected by validators rather than guessed.
-
-ASCII stable IDs remain stable. Existing non-ASCII IDs do not need an automatic rewrite;
-use `sok migrate-ids --input <sok-report.json> --output <id-map.json>` when an explicit,
-reviewable old-to-new map is needed. Reference rewriting is a separate deliberate step
-outside the command.
-
-Core packages, run manifests, and work protocol files are additive sidecars.
-`sok-knowledge/v1` , `sok-evidence/v1` , and `sok-pedagogy/v1` can be supplied to
-`export-json` or omitted. `sok-run/v1` , `sok-work-order/v1` , and `sok-work-result/v1`
-are private files for reproducibility and bounded exchange; removing them rolls the
-workflow back to Markdown/source/evidence inputs without changing public report
-payloads.
-
-For bounded collaboration, a WorkOrder declares the current SoK task kind, required
-capabilities, allowed core patch paths, and a default-deny permission envelope. A
-WorkResult returns a typed refusal, degradation plan, or proposed patches against core
-packages. Accepting a result writes a new validated core output file and never mutates
-source inputs in place.
+Machine input is opt-in; Markdown/source/evidence inputs remain supported.
+Before using typed core inputs, fenced `sok-json`, private run/work sidecars,
+or ID migration, read [machine-contract.md](machine-contract.md). It preserves
+all compatibility, conflict-handling, privacy, and rollback rules for those paths.
 
 ## Field-First Report Composition
 
@@ -195,11 +151,19 @@ use stable JSON IDs or unambiguous source titles / row labels from the bounded M
 and manifest. Ambiguous or unresolved references must become diagnostics, not silent
 guesses. Valid relation endpoint types are `field_element` , `concept` , `method` ,
 `representation` , `claim` , `source` , `curriculum_step` , and `frontier_debate` .
-Canonical relation kinds are `requires_before` , `introduced_by` , `revisits` ,
-`deepens` , `applies` , `assessed_by` , and `remediates` . Legacy labels such as
-`depends_on` , `supports` , `qualifies` , `contradicts` , `precedes` , `introduces` ,
-`uses_method` , `represented_by` , `grounds` , `motivates` , `part_of` , and `maps_to`
-are accepted only through explicit compatibility mapping.
+Preserve the relation's meaning: `supports`, `qualifies`, `contradicts`, `part_of`,
+`represented_by`, `maps_to`, `grounds`, `motivates`, `uses_method`, `extends`,
+`limits`, `conditions`, and `corresponds_to` remain distinct from the learning
+relations (`requires_before`, `introduced_by`, `revisits`, `deepens`, `applies`,
+`assessed_by`, `remediates`). Inverse aliases such as `depends_on`, `contains`, and
+`supported_by` reverse endpoints. Different assertions retain their descriptions
+and sources even when their endpoints match.
+
+In typed claim inputs, `conflict_review` records an `explanation`, `reviewed_at`
+date, and the opposing `source_ids`. Explain the applicable conditions and what
+remains unresolved. Acknowledgment allows a reviewed dispute to pass the conflict
+warning gate; opposing evidence still cannot satisfy affirmative support. Renew
+reviews when evidence changes. Do not delete disagreement to pass validation.
 
 ## Structured Visual Views
 
@@ -214,6 +178,12 @@ have enough nodes and edges. A report with no justified graph must remain comple
 readable without an empty visualization shell.
 
 ## Strict Final Validation
+
+Complete the [scholarly framing gate](research-protocol.md#scholarly-framing-gate)
+when applicable and record its evidence separately from CLI diagnostics. A valid
+artifact is not evidence of a sufficient literature review. Preserve literature-
+derived warrants, competing interpretations, and transfer limits in the public
+analysis even when the report is concise.
 
 Before publication, final reports should pass `sok lint --stage final` ,
 `sok export-json --stage final` , `sok validate-report --strict` , and then

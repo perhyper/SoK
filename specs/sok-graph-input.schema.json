@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "reports"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "sok-graph-input/v1"
+    },
+    "reports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "report_id",
+          "path"
+        ],
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "minItems": 1
+    },
+    "identity_links": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/identity_link"
+      }
+    }
+  },
+  "$defs": {
+    "entity_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_id",
+        "revision",
+        "entity_type",
+        "id"
+      ],
+      "properties": {
+        "report_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "entity_type": {
+          "enum": [
+            "field_element",
+            "concept",
+            "method",
+            "representation",
+            "source",
+            "claim",
+            "curriculum_step",
+            "frontier_debate",
+            "relation",
+            "evidence_link"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "identity_link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "kind",
+        "explanation",
+        "reviewer",
+        "reviewed_at",
+        "source_refs"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/entity_ref"
+        },
+        "to": {
+          "$ref": "#/$defs/entity_ref"
+        },
+        "kind": {
+          "enum": [
+            "equivalent_to",
+            "related_to",
+            "different_from"
+          ]
+        },
+        "explanation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity_ref"
+          },
+          "minItems": 1
+        }
+      }
+    }
+  }
+}

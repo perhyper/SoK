@@ -702,37 +702,20 @@ pub(crate) fn validate_known_enum_strings(value: &Value, checks: &mut Vec<Diagno
             let Some(relation) = relation.as_object() else {
                 continue;
             };
-            validate_string_enum(
-                relation,
-                "kind",
-                &[
-                    "requires_before",
-                    "introduced_by",
-                    "revisits",
-                    "deepens",
-                    "applies",
-                    "assessed_by",
-                    "remediates",
-                    "depends_on",
-                    "requires",
-                    "prerequisite",
-                    "prerequisite_for",
-                    "precedes",
-                    "introduces",
-                    "uses_method",
-                    "represented_by",
-                    "grounds",
-                    "motivates",
-                    "part_of",
-                    "maps_to",
-                    "supports",
-                    "qualifies",
-                    "contradicts",
-                ],
-                CHECK_VALIDATE_RELATION_KIND,
-                &format!("/report/relations/{index}"),
-                checks,
-            );
+            if relation
+                .get("kind")
+                .and_then(Value::as_str)
+                .and_then(crate::core::relations::relation_kind_mapping)
+                .is_none()
+            {
+                checks.push(
+                    DiagnosticCheck::error(
+                        CHECK_VALIDATE_RELATION_KIND,
+                        "unknown or missing relation kind",
+                    )
+                    .with_target(format!("/report/relations/{index}/kind"), ""),
+                );
+            }
             for endpoint_key in ["from", "to"] {
                 if let Some(endpoint) = relation.get(endpoint_key).and_then(Value::as_object) {
                     validate_string_enum(

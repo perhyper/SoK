@@ -35,10 +35,15 @@ or a full artifact package.
    interdisciplinary, or mixed. A field-name lens is a search hypothesis.
 
 2. **Review sources.** Use current web research or a user-provided corpus.
+   For scholarly framing, complete the research protocol's
+   [scholarly framing gate](references/research-protocol.md#scholarly-framing-gate)
+   before choosing an architecture; supplied cases do not replace missing
+   foundational or methodological literature.
    Build the role-based source probe and access records defined in the research
    protocol. Include instruments, facilities, collaborations, data, standards,
    and review bodies when they carry knowledge in the field. Treat syllabi as
    evidence of stabilized teaching consensus, not as the field's boundary.
+   For long runs, maintain and reload the continuity record in the research protocol.
 
 3. **Extract structure.** Identify generative questions, objects,
    representations, transformations, methods, warrants, examples, and failure

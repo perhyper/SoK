@@ -7,6 +7,7 @@ pub mod core;
 mod downloader;
 pub mod eval;
 mod graph;
+pub mod graph_snapshot;
 mod profiles;
 pub mod report;
 pub mod run_manifest;

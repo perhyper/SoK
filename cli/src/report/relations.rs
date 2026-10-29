@@ -76,6 +76,17 @@ pub(crate) fn build_relations(
                     &from.id,
                     entity_type_label(to.entity_type),
                     &to.id,
+                    &lookup_cell_any(row, &["Rationale", "Description", "Why"]),
+                    &lookup_cell_any(
+                        row,
+                        &[
+                            "Source IDs",
+                            "Source ids",
+                            "Sources",
+                            "Evidence sources",
+                            "Source references",
+                        ],
+                    ),
                 ],
             )
         } else if is_stable_id(&explicit_id) {
@@ -123,63 +134,7 @@ pub(crate) fn build_relations(
     relations
 }
 
-pub(crate) fn deduplicate_relations(relations: Vec<Relation>) -> Vec<Relation> {
-    let mut by_semantic_key = BTreeMap::<RelationSemanticKey, Relation>::new();
-    for mut relation in relations {
-        relation.source_ids = sorted_unique(relation.source_ids);
-        let key = RelationSemanticKey::from(&relation);
-        by_semantic_key
-            .entry(key)
-            .and_modify(|existing| merge_relation(existing, &relation))
-            .or_insert(relation);
-    }
-    by_semantic_key.into_values().collect()
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct RelationSemanticKey {
-    kind: RelationKind,
-    from_type: EntityType,
-    from_id: String,
-    to_type: EntityType,
-    to_id: String,
-}
-
-impl From<&Relation> for RelationSemanticKey {
-    fn from(relation: &Relation) -> Self {
-        Self {
-            kind: relation.kind,
-            from_type: relation.from.entity_type,
-            from_id: relation.from.id.clone(),
-            to_type: relation.to.entity_type,
-            to_id: relation.to.id.clone(),
-        }
-    }
-}
-
-fn merge_relation(existing: &mut Relation, duplicate: &Relation) {
-    if duplicate.id < existing.id {
-        existing.id = duplicate.id.clone();
-    }
-    if !duplicate.description.trim().is_empty()
-        && (existing.description.trim().is_empty() || duplicate.description < existing.description)
-    {
-        existing.description = duplicate.description.clone();
-    }
-    existing
-        .source_ids
-        .extend(duplicate.source_ids.iter().cloned());
-    existing.source_ids = sorted_unique(std::mem::take(&mut existing.source_ids));
-}
-
-fn sorted_unique(values: Vec<String>) -> Vec<String> {
-    values
-        .into_iter()
-        .filter(|value| !value.trim().is_empty())
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect()
-}
+pub(crate) use crate::core::relations::deduplicate_public_relations as deduplicate_relations;
 
 pub(crate) fn resolve_relation_endpoint_from_row(
     row: &BTreeMap<String, String>,

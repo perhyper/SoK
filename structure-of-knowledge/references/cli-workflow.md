@@ -77,5 +77,5 @@ explicitly supported waiver under the [output contract](output-contract.md).
 - `eval conformance --fixtures <directory>`: deterministic saved-fixture checks,
   without browsing, model calls, or in-place repairs.
 
-Optional machine inputs, compatibility, and private `--run-manifest` sidecars
-are defined once in the [output contract](output-contract.md).
+Before using optional machine inputs, compatibility migration, or private
+`--run-manifest` sidecars, read [machine-contract.md](machine-contract.md).

@@ -117,6 +117,32 @@ not dictate the table of contents. Relation-backed views can be placed in a sect
 field-native classes, while HTML is a self-contained public view rendered only from
 validated `human_report` JSON.
 
+## Reuse Across Reports
+
+`export-graph` creates a portable graph snapshot from strictly validated reports.
+It preserves distinct relationships, evidence, disagreements, and report-scoped IDs.
+It requires no database service. Create a manifest alongside your reports:
+
+```json
+{
+  "schema_version": "sok-graph-input/v1",
+  "reports": [
+    {"report_id": "quantum-sensing", "path": "sensing/sok-report.json"},
+    {"report_id": "quantum-information", "path": "information/sok-report.json"}
+  ]
+}
+```
+
+```bash
+cli/target/release/sok export-graph --input collection.json --output graph.json
+```
+
+Matching names remain separate. Reviewed identity links can connect them without
+merging the source reports. See the [interchange contract](specs/graph-interchange.md)
+for revision handling and the [input schema](specs/sok-graph-input.schema.json).
+The snapshot supplies reusable evidence; research quality still depends on source
+review and checking assumptions, exceptions, and competing explanations.
+
 ## Compatibility and Sidecars
 
 SoK continues to read public `sok-report/v1` and `sok-report/v2` artifacts. New

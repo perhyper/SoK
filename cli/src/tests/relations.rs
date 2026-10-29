@@ -20,11 +20,11 @@ fn canonical_relation_semantics_and_legacy_labels_map_explicitly() {
         (
             "prerequisite_for",
             report::RelationKind::RequiresBefore,
-            true,
+            false,
         ),
         ("introduces", report::RelationKind::IntroducedBy, true),
-        ("uses_method", report::RelationKind::Applies, false),
-        ("qualifies", report::RelationKind::Deepens, false),
+        ("uses_method", report::RelationKind::UsesMethod, false),
+        ("qualifies", report::RelationKind::Qualifies, false),
     ] {
         let mapping = crate::core::relations::relation_kind_mapping(raw).unwrap();
         assert_eq!(mapping.kind, expected, "{raw}");
@@ -33,7 +33,7 @@ fn canonical_relation_semantics_and_legacy_labels_map_explicitly() {
 }
 
 #[test]
-fn duplicate_relations_merge_sources_deterministically_on_import() {
+fn distinct_assertions_keep_their_sources_on_import() {
     let dir = tempfile::tempdir().unwrap();
     let report_path = dir.path().join("duplicate-relations.md");
     let sources_path = dir.path().join("sources.csv");
@@ -73,12 +73,17 @@ Interface Study,article,doi:10.0000/interface,https://example.test/interface,202
     )
     .unwrap();
 
-    assert_eq!(exported.report.relations.len(), 1);
-    let relation = &exported.report.relations[0];
-    assert_eq!(relation.id, "rel-a-duplicate-2222222222");
-    assert_eq!(relation.kind, report::RelationKind::Applies);
-    assert_eq!(relation.source_ids.len(), 2);
-    assert!(relation.source_ids.windows(2).all(|pair| pair[0] < pair[1]));
+    assert_eq!(exported.report.relations.len(), 2);
+    assert!(exported
+        .report
+        .relations
+        .iter()
+        .all(|r| r.source_ids.len() == 1));
+    let kinds: BTreeSet<_> = exported.report.relations.iter().map(|r| r.kind).collect();
+    assert_eq!(
+        kinds,
+        BTreeSet::from([report::RelationKind::Applies, report::RelationKind::MapsTo])
+    );
 }
 
 #[test]
