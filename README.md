@@ -1,58 +1,154 @@
 # Structure of Knowledge (SoK)
 
-Structure of Knowledge, or SoK, is a Codex skill and orchestration harness for turning
-an unfamiliar field into a reusable knowledge scaffold: field structure, source layers,
-evidence standards, visual maps, and next-step task plans.
+**Understand how a field holds together—and turn that understanding into a useful,
+traceable research artifact.**
 
-SoK was originally developed for research-oriented field mapping. Its more general role
-is to produce a structured intermediate artifact that other agents, research systems,
-writing tools, curriculum tools, or visualization layers can adapt for many audiences
-and formats.
+SoK combines a research skill for Codex with a local Rust CLI. The skill guides an
+agent through source review, identification of a field's central ideas and their
+surrounding context, and the design of a report for a particular reader. The CLI
+organizes the resulting records, checks their consistency, and produces reusable
+JSON, HTML reports, and optional graph snapshots.
 
-The core scaffold idea is inspired by pedagogical ideas of Jerome Bruner and the
-structure-of-knowledge curriculum tradition: decompose a domain into the concepts,
-representations, methods, and warrants that make it intelligible, then recompose that
-structure into a scaffold for learning, research, and downstream generation.
+Its starting point comes from Jerome Bruner's structure-of-knowledge curriculum
+tradition: understanding a field involves its organizing ideas, their relationships,
+and the ways the field establishes and revises knowledge. SoK applies that approach
+to research, explanation, learning, and downstream reuse.
 
-![Rendered SoK quantum sensing report with a relation-backed measurement chain](docs/assets/sok-quantum-sensing-report.png)
+## What You Can Do with SoK
 
-This current-version example organizes quantum sensing around its measurement chain and
-places the validated field-element map inside the relevant section.
+| Goal | What SoK helps produce |
+|---|---|
+| Enter an unfamiliar field | A map of its core questions, ideas, methods, evidence standards, and important surrounding context. |
+| Investigate a research question | A source-grounded report whose argument and section order follow the findings. |
+| Evaluate a supplied corpus or case | Analysis that distinguishes the material being examined from the scholarship or standards used to evaluate it. |
+| Choose what to read or learn | A purpose-based literature ladder, or a curriculum with prerequisites, practice, and progress criteria when requested. |
+| Continue work across agents or sessions | Research notes, handoff briefs, and optional structured work exchanges that preserve scope, evidence gaps, and decisions. |
+| Reuse findings in other tools | Validated report JSON, typed knowledge/evidence/pedagogy packages, and graph snapshots connecting explicitly reviewed report identities. |
 
-## What SoK Does
+The same findings can support a briefing, field map, textbook plan, or corpus plan.
+The output depends on the task: a curriculum, frontier survey, or visualization is
+included when it helps the reader.
 
-SoK helps an agent:
+## The Research Logic
 
-- review how a field defines its boundary and warrants claims;
-- identify its actual questions, objects, cases, representations, methods, institutions,
-  instruments, data, and disputes;
-- separate core ideas from the surrounding elements needed to understand them;
-- compare possible organizing forms before choosing a report structure;
-- connect sources, claims, relations, curricula, and visual views in a validated JSON
-  artifact.
+**Let the field determine the report.** A field name supplies initial search hints.
+Source review reveals the actual knowledge-bearing elements: concepts, cases,
+objects, methods, representations, practices, instruments, institutions, datasets,
+or disputes. The agent identifies the central ideas and the surrounding elements
+needed to understand them, compares organizing forms, and then chooses the thesis
+and narrative sequence. New findings can send it back to revise that choice.
 
-The generated scaffold is a discovery canvas, not a report template. The final report
-chooses its own thesis, section order, and visual logic after source review.
+**Examine both knowledge and its justification.** SoK distinguishes what a field
+knows from how it warrants, disputes, and revises its claims. In an empirical field,
+that may involve measurement and uncertainty; in a formal field, proof and
+counterexample; in an interpretive field, sources, competing readings, and methods.
+The documents being analyzed and the sources justifying an analytical framework
+may play different roles.
 
-## Installation
+**Preserve distinctions when simplifying presentation.** A concise report should
+retain the assumptions, boundary conditions, technical distinctions, and competing
+interpretations that affect its conclusions. Research depth and presentation
+length are separate choices.
 
-The macOS/Linux installer requires Rust with Cargo, `curl` , and `tar` . It downloads
-the selected Git revision, builds the CLI locally, and installs the skill to
-`${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge` .
+**Make evidence traceable.** Cataloging a source records that it exists. Reviewed
+support connects a claim to a source passage or support note and a review date.
+Supporting, qualifying, and contradicting evidence have different meanings;
+uncertainty and disagreement remain part of the record.
+
+**Maintain continuity during long research.** The skill guides the agent to keep a
+compact research-state record and revisit relevant evidence, assumptions, decisions,
+and unresolved disputes before synthesis or resumption. This supports continuity;
+it does not guarantee sound reasoning or automatically retrieve context.
+
+See the [research protocol](structure-of-knowledge/references/research-protocol.md)
+for the detailed approach.
+
+## How the Work Flows
+
+```mermaid
+flowchart TD
+    subgraph Research["Agent-led research and judgment"]
+        Goal["Define the question, reader, and scope"]
+        Review["Review foundations, methods, and competing evidence"]
+        Map["Identify core ideas, surrounding elements, and relations"]
+        Shape["Compare organizing forms and choose the report architecture"]
+        Write["Compose the report and its evidence records"]
+        Check["Review the argument, counterexamples, and limits"]
+        State["Research-state notes: assumptions, decisions, and open gaps"]
+        Goal --> Review --> Map --> Shape --> Write --> Check
+        Shape -->|Missing evidence| Review
+        Check -->|Revise the interpretation| Map
+        Map -. Record .-> State
+        State -. Reload when resuming .-> Review
+    end
+    subgraph Artifacts["Local CLI: artifact checks and outputs"]
+        Lint["Lint Markdown, sources, and evidence"]
+        JSON["Export structured report JSON"]
+        Validate["Strictly validate the report"]
+        HTML["Render a self-contained HTML report"]
+        Graph["Optionally export a graph snapshot"]
+        Lint --> JSON --> Validate
+        Validate --> HTML
+        Validate --> Graph
+    end
+    Check --> Lint
+    Validate -->|Repair reported issues| Write
+```
+
+The agent performs the research and chooses the architecture. The CLI checks
+structured records, references, evidence metadata, and other artifact contracts.
+Passing those checks does not establish that the literature review is complete or
+that every argument is correct. The diagram describes their collaboration; the CLI
+does not run an autonomous research loop.
+
+## Recent Functional Changes
+
+- **Field-native reports.** New `sok-report/v2` exports preserve field elements and
+  an explicit architecture decision. Authored narrative sections retain their
+  order; legacy concept/method arrays remain compatibility views. Reports can
+  follow a causal system, debate, chronology, case comparison, or another
+  evidence-grounded structure.
+- **More precise relationships.** Relations such as `supports`, `qualifies`,
+  `contradicts`, `part_of`, and `represented_by` retain distinct meanings.
+  Assertions with different identities, descriptions, or sources remain separate.
+- **Explicit conflict review.** A claim can record how opposing evidence affects
+  its interpretation. A valid conflict review can acknowledge a dispute without
+  treating the opposing evidence as affirmative support.
+- **Reuse across reports.** `export-graph` produces a portable snapshot with
+  report-scoped identities, revision hashes, and evidence provenance. Reviewed
+  identity links can connect entities across reports without merging them by name.
+- **Structured handoffs and continuity.** Optional typed core inputs and
+  WorkOrder/WorkResult exchanges support bounded collaboration. Research-state
+  guidance preserves the assumptions and unresolved questions needed to resume
+  longer investigations.
+
+Public report v1 inputs remain readable. The
+[machine contract](structure-of-knowledge/references/machine-contract.md) describes
+optional inputs and compatibility; the
+[graph contract](specs/graph-interchange.md) describes snapshot semantics and limits.
+Older tools may not understand the newly supported relation kinds.
+
+## Install or Update
+
+On macOS or Linux, the installer requires Rust with Cargo, `curl`, and `tar`.
+It downloads the selected Git revision, builds the CLI, and installs it with the
+skill under `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/perhyper/SoK/main/install.sh | sh
 ```
 
-To test a branch, tag, or commit:
+Run the installer again to update. To select a branch, tag, or commit, pass
+`--ref <revision>` to the installer. Automated Windows installation is not yet
+supported.
+
+From a local checkout, install that checkout's skill and compiled CLI together:
 
 ```bash
-REF=your-branch
-curl -fsSL https://raw.githubusercontent.com/perhyper/SoK/main/install.sh |
-  sh -s -- --ref "$REF"
+make install
 ```
 
-Rerun the installer to update. Windows automated installation is not yet supported.
+Verify the installed executable:
 
 ```bash
 SOK_CLI="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok"
@@ -60,68 +156,73 @@ SOK_CLI="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok"
 "$SOK_CLI" --help
 ```
 
-## Use the Skill
+Editing the repository does not update an existing installation. Reinstall when
+you want the installed skill and CLI to use the checkout's changes.
 
-In Codex:
+## Start a Research Task
+
+Ask Codex to use the skill with a question, audience, and intended outcome:
 
 ```text
-Use $structure-of-knowledge to map computational neuroscience into a reusable field scaffold with sources, visual maps, and next-step tasks.
+Use $structure-of-knowledge to investigate computational neuroscience for a
+technical reader entering the field. Explain its core ideas and how experimental
+methods, models, and evidence fit around them. Review competing perspectives
+before choosing the report structure, and give me a focused reading path.
 ```
 
-From a repository checkout:
+For an analysis of supplied documents, specify whether external scholarship is
+wanted or the work must remain within the supplied corpus. For a curriculum,
+include the learner's starting point and available time.
+
+You can also generate a working scaffold directly from the repository:
 
 ```bash
-cargo run --locked --manifest-path cli/Cargo.toml --bin sok -- scaffold \
-  --field "computational neuroscience" \
-  --learner "technical reader new to neuroscience" \
-  --goal "build a reusable field map" \
-  --weeks 12 \
+make build
+SOK_CLI="$PWD/cli/target/release/sok"
+"$SOK_CLI" scaffold --field "computational neuroscience" \
+  --learner "technical reader new to the field" \
+  --goal "understand the core ideas and their evidence" \
   --output /tmp/sok-scaffold.md
 ```
 
-The scaffold guides source review, field-element extraction, organizing-form comparison,
-and a final report-architecture decision. `handoff-report` packages that working context
-for another agent without exposing it in the public report.
+The scaffold is a research canvas. Generating it does not perform source review
+or determine the final report's table of contents. `handoff-report` prepares
+that working material for another agent to continue.
 
-## Validated Report Workflow
+## From Findings to a Report
 
-Each run is bounded to its Markdown, source manifest, and reviewed evidence. It creates
-no persistent database or cross-run evidence store.
-
-From a development checkout, run `make build` before using the release-binary paths
-below. An installed copy can use `$SOK_CLI` instead.
+After research and composition, use the resolved `$SOK_CLI` from either setup above:
 
 ```bash
-REPORT=/path/to/report.md
-SOURCES=/path/to/sources.csv
-EVIDENCE=/path/to/reviewed-evidence.jsonl
-
-cli/target/release/sok lint \
-  --stage final --report "$REPORT" --sources "$SOURCES" \
-  --evidence "$EVIDENCE" --strict
-cli/target/release/sok export-json \
-  --stage final --report "$REPORT" --sources "$SOURCES" \
-  --evidence "$EVIDENCE" --output /tmp/sok-report.json
-cli/target/release/sok validate-report \
-  --input /tmp/sok-report.json --strict
-cli/target/release/sok render-html \
-  --input /tmp/sok-report.json --output /tmp/sok-report.html
+"$SOK_CLI" lint --stage final --report report.md \
+  --sources sources.csv --evidence reviewed-evidence.jsonl --strict
+"$SOK_CLI" export-json --stage final --report report.md \
+  --sources sources.csv --evidence reviewed-evidence.jsonl --output sok-report.json
+"$SOK_CLI" validate-report --input sok-report.json --strict
+"$SOK_CLI" render-html --input sok-report.json --output report.html
 ```
 
-Public `##` sections are preserved in their authored order. Structured tables can keep
-their canonical headings or use `<!-- sok:surface ... -->` markers, so validation does
-not dictate the table of contents. Relation-backed views can be placed in a section with
-`<!-- sok:visual-view view-id -->` .
+| Artifact | Purpose |
+|---|---|
+| Working notes and scaffold | Research planning, decisions, gaps, and continuity. |
+| `report.md` | Authored narrative and structured input surfaces. |
+| `sources.csv` | Bibliographic, access, and source-role metadata. |
+| `reviewed-evidence.jsonl` | Reviewed evidence records used to link sources and claims. |
+| `sok-report.json` | Structured source of truth for validation and downstream tools. |
+| `report.html` | Self-contained reader-facing view of a human report. |
+| Optional core, run, and work files | Typed inputs, reproducibility records, and bounded work exchanges. |
 
-`sok-report.json` is the structured source of truth: `field_elements` preserves
-field-native classes, while HTML is a self-contained public view rendered only from
-validated `human_report` JSON.
+Public headings can follow the field's language and argument. Markers or typed
+inputs identify structured surfaces without imposing a universal table of contents.
+Private planning context and run/work metadata remain outside the public report.
 
-## Reuse Across Reports
+See the [output contract](structure-of-knowledge/references/output-contract.md)
+for authoring formats and the
+[CLI workflow](structure-of-knowledge/references/cli-workflow.md) for command details.
 
-`export-graph` creates a portable graph snapshot from strictly validated reports.
-It preserves distinct relationships, evidence, disagreements, and report-scoped IDs.
-It requires no database service. Create a manifest alongside your reports:
+## Connect Findings Across Reports
+
+Create a collection manifest alongside your reports:
 
 ```json
 {
@@ -134,67 +235,40 @@ It requires no database service. Create a manifest alongside your reports:
 ```
 
 ```bash
-cli/target/release/sok export-graph --input collection.json --output graph.json
+"$SOK_CLI" export-graph --input collection.json --output graph.json
 ```
 
-Matching names remain separate. Reviewed identity links can connect them without
-merging the source reports. See the [interchange contract](specs/graph-interchange.md)
-for revision handling and the [input schema](specs/sok-graph-input.schema.json).
-The snapshot supplies reusable evidence; research quality still depends on source
-review and checking assumptions, exceptions, and competing explanations.
+Input reports must pass strict validation. Each entity is scoped to its report
+and exact revision; equal names or local IDs do not imply equivalence. Explicitly
+reviewed links can record equivalence, relatedness, or difference across reports.
 
-## Compatibility and Sidecars
+The snapshot is a rebuildable artifact for downstream tools. SoK does not install
+a graph database, merge reports automatically, or resolve their disagreements.
+See the [graph input schema](specs/sok-graph-input.schema.json) for the manifest and
+identity-link format.
 
-SoK continues to read public `sok-report/v1` and `sok-report/v2` artifacts. New
-human-report exports use `sok-report/v2` ; the public report payload does not embed
-private run manifests, WorkOrder/WorkResult exchanges, executor metadata, or local
-paths.
+## Other Tools
 
-ASCII stable IDs remain stable. For older non-ASCII IDs, run
-`sok migrate-ids --input <sok-report.json> --output <id-map.json>` to write a reviewable
-old-to-new map; the command never rewrites the source report in place.
+Run `"$SOK_CLI" <command> --help` for options.
 
-Typed `sok-knowledge/v1` , `sok-evidence/v1` , and `sok-pedagogy/v1` core sidecars are
-additive machine inputs for `export-json` . Private `sok-run/v1` manifests and
-provider-neutral `sok-work-order/v1` / `sok-work-result/v1` files are sidecars for
-reproducibility and bounded work exchange. Removing these sidecars rolls back to the
-Markdown-to-report workflow without changing public report payloads.
+| Task | Commands |
+|---|---|
+| Set up and scope work | `init`, `brief`, `scaffold`, `specificity` |
+| Prepare a handoff | `handoff-report`, `work` |
+| Manage sources | `source-template`, `audit-sources`, `download-sources`, `ingest last` |
+| Check and publish local artifacts | `lint`, `export-json`, `validate-report`, `render-html` |
+| Reuse and maintain structured data | `export-graph`, `migrate-ids` |
+| Check saved contract fixtures | `eval conformance` |
 
-## CLI
-
-```text
-init              Create an agent workspace.
-brief             Generate an agent handoff brief.
-scaffold          Generate a field-discovery and report-architecture canvas.
-handoff-report    Prepare a scaffold for human-report completion.
-source-template   Create a source manifest template.
-audit-sources     Audit access metadata.
-download-sources  Download explicitly open or user-provided sources.
-ingest last       Normalize source metadata into cataloged, non-supporting evidence candidates in JSONL.
-lint              Check Markdown, sources, and evidence before export.
-export-json       Export bounded inputs to sok-report.json.
-validate-report   Validate evidence, currentness, relations, and references.
-migrate-ids       Write a deterministic stable-ID migration map.
-eval              Score saved provider-neutral conformance fixtures.
-render-html       Render validated human_report JSON to local HTML.
-specificity       Make an underspecified domain task executable.
-work              Validate and exchange bounded WorkOrder/WorkResult sidecars.
-```
-
-Run `sok <command> --help` for flags.
-
-## Source Access
-
-Downloads are conservative. By default, only `open_access` , `free_web` ,
-`public_domain` , `cc_by` , `cc_by_sa` , `official_open` , and `user_provided` sources
-are downloaded. Paid, paywalled, subscription-only, restricted, unknown, and blank
-statuses remain metadata-only unless an explicit flag permits the attempt; flags never
-grant legal access.
+Source downloads follow declared access permissions; paid or restricted sources
+normally remain metadata-only. `ingest last` produces cataloged candidates and
+**overwrites its output**, so keep reviewed evidence in a separate file.
 
 ## Development
 
-The portable skill lives in `structure-of-knowledge/` ; the Rust crate lives in `cli/` .
-Build output is not tracked.
+The portable skill lives in `structure-of-knowledge/`; the Rust crate lives in
+`cli/`. Installed skills contain the compiled `bin/sok` executable, without Rust
+sources or build artifacts. Contracts live in [specs/](specs/).
 
 ```bash
 make test
@@ -203,9 +277,8 @@ make test-install
 make build
 ```
 
-The implementation-neutral contracts are in `specs/` , and detailed research and output
-rules are in `structure-of-knowledge/references/` .
+The [blueprint](BLUEPRINT.md) describes the project architecture and boundaries.
 
 ## License
 
-MIT License. See `LICENSE` .
+[MIT](LICENSE).
