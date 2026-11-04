@@ -3,6 +3,7 @@
 
 # Local-only documents and agent/workflow state
 .private/
+/outputs/
 .crack/
 
 # Build and release artifacts

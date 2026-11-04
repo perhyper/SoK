@@ -14,6 +14,11 @@
 - Keep `structure-of-knowledge/` portable and free of Rust sources or build artifacts.
 - Keep the Rust crate in `cli/`; installed skills contain only the compiled CLI at `bin/sok`.
 
+## User materials
+
+- Keep user-provided material and examples derived from real user sessions local. Store backups under the ignored `.private/` directory and generated runs under the ignored `outputs/` directory.
+- Never incorporate those materials into project files, fixtures, screenshots, documentation, packages, or GitHub releases. Use independently created synthetic examples for public demonstrations and tests. Review staged files and release archives before publishing.
+
 ## Validation
 
 - Run `make test` after changing skill instructions, references, specifications, or CLI behavior.

@@ -24,6 +24,8 @@ The approach draws on Bruner's structure-of-knowledge curriculum tradition.
 A narrow conceptual answer needs only the relevant guidance, not a CLI workspace
 or a full artifact package.
 
+Keep each user's sources, prompts, reports, and derived examples in their private task workspace. Do not copy them into shared project files, fixtures, documentation, or release artifacts.
+
 ## Workflow
 
 1. **Frame the request.** Establish field, audience, entry point, depth, goal,
