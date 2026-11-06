@@ -2,8 +2,8 @@
 
 ## Product Definition
 
-Structure of Knowledge, or SoK, is a Codex skill and research harness that turns a
-learning or research goal into a bounded, evidence-grounded map of a field. It
+Structure of Knowledge, or SoK, is a model-independent agent skill and research harness.
+It turns a learning or research goal into a bounded, evidence-grounded map of a field and
 identifies the field's actual knowledge-bearing elements, their forms and warrants,
 load-bearing relations, source roles, and a reader-fit artifact architecture.
 
@@ -85,8 +85,8 @@ once at the top level; individual profiles retain their signals, lenses, and que
 - Local Codex installation: run `make install` .
 - User testing: `install.sh` downloads a selected Git ref, builds the Rust CLI locally,
   and installs it with the portable skill sources.
-- Plugin distribution: package the skill and tested CLI assets behind a Codex plugin
-  manifest and marketplace entry.
+- Planned Codex integration: package the shared skill and tested CLI assets with a
+  plugin manifest and marketplace entry.
 
 ## Development Priorities
 

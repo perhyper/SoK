@@ -3,7 +3,8 @@
 **Understand how a field holds together—and turn that understanding into a useful,
 traceable research artifact.**
 
-SoK combines a research skill for Codex with a local Rust CLI. The skill guides an
+SoK combines a model-independent research skill in the [Agent Skills format](https://agentskills.io/specification)
+with a local Rust CLI. The skill guides an
 agent through source review, identification of a field's central ideas and their
 surrounding context, and the design of a report for a particular reader. The CLI
 organizes the resulting records, checks their consistency, and produces reusable
@@ -131,8 +132,8 @@ Older tools may not understand the newly supported relation kinds.
 ## Install or Update
 
 On macOS or Linux, the installer requires Rust with Cargo, `curl`, and `tar`.
-It downloads the selected Git revision, builds the CLI, and installs it with the
-skill under `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge`.
+It downloads the selected Git revision, builds the CLI, and installs the skill and CLI
+together in the Codex skills directory at `${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/perhyper/SoK/main/install.sh | sh
@@ -161,10 +162,10 @@ you want the installed skill and CLI to use the checkout's changes.
 
 ## Start a Research Task
 
-Ask Codex to use the skill with a question, audience, and intended outcome:
+Once your agent has loaded the skill, give it a question, audience, and intended outcome.
 
 ```text
-Use $structure-of-knowledge to investigate computational neuroscience for a
+Use the structure-of-knowledge skill to investigate computational neuroscience for a
 technical reader entering the field. Explain its core ideas and how experimental
 methods, models, and evidence fit around them. Review competing perspectives
 before choosing the report structure, and give me a focused reading path.
@@ -212,7 +213,7 @@ After research and composition, use the resolved `$SOK_CLI` from either setup ab
 | `report.html` | Self-contained reader-facing view of a human report. |
 | Optional core, run, and work files | Typed inputs, reproducibility records, and bounded work exchanges. |
 
-Public headings can follow the field's language and argument. Markers or typed
+Public headings can follow the report's argument. Markers or typed
 inputs identify structured surfaces without imposing a universal table of contents.
 Private planning context and run/work metadata remain outside the public report.
 

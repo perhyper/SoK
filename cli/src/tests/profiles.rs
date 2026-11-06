@@ -72,7 +72,12 @@ fn declarative_profiles_support_korean_signals_and_open_fallback() {
         "sok-discovery-profiles/v1"
     );
 
-    let korean_formal = build_report_scaffold("위상수학", "doctoral learner", "map proofs", 8);
+    let korean_formal = build_report_scaffold(
+        "\u{c704}\u{c0c1}\u{c218}\u{d559}",
+        "doctoral learner",
+        "map proofs",
+        8,
+    );
     assert_contains(
         &korean_formal,
         "| Provisional lens | formal or theory-led candidate |",
@@ -81,11 +86,15 @@ fn declarative_profiles_support_korean_signals_and_open_fallback() {
     assert_contains(&korean_formal, "| Profile locale | ko |");
     assert_contains(
         &korean_formal,
-        "Matched field-name signal \"위상수학\" for locale ko; provisional until source review.",
+        "Matched field-name signal \"\u{c704}\u{c0c1}\u{c218}\u{d559}\" for locale ko; provisional until source review.",
     );
 
-    let korean_interpretive =
-        build_report_scaffold("비교 헌법", "legal scholar", "compare cases", 4);
+    let korean_interpretive = build_report_scaffold(
+        "\u{be44}\u{ad50} \u{d5cc}\u{bc95}",
+        "legal scholar",
+        "compare cases",
+        4,
+    );
     assert_contains(
         &korean_interpretive,
         "| Provisional lens | interpretive or contested candidate |",
@@ -104,7 +113,12 @@ fn declarative_profiles_support_korean_signals_and_open_fallback() {
             until source review.",
     );
 
-    let korean_unmatched = build_report_scaffold("방법론 일반론", "reader", "orient", 0);
+    let korean_unmatched = build_report_scaffold(
+        "\u{bc29}\u{bc95}\u{b860} \u{c77c}\u{bc18}\u{b860}",
+        "reader",
+        "orient",
+        0,
+    );
     assert_contains(
         &korean_unmatched,
         "| Provisional lens | open or mixed candidate |",
@@ -113,13 +127,29 @@ fn declarative_profiles_support_korean_signals_and_open_fallback() {
 }
 
 #[test]
-fn explicit_profile_proposal_and_korean_projection_terms_round_trip() {
+fn korean_input_classes_map_to_projection_roles() {
+    use profiles::{projection_for_element_class, ProjectionRole};
+
+    for (input, expected) in [
+        ("\u{bc29}\u{bc95}\u{b860}", ProjectionRole::Method),
+        (
+            "\u{d45c}\u{d604} \u{baa8}\u{b378}",
+            ProjectionRole::Representation,
+        ),
+        ("\u{b17c}\u{c7c1}", ProjectionRole::Omit),
+    ] {
+        assert_eq!(projection_for_element_class(input).role, expected);
+    }
+}
+
+#[test]
+fn explicit_profile_proposal_and_projection_terms_round_trip() {
     let dir = tempfile::tempdir().unwrap();
     let sources_path = dir.path().join("sources.csv");
     fs::write(
         &sources_path,
         "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
-Open Korean Source,review,fixture:open-korean-source,https://example.test/korean,2026-01-01,open_access,Fixture URL,$0,CC BY,foundation,Supports Korean profile fixture.,Use for profile fixture,Fixture row\n",
+Comparative Law Review,review,fixture:comparative-law-review,https://example.test/law,2026-01-01,open_access,Fixture URL,$0,CC BY,foundation,Supports profile fixture.,Use for profile fixture,Fixture row\n",
     )
     .unwrap();
 
@@ -138,7 +168,7 @@ Open Korean Source,review,fixture:open-korean-source,https://example.test/korean
     assert_eq!(proposal.proposer_type, report::ProfileProposerType::User);
     assert_eq!(proposal.profile_id, "interpretive");
     assert_eq!(proposal.profile_version, "1.0.0");
-    assert_eq!(proposal.locale, "ko");
+    assert_eq!(proposal.locale, "en");
     assert_eq!(proposal.confidence, "0.72");
     assert_contains(
         &proposal.rationale,
@@ -149,12 +179,12 @@ Open Korean Source,review,fixture:open-korean-source,https://example.test/korean
         .report
         .methods
         .iter()
-        .any(|item| item.label == "판례 비교"));
+        .any(|item| item.label == "Case comparison"));
     assert!(exported
         .report
         .representations
         .iter()
-        .any(|item| item.label == "권리 분석 틀"));
+        .any(|item| item.label == "Rights analysis framework"));
     let compatibility_labels = exported
         .report
         .core_ideas
@@ -163,8 +193,8 @@ Open Korean Source,review,fixture:open-korean-source,https://example.test/korean
         .chain(exported.report.representations.iter())
         .map(|item| item.label.as_str())
         .collect::<Vec<_>>();
-    assert!(!compatibility_labels.contains(&"사법 적극주의 논쟁"));
+    assert!(!compatibility_labels.contains(&"Selective case sampling"));
 
     let validation = report::validate_report_value(&serde_json::to_value(&exported).unwrap());
-    assert_eq!(validation.error_count(), 0);
+    assert_eq!(validation.error_count(), 0, "{validation:?}");
 }

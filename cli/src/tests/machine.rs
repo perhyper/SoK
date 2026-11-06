@@ -152,16 +152,19 @@ fn machine_sidecars_merge_with_markdown_without_overwriting_human_items() {
 #[test]
 fn sok_json_blocks_feed_core_models_without_localized_table_headers() {
     let exported = report::export_markdown_report(
-        repo_path("cli/tests/fixtures/input-lanes/korean-sok-json.md"),
+        repo_path("cli/tests/fixtures/input-lanes/typed-knowledge.md"),
         repo_path("cli/tests/fixtures/input-lanes/header-only-sources.csv"),
         None,
         report::ExportStage::Scaffold,
     )
     .unwrap();
 
-    assert_eq!(exported.report.field, "약물정보학");
+    assert_eq!(exported.report.field, "Drug informatics");
     assert_eq!(exported.report.field_elements.len(), 1);
-    assert_eq!(exported.report.field_elements[0].label, "의약품 허가사항");
+    assert_eq!(
+        exported.report.field_elements[0].label,
+        "Approved drug labeling"
+    );
     assert_eq!(exported.report.field_elements[0].role, "core");
     assert!(exported.diagnostics.is_none(), "{:?}", exported.diagnostics);
 }

@@ -11,37 +11,37 @@
       "classification": "formal",
       "terms": [
         { "term": "formal", "locale": "en" },
-        { "term": "형식", "locale": "ko" }
+        { "term": "\ud615\uc2dd", "locale": "ko" }
       ]
     },
     {
       "classification": "well_structured",
       "terms": [
         { "term": "well structured", "locale": "en" },
-        { "term": "잘 구조화", "locale": "ko" }
+        { "term": "\uc798 \uad6c\uc870\ud654", "locale": "ko" }
       ]
     },
     {
       "classification": "ill_structured",
       "terms": [
         { "term": "ill structured", "locale": "en" },
-        { "term": "비구조", "locale": "ko" },
-        { "term": "논쟁적", "locale": "ko" }
+        { "term": "\ube44\uad6c\uc870", "locale": "ko" },
+        { "term": "\ub17c\uc7c1\uc801", "locale": "ko" }
       ]
     },
     {
       "classification": "professional_practice",
       "terms": [
         { "term": "professional practice", "locale": "en" },
-        { "term": "전문 실무", "locale": "ko" }
+        { "term": "\uc804\ubb38 \uc2e4\ubb34", "locale": "ko" }
       ]
     },
     {
       "classification": "instrument_bound",
       "terms": [
         { "term": "instrument bound", "locale": "en" },
-        { "term": "도구 의존", "locale": "ko" },
-        { "term": "장비 의존", "locale": "ko" }
+        { "term": "\ub3c4\uad6c \uc758\uc874", "locale": "ko" },
+        { "term": "\uc7a5\ube44 \uc758\uc874", "locale": "ko" }
       ]
     },
     {
@@ -49,29 +49,29 @@
       "terms": [
         { "term": "infrastructure bound", "locale": "en" },
         { "term": "infrastructure-bound", "locale": "en" },
-        { "term": "인프라 의존", "locale": "ko" },
-        { "term": "기반시설 의존", "locale": "ko" }
+        { "term": "\uc778\ud504\ub77c \uc758\uc874", "locale": "ko" },
+        { "term": "\uae30\ubc18\uc2dc\uc124 \uc758\uc874", "locale": "ko" }
       ]
     },
     {
       "classification": "emerging",
       "terms": [
         { "term": "emerging", "locale": "en" },
-        { "term": "신흥", "locale": "ko" }
+        { "term": "\uc2e0\ud765", "locale": "ko" }
       ]
     },
     {
       "classification": "interdisciplinary",
       "terms": [
         { "term": "interdisciplinary", "locale": "en" },
-        { "term": "학제", "locale": "ko" }
+        { "term": "\ud559\uc81c", "locale": "ko" }
       ]
     },
     {
       "classification": "mixed",
       "terms": [
         { "term": "mixed", "locale": "en" },
-        { "term": "혼합", "locale": "ko" }
+        { "term": "\ud63c\ud569", "locale": "ko" }
       ]
     }
   ],
@@ -83,10 +83,10 @@
         { "term": "representation", "locale": "en" },
         { "term": "model", "locale": "en" },
         { "term": "notation", "locale": "en" },
-        { "term": "표현", "locale": "ko" },
-        { "term": "모형", "locale": "ko" },
-        { "term": "모델", "locale": "ko" },
-        { "term": "표기", "locale": "ko" }
+        { "term": "\ud45c\ud604", "locale": "ko" },
+        { "term": "\ubaa8\ud615", "locale": "ko" },
+        { "term": "\ubaa8\ub378", "locale": "ko" },
+        { "term": "\ud45c\uae30", "locale": "ko" }
       ]
     },
     {
@@ -100,16 +100,16 @@
         { "term": "proof", "locale": "en" },
         { "term": "warrant", "locale": "en" },
         { "term": "evidence standard", "locale": "en" },
-        { "term": "구문", "locale": "ko" },
-        { "term": "방법", "locale": "ko" },
-        { "term": "방법론", "locale": "ko" },
-        { "term": "연산", "locale": "ko" },
-        { "term": "실천", "locale": "ko" },
-        { "term": "실무", "locale": "ko" },
-        { "term": "증명", "locale": "ko" },
-        { "term": "보증", "locale": "ko" },
-        { "term": "근거", "locale": "ko" },
-        { "term": "증거 기준", "locale": "ko" }
+        { "term": "\uad6c\ubb38", "locale": "ko" },
+        { "term": "\ubc29\ubc95", "locale": "ko" },
+        { "term": "\ubc29\ubc95\ub860", "locale": "ko" },
+        { "term": "\uc5f0\uc0b0", "locale": "ko" },
+        { "term": "\uc2e4\ucc9c", "locale": "ko" },
+        { "term": "\uc2e4\ubb34", "locale": "ko" },
+        { "term": "\uc99d\uba85", "locale": "ko" },
+        { "term": "\ubcf4\uc99d", "locale": "ko" },
+        { "term": "\uadfc\uac70", "locale": "ko" },
+        { "term": "\uc99d\uac70 \uae30\uc900", "locale": "ko" }
       ]
     },
     {
@@ -121,12 +121,12 @@
         { "term": "dispute", "locale": "en" },
         { "term": "debate", "locale": "en" },
         { "term": "open problem", "locale": "en" },
-        { "term": "실패 양식", "locale": "ko" },
-        { "term": "한계", "locale": "ko" },
-        { "term": "프런티어", "locale": "ko" },
-        { "term": "쟁점", "locale": "ko" },
-        { "term": "논쟁", "locale": "ko" },
-        { "term": "미해결 문제", "locale": "ko" }
+        { "term": "\uc2e4\ud328 \uc591\uc2dd", "locale": "ko" },
+        { "term": "\ud55c\uacc4", "locale": "ko" },
+        { "term": "\ud504\ub7f0\ud2f0\uc5b4", "locale": "ko" },
+        { "term": "\uc7c1\uc810", "locale": "ko" },
+        { "term": "\ub17c\uc7c1", "locale": "ko" },
+        { "term": "\ubbf8\ud574\uacb0 \ubb38\uc81c", "locale": "ko" }
       ]
     }
   ],
@@ -185,21 +185,21 @@
         { "term": "theoretical computer science", "locale": "en" },
         { "term": "topology", "locale": "en" },
         { "term": "type theory", "locale": "en" },
-        { "term": "대수", "locale": "ko" },
-        { "term": "해석학", "locale": "ko" },
-        { "term": "기하학", "locale": "ko" },
-        { "term": "논리학", "locale": "ko" },
-        { "term": "수학", "locale": "ko" },
-        { "term": "수론", "locale": "ko" },
-        { "term": "최적화", "locale": "ko" },
-        { "term": "확률", "locale": "ko" },
-        { "term": "증명", "locale": "ko" },
-        { "term": "양자 정보", "locale": "ko" },
-        { "term": "집합론", "locale": "ko" },
-        { "term": "통계학", "locale": "ko" },
-        { "term": "이론 컴퓨터 과학", "locale": "ko" },
-        { "term": "위상수학", "locale": "ko" },
-        { "term": "타입 이론", "locale": "ko" }
+        { "term": "\ub300\uc218", "locale": "ko" },
+        { "term": "\ud574\uc11d\ud559", "locale": "ko" },
+        { "term": "\uae30\ud558\ud559", "locale": "ko" },
+        { "term": "\ub17c\ub9ac\ud559", "locale": "ko" },
+        { "term": "\uc218\ud559", "locale": "ko" },
+        { "term": "\uc218\ub860", "locale": "ko" },
+        { "term": "\ucd5c\uc801\ud654", "locale": "ko" },
+        { "term": "\ud655\ub960", "locale": "ko" },
+        { "term": "\uc99d\uba85", "locale": "ko" },
+        { "term": "\uc591\uc790 \uc815\ubcf4", "locale": "ko" },
+        { "term": "\uc9d1\ud569\ub860", "locale": "ko" },
+        { "term": "\ud1b5\uacc4\ud559", "locale": "ko" },
+        { "term": "\uc774\ub860 \ucef4\ud4e8\ud130 \uacfc\ud559", "locale": "ko" },
+        { "term": "\uc704\uc0c1\uc218\ud559", "locale": "ko" },
+        { "term": "\ud0c0\uc785 \uc774\ub860", "locale": "ko" }
       ],
       "lens_prompts": [
         {
@@ -253,23 +253,23 @@
         { "term": "sociology", "locale": "en" },
         { "term": "strategy", "locale": "en" },
         { "term": "urban planning", "locale": "en" },
-        { "term": "인류학", "locale": "ko" },
-        { "term": "헌법", "locale": "ko" },
-        { "term": "비판 이론", "locale": "ko" },
-        { "term": "디자인", "locale": "ko" },
-        { "term": "교육", "locale": "ko" },
-        { "term": "윤리", "locale": "ko" },
-        { "term": "거버넌스", "locale": "ko" },
-        { "term": "역사", "locale": "ko" },
-        { "term": "법학", "locale": "ko" },
-        { "term": "문학", "locale": "ko" },
-        { "term": "경영", "locale": "ko" },
-        { "term": "미디어 연구", "locale": "ko" },
-        { "term": "정책", "locale": "ko" },
-        { "term": "정치", "locale": "ko" },
-        { "term": "사회학", "locale": "ko" },
-        { "term": "전략", "locale": "ko" },
-        { "term": "도시 계획", "locale": "ko" }
+        { "term": "\uc778\ub958\ud559", "locale": "ko" },
+        { "term": "\ud5cc\ubc95", "locale": "ko" },
+        { "term": "\ube44\ud310 \uc774\ub860", "locale": "ko" },
+        { "term": "\ub514\uc790\uc778", "locale": "ko" },
+        { "term": "\uad50\uc721", "locale": "ko" },
+        { "term": "\uc724\ub9ac", "locale": "ko" },
+        { "term": "\uac70\ubc84\ub10c\uc2a4", "locale": "ko" },
+        { "term": "\uc5ed\uc0ac", "locale": "ko" },
+        { "term": "\ubc95\ud559", "locale": "ko" },
+        { "term": "\ubb38\ud559", "locale": "ko" },
+        { "term": "\uacbd\uc601", "locale": "ko" },
+        { "term": "\ubbf8\ub514\uc5b4 \uc5f0\uad6c", "locale": "ko" },
+        { "term": "\uc815\ucc45", "locale": "ko" },
+        { "term": "\uc815\uce58", "locale": "ko" },
+        { "term": "\uc0ac\ud68c\ud559", "locale": "ko" },
+        { "term": "\uc804\ub7b5", "locale": "ko" },
+        { "term": "\ub3c4\uc2dc \uacc4\ud68d", "locale": "ko" }
       ],
       "lens_prompts": [
         {
@@ -325,27 +325,27 @@
         { "term": "remote sensing", "locale": "en" },
         { "term": "seismology", "locale": "en" },
         { "term": "synchrotron", "locale": "en" },
-        { "term": "가속기", "locale": "ko" },
-        { "term": "천문학", "locale": "ko" },
-        { "term": "천체물리학", "locale": "ko" },
-        { "term": "생물정보학", "locale": "ko" },
-        { "term": "기후", "locale": "ko" },
-        { "term": "충돌기", "locale": "ko" },
-        { "term": "지구 관측", "locale": "ko" },
-        { "term": "전염병학", "locale": "ko" },
-        { "term": "역학조사", "locale": "ko" },
-        { "term": "유전체학", "locale": "ko" },
-        { "term": "중력파", "locale": "ko" },
-        { "term": "고에너지 물리", "locale": "ko" },
-        { "term": "재료 특성화", "locale": "ko" },
-        { "term": "대사체학", "locale": "ko" },
-        { "term": "신경과학", "locale": "ko" },
-        { "term": "해양학", "locale": "ko" },
-        { "term": "입자 물리", "locale": "ko" },
-        { "term": "단백질체학", "locale": "ko" },
-        { "term": "원격탐사", "locale": "ko" },
-        { "term": "지진학", "locale": "ko" },
-        { "term": "싱크로트론", "locale": "ko" }
+        { "term": "\uac00\uc18d\uae30", "locale": "ko" },
+        { "term": "\ucc9c\ubb38\ud559", "locale": "ko" },
+        { "term": "\ucc9c\uccb4\ubb3c\ub9ac\ud559", "locale": "ko" },
+        { "term": "\uc0dd\ubb3c\uc815\ubcf4\ud559", "locale": "ko" },
+        { "term": "\uae30\ud6c4", "locale": "ko" },
+        { "term": "\ucda9\ub3cc\uae30", "locale": "ko" },
+        { "term": "\uc9c0\uad6c \uad00\uce21", "locale": "ko" },
+        { "term": "\uc804\uc5fc\ubcd1\ud559", "locale": "ko" },
+        { "term": "\uc5ed\ud559\uc870\uc0ac", "locale": "ko" },
+        { "term": "\uc720\uc804\uccb4\ud559", "locale": "ko" },
+        { "term": "\uc911\ub825\ud30c", "locale": "ko" },
+        { "term": "\uace0\uc5d0\ub108\uc9c0 \ubb3c\ub9ac", "locale": "ko" },
+        { "term": "\uc7ac\ub8cc \ud2b9\uc131\ud654", "locale": "ko" },
+        { "term": "\ub300\uc0ac\uccb4\ud559", "locale": "ko" },
+        { "term": "\uc2e0\uacbd\uacfc\ud559", "locale": "ko" },
+        { "term": "\ud574\uc591\ud559", "locale": "ko" },
+        { "term": "\uc785\uc790 \ubb3c\ub9ac", "locale": "ko" },
+        { "term": "\ub2e8\ubc31\uc9c8\uccb4\ud559", "locale": "ko" },
+        { "term": "\uc6d0\uaca9\ud0d0\uc0ac", "locale": "ko" },
+        { "term": "\uc9c0\uc9c4\ud559", "locale": "ko" },
+        { "term": "\uc2f1\ud06c\ub85c\ud2b8\ub860", "locale": "ko" }
       ],
       "lens_prompts": [
         {

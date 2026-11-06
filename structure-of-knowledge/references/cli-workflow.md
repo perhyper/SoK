@@ -13,7 +13,9 @@ SOK_CLI="$PWD/cli/target/release/sok"
 "$SOK_CLI" --version
 ```
 
-Otherwise use the installed skill:
+Otherwise locate the directory containing the installed skill's `SKILL.md` and
+use its `bin/sok` executable (`bin/sok.exe` on Windows). For the default Codex
+installation, run the following command to verify the executable.
 
 ```bash
 SOK_CLI="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok"
@@ -21,10 +23,7 @@ SOK_CLI="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok"
 ```
 
 Require the version suffix `(rust)`. If verification fails, report the limitation
-instead of using an unverified or stale executable. Installed skills contain only
-`bin/sok`, not Cargo sources. On Windows use
-`%CODEX_HOME%\skills\structure-of-knowledge\bin\sok.exe`, or the corresponding
-`%USERPROFILE%\.codex` path when `CODEX_HOME` is unset.
+instead of using an unverified or stale executable.
 
 Before an unfamiliar command, run `"$SOK_CLI" <command> --help`; for ingestion,
 use `"$SOK_CLI" ingest last --help`. Follow the displayed flags rather than guessing.

@@ -29,7 +29,7 @@ Keep each user's sources, prompts, reports, and derived examples in their privat
 ## Workflow
 
 1. **Frame the request.** Establish field, audience, entry point, depth, goal,
-   time budget, language, and format. Decompose broad fields into shared
+   time budget, and format. Decompose broad fields into shared
    foundations and divergent paths. Ask one concise question only when ambiguity
    would materially change scope or architecture; otherwise state assumptions.
    Propose a revisable domain profile: formal, interpretive, empirical,

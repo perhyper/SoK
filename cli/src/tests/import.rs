@@ -415,42 +415,46 @@ fn export_json_resolves_unicode_aliases_without_losing_ascii_safe_ids() {
     let dir = tempfile::tempdir().unwrap();
     let report_path = dir.path().join("unicode-report.md");
     let sources_path = dir.path().join("sources.csv");
+    let decomposed_title = "\u{110b}\u{1163}\u{11bc}\u{110c}\u{1161} \u{1109}\u{1166}\u{11ab}\u{1109}\u{1175}\u{11bc} \u{110b}\u{1175}\u{11b8}\u{1106}\u{116e}\u{11ab}";
+    let title = "\u{c591}\u{c790} \u{c13c}\u{c2f1} \u{c785}\u{bb38}";
+    let signal_label = "\u{c2e0}\u{d638} \u{baa8}\u{b378}";
+    let estimator_label = "\u{cd94}\u{c815}\u{ae30}";
     fs::write(
         &sources_path,
-        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
-양자 센싱 입문,review_article,doi:10.0000/ko,https://example.test/ko,2025-01-01,open_access,Official URL,$0,CC BY,foundation,한국어 source alias resolution fixture.,Use in module 1,Reviewed metadata.\n",
+        format!("title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+{title},review_article,doi:10.0000/ko,https://example.test/ko,2025-01-01,open_access,Official URL,$0,CC BY,foundation,Unicode source alias resolution fixture.,Use in module 1,Reviewed metadata.\n"),
     )
     .unwrap();
     fs::write(
         &report_path,
-        r#"# Structure of Knowledge: 양자 센싱
+        format!(r#"# Structure of Knowledge: Quantum sensing
 
 ## Report Architecture
 
 | Item | Decision |
 |---|---|
-| Executive thesis | 양자 센싱은 신호 모델과 추정기의 관계로 설명된다. |
+| Executive thesis | Signal models guide estimator selection. |
 | Chosen organizing form | A relation-centered path. |
 | Architecture rationale | The report follows the relation under test. |
 | Rejected alternatives and why | A glossary-only form would hide the relation. |
 
 ## Domain Decomposition
 
-양자 센싱은 신호 모델과 추정기를 함께 다룬다.
+Quantum sensing uses signal models and estimators.
 
 ## Field Element Inventory
 
 | Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
 |---|---|---|---|---|---|---|
-| Concept | 신호 모델 | 관측 신호를 수학적으로 표현한다. | core | 추정기가 이 모델을 사용한다. | 양자 센싱 입문 | high |
-| Method | 추정기 | 신호 모델에서 파라미터를 추정한다. | surrounding | 신호 모델을 적용한다. | 양자 센싱 입문 | high |
+| Concept | {signal_label} | A mathematical description of an observed signal. | core | An estimator uses this model. | {decomposed_title} | high |
+| Method | {estimator_label} | Estimates parameters from a signal model. | surrounding | Applies the signal model. | {title} | high |
 
 ## Relations
 
 | Relation ID | Relation kind | From type | From reference | To type | To reference | Rationale |
 |---|---|---|---|---|---|---|
-| rel-korean-reference-1111111111 | uses_method | field_element | 추정기 | field_element | 신호 모델 | Korean labels should resolve through Unicode-aware aliases. |
-"#,
+| rel-korean-reference-1111111111 | uses_method | field_element | {estimator_label} | field_element | {signal_label} | Korean labels should resolve through Unicode-aware aliases. |
+"#),
     )
     .unwrap();
 
@@ -473,7 +477,7 @@ fn export_json_resolves_unicode_aliases_without_losing_ascii_safe_ids() {
         .report
         .field_elements
         .iter()
-        .find(|element| element.label == "신호 모델")
+        .find(|element| element.label == signal_label)
         .unwrap();
     assert!(signal_model.id.starts_with("element-item-"));
     validate_stable_id(&signal_model.id).unwrap();
@@ -494,23 +498,25 @@ fn export_json_reports_ambiguous_and_dangling_unicode_source_aliases() {
     let dir = tempfile::tempdir().unwrap();
     let report_path = dir.path().join("ambiguous-source-report.md");
     let sources_path = dir.path().join("sources.csv");
+    let duplicate = "\u{acf5}\u{d1b5} \u{c81c}\u{baa9}";
+    let missing = "\u{c5c6}\u{b294} \u{c790}\u{b8cc}";
     fs::write(
         &sources_path,
-        "title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
-공통 제목,review_article,doi:10.0000/a,https://example.test/a,2025-01-01,open_access,Official URL,$0,CC BY,foundation,First duplicate alias.,Use in module 1,Reviewed metadata.\n\
-공통 제목,review_article,doi:10.0000/b,https://example.test/b,2025-01-02,open_access,Official URL,$0,CC BY,foundation,Second duplicate alias.,Use in module 1,Reviewed metadata.\n",
+        format!("title,type,identifier,url,date,access_status,access_route,budget_estimate,license,layer,why_it_matters,use_in_curriculum,notes\n\
+{duplicate},review_article,doi:10.0000/a,https://example.test/a,2025-01-01,open_access,Official URL,$0,CC BY,foundation,First duplicate alias.,Use in module 1,Reviewed metadata.\n\
+{duplicate},review_article,doi:10.0000/b,https://example.test/b,2025-01-02,open_access,Official URL,$0,CC BY,foundation,Second duplicate alias.,Use in module 1,Reviewed metadata.\n"),
     )
     .unwrap();
     fs::write(
         &report_path,
-        r#"# Structure of Knowledge: 중복 alias
+        format!(r#"# Structure of Knowledge: Duplicate aliases
 
 ## Field Element Inventory
 
 | Element class | Observed element | Actual form in this field | Role | Load-bearing relations | Source IDs | Confidence |
 |---|---|---|---|---|---|---|
-| Concept | 공통 개념 | 중복 source alias와 dangling alias를 검사한다. | core | source resolution must not guess. | 공통 제목; 없는 자료 | high |
-"#,
+| Concept | Shared concept | Tests duplicate and dangling source aliases. | core | source resolution must not guess. | {duplicate}; {missing} | high |
+"#),
     )
     .unwrap();
 
@@ -528,14 +534,14 @@ fn export_json_reports_ambiguous_and_dangling_unicode_source_aliases() {
         .find(|check| check.check_id == report::CHECK_EXPORT_AMBIGUOUS_REFERENCE)
         .unwrap();
     assert_eq!(ambiguous.severity, report::DiagnosticSeverity::Error);
-    assert_contains(&ambiguous.message, "공통 제목");
+    assert_contains(&ambiguous.message, duplicate);
     assert_contains(&ambiguous.message, "src-");
     let dangling = diagnostics
         .checks
         .iter()
         .find(|check| check.check_id == report::CHECK_EXPORT_UNRESOLVED_REFERENCE)
         .unwrap();
-    assert_contains(&dangling.message, "없는 자료");
+    assert_contains(&dangling.message, missing);
     assert!(exported.report.field_elements[0].source_ids.is_empty());
     let validation = report::validate_report_value(&serde_json::to_value(&exported).unwrap());
     assert_validation_check(

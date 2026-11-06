@@ -235,8 +235,8 @@
         "identity_checks": [
           {
             "prefix": "element",
-            "parts": ["양자 센싱"],
-            "expected_normalized_identity": "양자 센싱",
+            "parts": ["\uc591\uc790 \uc13c\uc2f1"],
+            "expected_normalized_identity": "\uc591\uc790 \uc13c\uc2f1",
             "require_non_ascii_retention": true
           },
           {

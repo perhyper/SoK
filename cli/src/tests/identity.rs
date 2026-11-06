@@ -37,25 +37,28 @@ fn content_ids_are_content_derived_and_order_independent() {
 
 #[test]
 fn content_ids_are_unicode_safe_and_identity_hashes_use_normalized_utf8() {
-    let korean = report::content_id_identity("element", &["양자 센싱"]);
-    let korean_nfd = report::content_id("element", &["양자 센싱"]);
+    let korean = report::content_id_identity("element", &["\u{c591}\u{c790} \u{c13c}\u{c2f1}"]);
+    let korean_nfd = report::content_id("element", &["\u{110b}\u{1163}\u{11bc}\u{110c}\u{1161} \u{1109}\u{1166}\u{11ab}\u{1109}\u{1175}\u{11bc}"]);
     assert_eq!(korean.stable_id, korean_nfd);
     assert_eq!(korean.display_slug, "item");
-    assert_eq!(korean.normalized_identity, "양자 센싱");
+    assert_eq!(
+        korean.normalized_identity,
+        "\u{c591}\u{c790} \u{c13c}\u{c2f1}"
+    );
     validate_stable_id(&korean.stable_id).unwrap();
 
-    let composed = report::content_id("concept", &["가"]);
-    let decomposed = report::content_id("concept", &["가"]);
+    let composed = report::content_id("concept", &["\u{ac00}"]);
+    let decomposed = report::content_id("concept", &["\u{1100}\u{1161}"]);
     assert_eq!(composed, decomposed);
 
     let greek_upper = report::content_id("concept", &["Μέθοδος"]);
     let greek_lower = report::content_id("concept", &["μέθοδος"]);
     assert_eq!(greek_upper, greek_lower);
 
-    let korean_concept = report::content_id("concept", &["양자 센싱"]);
+    let korean_concept = report::content_id("concept", &["\u{c591}\u{c790} \u{c13c}\u{c2f1}"]);
     let cjk = report::content_id("concept", &["量子センシング"]);
     let greek = report::content_id("concept", &["μέθοδος"]);
-    let mixed = report::content_id("concept", &["Graph 그래프"]);
+    let mixed = report::content_id("concept", &["Graph \u{adf8}\u{b798}\u{d504}"]);
     let ids = BTreeSet::from([korean_concept, cjk, greek, mixed]);
     assert_eq!(ids.len(), 4);
     assert!(ids.iter().all(|id| validate_stable_id(id).is_ok()));
@@ -104,7 +107,7 @@ fn migrate_ids_writes_ordered_maps_for_v1_and_v2_without_mutating_input() {
     let v2_output = dir.path().join("unicode-v2-id-map.json");
     let mut v2 = current_human_report_value();
     v2["report"]["field_elements"][0]["id"] = json!("element-item-4a33eacd5f");
-    v2["report"]["field_elements"][0]["label"] = json!("양자 센싱");
+    v2["report"]["field_elements"][0]["label"] = json!("\u{c591}\u{c790} \u{c13c}\u{c2f1}");
     report::write_json_file(&v2_input, &v2).unwrap();
     let before = fs::read_to_string(&v2_input).unwrap();
 
@@ -144,7 +147,10 @@ fn migrate_ids_writes_ordered_maps_for_v1_and_v2_without_mutating_input() {
     assert!(unicode_entry.changed);
     assert_ne!(unicode_entry.old_id, unicode_entry.new_id);
     assert!(unicode_entry.new_id.starts_with("element-item-"));
-    assert_eq!(unicode_entry.normalized_identity, "양자 센싱");
+    assert_eq!(
+        unicode_entry.normalized_identity,
+        "\u{c591}\u{c790} \u{c13c}\u{c2f1}"
+    );
     validate_stable_id(&unicode_entry.new_id).unwrap();
 
     let v1_input = dir.path().join("legacy-v1-report.json");

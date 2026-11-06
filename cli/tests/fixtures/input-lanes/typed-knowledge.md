@@ -1,22 +1,22 @@
-# Structure of Knowledge: 약물정보학
+# Structure of Knowledge: Drug informatics
 
-## 기계 구조 입력
+## Structured input
 
 ```sok-json sok-knowledge/v1
 {
   "schema_version": "sok-knowledge/v1",
-  "field": "약물정보학",
+  "field": "Drug informatics",
   "elements": [
     {
       "id": "element-drug-label-1111111111",
-      "element_class": "규제 문서",
+      "element_class": "Regulatory document",
       "label": {
-        "text": "의약품 허가사항",
-        "locale": "ko"
+        "text": "Approved drug labeling",
+        "locale": "en"
       },
       "actual_form": {
-        "text": "효능, 용법, 금기, 상호작용을 담은 검토된 문서",
-        "locale": "ko"
+        "text": "A reviewed document covering indications, dosage and administration, contraindications, and drug interactions",
+        "locale": "en"
       },
       "semantic_roles": ["core", "evidence"],
       "role_note": "core",
