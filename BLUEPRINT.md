@@ -1,101 +1,71 @@
-# SoK Blueprint
+# Structure of Knowledge
 
-## Product Definition
+The educational aim of Structure of Knowledge (SoK) is to help someone entering a
+field understand what its central ideas explain, how its practitioners reach a
+judgment, and what gives them reason to change their minds. A learner begins to
+share in the knowledge of a discipline when they can bring its ways of thinking
+to a question they have never encountered.
 
-Structure of Knowledge, or SoK, is a model-independent agent skill and research harness.
-It turns a learning or research goal into a bounded, evidence-grounded map of a field and
-identifies the field's actual knowledge-bearing elements, their forms and warrants,
-load-bearing relations, source roles, and a reader-fit artifact architecture.
+## What holds a field together?
 
-SoK produces a reusable intermediate scaffold rather than a persistent knowledge base.
-Other agents and tools can adapt that scaffold into a human-readable report, curriculum,
-briefing, textbook plan, corpus plan, or interactive view.
+Jerome Bruner argued that an idea is worth teaching in part because of what else
+it helps a learner understand. Grasping a relationship makes it possible to
+recognize it in a new problem. His *spiral curriculum* gives learners an early
+encounter with a fundamental idea and returns to it when they can ask more
+demanding questions. [Bruner, 1960, chapters 2–3][bruner]
 
-## Foundational Idea
+Consider corroboration in history. A learner may first see why agreement between
+two witnesses lends weight to an account. Later, they discover that one witness
+copied the other. The idea is familiar, but the judgment has deepened. What
+matters now is how many independent accounts the evidence represents.
 
-SoK's scaffold idea is inspired by Jerome Bruner and the structure-of-knowledge
-curriculum tradition: decompose a domain into the concepts, representations, methods,
-and warrants that make it intelligible, then recompose that structure into a scaffold
-for learning, research, and downstream generation.
+## What knowledge should a learner have access to?
 
-## Current Architecture
+Writing in the sociology of education, Michael Young grounds curriculum in a
+learner's entitlement to specialized knowledge. A person's everyday experience
+offers a place to begin. Education can also give them concepts and explanations
+they would have little occasion to encounter there. SoK takes this as a reason
+to keep difficult ideas within reach of newcomers. An introduction can use
+familiar language while preserving the distinction on which an explanation
+depends. [Young, 2013][young]
 
-- `structure-of-knowledge/SKILL.md` : agent workflow, trigger conditions, and quality
-  gates.
-- `structure-of-knowledge/references/` : research, output, and collaboration protocols
-  loaded as needed.
-- `cli/src/` : Rust CLI for scaffolds, handoffs, source manifests, evidence ingestion,
-  validation, and rendering.
-- `specs/sok-harness.yaml` : implementation-neutral stage and command contract.
-- `specs/sok-report.schema.json` : public report compatibility contract for
-  `sok-report/v1` and `sok-report/v2` .
-- `specs/sok-knowledge.schema.json` , `specs/sok-evidence.schema.json` , and
-  `specs/sok-pedagogy.schema.json` : typed core sidecar contracts.
-- `specs/sok-run.schema.json` and `specs/sok-work-*.schema.json` : private run
-  provenance and bounded WorkOrder/WorkResult sidecar contracts.
-- `cli/tests/fixtures/` : compact bounded inputs and JSON validation fixtures.
+## Who decides what is worth teaching?
 
-Markdown is an authoring input. `sok-report.json` is the structured source of truth for
-validation and downstream tooling. HTML is a self-contained public view rendered only
-from validated `human_report` JSON.
+Ralph Tyler asked educators to make the purpose of a curriculum explicit. A
+choice of content or learning experience can then be judged by what it enables
+the learner to do. Joseph Schwab brought a further question into view. Whose
+experience informs that choice? He gave the subject matter, the learner, the
+teacher, and their social setting equal standing in curriculum deliberation.
+For SoK, these traditions explain how people can share an account of what matters
+in a discipline and still have good reasons to teach it differently.
+[Tyler, 1949, chapters 1–4][tyler] · [Schwab, 1973, pp. 508–509][schwab]
 
-New human-report exports use `sok-report/v2` and preserve reviewed inventory rows in
-`report.field_elements` . The older `core_ideas` , `methods` , and `representations`
-arrays are compatibility projections rather than a universal ontology; v1 remains
-readable for legacy artifacts.
+## What counts as understanding?
 
-Typed core packages, run manifests, and WorkOrder/WorkResult files are additive
-sidecars. They can be removed without changing the public report shape; `migrate-ids`
-provides a reviewable map when non-ASCII IDs need explicit migration.
+John Biggs's *constructive alignment* connects an educational aim with the work
+through which learners develop and demonstrate it. If the aim is historical
+judgment, a learner needs an occasion to weigh sources and explain a conclusion.
+Discovering that two witnesses share a source and revising a claim accordingly
+would show precisely this kind of understanding. [Biggs, 1996][biggs]
 
-The discovery profile file stores shared source-role probes and projection keywords
-once at the top level; individual profiles retain their signals, lenses, and questions.
+Avishag Reisman studied a curriculum built around reading historical documents
+in urban high schools. In a six-month quasi-experimental study, participating
+students outperformed comparison students in both historical thinking and factual
+knowledge. In those classrooms, students gained factual knowledge while learning
+to evaluate historical evidence. [Reisman, 2012][reisman]
 
-## Product Boundaries
+## References
 
-- Keep agent-facing scaffolds separate from human-facing reports.
-- Keep every run bounded to its explicit Markdown, source manifest, and evidence files.
-- Do not create a daemon, database, cross-run evidence ledger, or persistent wiki.
-  Bounded, rebuildable graph snapshots may connect explicitly reviewed report
-  identities; source reports remain authoritative. See `specs/graph-interchange.md`.
-- Treat cataloged sources as discovery metadata until evidence has been reviewed or
-  verified.
-- Select visual views only when structured relations justify them; no visualization
-  syntax or graph family is mandatory.
-- Preserve technical and evidentiary integrity while allowing downstream tools to adapt
-  depth, tone, and format for a target audience.
+- Bruner, J. S. (1960). [*The Process of Education*][bruner]. Harvard University Press. Chapters 2–3. Link to the revised edition.
+- Tyler, R. W. (1949). [*Basic Principles of Curriculum and Instruction*][tyler]. University of Chicago Press. Chapters 1–4.
+- Schwab, J. J. (1973). [The Practical 3: Translation into Curriculum][schwab]. *The School Review*, 81(4), 501–522.
+- Biggs, J. (1996). [Enhancing teaching through constructive alignment][biggs]. *Higher Education*, 32, 347–364.
+- Reisman, A. (2012). [Reading Like a Historian: A Document-Based History Curriculum Intervention in Urban High Schools][reisman]. *Cognition and Instruction*, 30(1), 86–112.
+- Young, M. (2013). [Overcoming the crisis in curriculum theory: a knowledge-based approach][young]. *Journal of Curriculum Studies*, 45(2), 101–118.
 
-## Current Workflow
-
-1. Frame the field, audience, goal, scope, and provisional domain profile.
-2. Build a source-role probe and record access metadata.
-3. Extract field-native elements, warrants, and load-bearing relations; add frontier
-   questions only when the goal requires them.
-4. Compare plausible organizing forms and choose a source-grounded report architecture.
-5. Generate an internal scaffold or complete a field-specific ordered human report.
-6. Ingest bounded source metadata into evidence JSONL when useful.
-7. Lint the selected lane and export `sok-report.json` .
-8. Validate final-report reliability gates and render HTML.
-9. When needed, score saved conformance fixtures with `sok eval conformance` to verify
-   contracts without model or network calls.
-
-## Distribution
-
-- Development checkout: run the CLI with Cargo or `make build` .
-- Local Codex installation: run `make install` .
-- User testing: `install.sh` downloads a selected Git ref, builds the Rust CLI locally,
-  and installs it with the portable skill sources.
-- Planned Codex integration: package the shared skill and tested CLI assets with a
-  plugin manifest and marketplace entry.
-
-## Development Priorities
-
-- Increase field-structure inference reliability without turning provisional lenses into
-  report templates.
-- Improve tool-use guidance for agents executing the skill.
-- Evaluate visualization choices against report relations, audience tasks, and
-  information density.
-- Keep the public report concise while increasing the specificity and weight of each
-  included claim.
-- Add plugin packaging and installation tests without weakening the bounded local
-  workflow.
+[bruner]: https://www.jstor.org/stable/j.ctvk12qst
+[tyler]: https://press.uchicago.edu/ucp/books/book/chicago/B/bo17239506.html
+[schwab]: https://doi.org/10.1086/443100
+[biggs]: https://doi.org/10.1007/BF00138871
+[reisman]: https://doi.org/10.1080/07370008.2011.634081
+[young]: https://doi.org/10.1080/00220272.2013.764505
