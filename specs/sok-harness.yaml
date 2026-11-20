@@ -11,6 +11,10 @@ target_learner:
     - domain_precision_is_preserved
     - needs_field_structure_not_a_flat_topic_list
 stages:
+  - id: scaffold
+    objective: Create or reopen the scaffold before synthesis for every SoK invocation, including short and non-report tasks.
+    required_artifacts:
+      - working_scaffold
   - id: frame
     objective: Define field, learner, goal, scope, and a provisional domain profile.
     required_artifacts:
@@ -29,7 +33,13 @@ stages:
     required_artifacts:
       - field_element_inventory
       - load_bearing_relations
+  - id: domain_judgment
+    objective: Populate and review the scaffold's domain profile, warrants, structure, evidence limits, and implications before higher-level synthesis.
+    required_artifacts:
+      - populated_domain_judgment_layer
+      - evidence_grounded_gate_outcome
   - id: architecture_design
+    precondition: populated_domain_judgment_reviewed
     objective: Compare organizing forms and choose a source-grounded, reader-fit narrative architecture.
     required_artifacts:
       - organizing_form_comparison
@@ -52,9 +62,12 @@ stages:
     required_artifacts:
       - narrative_report
       - sources
+      - used_scaffold_companion
     conditional_artifacts:
       visual_package: chosen_architecture_benefits_from_relation_backed_visuals
 quality_gates:
+  - id: scaffold_grounded_synthesis
+    rule: Every SoK invocation creates or reopens a scaffold, populates and checks its domain judgment from reviewed sources and field structure before higher-level synthesis, and delivers that used scaffold with the requested result. Insufficient evidence limits conclusions to explicitly preliminary findings. This semantic gate requires agent review; CLI validation does not prove reasoning order.
   - id: not_topic_list
     rule: Output explains load-bearing relations, its chosen organizing form, and inquiry methods; hierarchy, network structure, or progression appear only when they fit the field and goal.
   - id: technical_integrity
@@ -81,7 +94,7 @@ quality_gates:
   - id: curriculum_not_boundary
     rule: Existing curricula and syllabi count as evidence of stabilized pedagogical consensus, not as the boundary of the field.
 outputs:
-  internal_scaffold_markdown: optional_agent_artifact
+  used_scaffold: required_companion_or_labeled_appendix_inline_allowed_for_chat_only
   human_report_markdown: required_for_final_report_lane
   sources_manifest: required
   evidence_jsonl: optional_until_final_claim_support
@@ -130,7 +143,7 @@ agent_cli:
     access_status values are metadata-only unless an explicit downloader flag
     permits them; flags do not grant legal access to restricted content.
   commands:
-    init: Create an agent workspace with brief, tasks, report scaffold, source manifest, downloads, notes, and logs.
+    init: Create an agent workspace with brief, tasks, separate scaffold.md, compatible report.md starting canvas, source manifest, downloads, notes, and logs.
     brief: Generate a standalone agent handoff brief.
     scaffold: Generate a source-review and report-architecture discovery canvas with a provisional field-name lens.
     handoff-report: Wrap a scaffold in next-agent instructions for completing a polished human-reader report.
@@ -148,7 +161,7 @@ agent_cli:
     specificity: Generate a concreteness checklist for underspecified domain tasks.
   workflow_lanes:
     scaffold:
-      intent: Internal agent scaffold; not a finished report.
+      intent: Working scaffold whose populated domain judgment and evidence record are delivered as a labeled companion, not a finished report.
       commands:
         - source-template
         - ingest last
@@ -176,6 +189,7 @@ agent_cli:
       conditional_inputs:
         reviewed evidence JSONL: report_contains_claims_requiring_reviewed_support
       outputs:
+        - scaffold.md as the used companion
         - sok-report.json
       conditional_outputs:
         report.html: requested_output_includes_html

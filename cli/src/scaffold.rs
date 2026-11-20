@@ -170,6 +170,7 @@ Generated: {generated}
 ## Purpose
 
 Use the scaffold below as internal planning material for a next agent. Complete it into a polished, source-grounded deep research report for a human reader.
+Preserve and update the scaffold separately; deliver its substantive domain judgment and evidence record as a labeled companion to the requested report.
 
 ## Internal Context
 
@@ -191,6 +192,7 @@ Do not render this internal context as a front-matter table in the final report.
 ## Human-Reader Report Contract
 
 1. Review sources before confirming the report's shape. Treat the scaffold's profile, lenses, and any architecture decision as hypotheses to preserve, revise, or reject against the evidence.
+   Populate and check the scaffold's domain judgment layer before higher-level synthesis or evaluation. A field-name hint or blank canvas does not pass; insufficient evidence permits only explicitly preliminary conclusions.
 2. Inventory the field-native elements that actually carry its knowledge: questions, objects, cases, representations, methods, warrants, institutions, instruments, data, disputes, or other forms found in the sources.
 3. Identify the few load-bearing relations among those elements and distinguish core ideas from supporting context.
 4. Compare plausible organizing forms against those findings and the reader's goal, then confirm or revise the scaffold's decision: for example a dependency graph, causal system, process, multiscale model, debate network, case constellation, genealogy, chronology, or a justified hybrid.
@@ -268,6 +270,20 @@ Source roles are diagnostic, not quotas. Decide each role after the first source
 |---|---|---|---|
 {source_roles}
 
+## Domain Judgment Layer
+
+Populate this from the reviewed sources and field-element inventory before higher-level synthesis, evaluation, recommendations, or architecture selection. Record concise findings and evidence-based decisions, not private reasoning. Update material revisions as evidence changes. A field-name hint or empty template does not pass this gate.
+
+| Judgment | Finding and evidence references |
+|---|---|
+| Reviewed domain profile and scope |  |
+| Warrant standards |  |
+| Core elements and load-bearing relations |  |
+| Source coverage and evidence limits |  |
+| Retained or revised lenses and reasons |  |
+| Implications for the requested synthesis |  |
+| Gate outcome and limits on conclusions |  |
+
 ## Organizing Form Comparison
 
 Add at least two plausible forms suggested by the reviewed element inventory. Compare their explanatory gain and distortion risk; invent a field-specific or hybrid form when standard graph, process, case, debate, taxonomy, scale, or historical forms do not fit.
@@ -302,6 +318,7 @@ Claims, relations, reading ladders, curricula, and visual declarations are machi
 - Profile proposal metadata is advisory until source review revises or confirms it.
 - A completed run identifies core and surrounding elements, compares organizing forms, and records why the chosen report architecture fits.
 - Existing curricula are evidence of pedagogical consensus, not the boundary or automatic table of contents of the field.
+- Preserve this populated scaffold separately from the final report and deliver it as a labeled companion. Remove raw prompts, unnecessary personal context, private paths, and execution diagnostics while retaining domain judgments, evidence references, and material revisions.
 "#,
         classification_hint = profile.classification_hint.as_str(),
         why_this_hint = profile.why_this_hint.as_str(),
@@ -318,6 +335,7 @@ Claims, relations, reading ladders, curricula, and visual declarations are machi
 
 pub(crate) fn mode_deliverables(mode: &str) -> Vec<&'static str> {
     let mut common = vec![
+        "Used scaffold with a reviewed domain judgment layer, delivered as a labeled companion",
         "Field boundary and scoped assumptions",
         "Field-native element inventory with actual forms",
         "Load-bearing relations and core-versus-surrounding distinction",
@@ -392,6 +410,8 @@ Requested output format: {output_format}
 
 ## Operating Rules
 
+- Create or reopen the scaffold before synthesis. Populate and check its domain judgment layer from reviewed sources and field structure before higher-level synthesis, evaluation, or architecture selection.
+- Deliver the used, updated scaffold alongside the requested result under the skill's output contract.
 - Preserve domain precision while calibrating explanations, sequence, representations, and tasks to the intended audience.
 - Keep the domain profile provisional until source review establishes the field's actual knowledge-bearing forms.
 - If the field is broad, decompose it into subfields and state the scoped path.
@@ -406,16 +426,17 @@ Requested output format: {output_format}
 
 ## Suggested Execution Stages
 
-1. Frame: define field, learner, scope, assumptions, and a provisional domain profile.
+1. Frame: create or reopen the scaffold; define field, learner, scope, assumptions, and a provisional domain profile.
 2. Decompose: identify subfields, shared foundations, divergent methods, and path options.
 3. Source: probe the boundary, foundation, warrant, and any goal-dependent evidence roles without imposing a fixed quota.
 4. Extract: identify the questions and field-native elements that carry knowledge, their actual forms, and their load-bearing relations.
-5. Design: compare plausible organizing forms, choose the reader-fit architecture, and add only the capability modules the goal requires.
+5. Design: check the populated domain judgment layer, compare plausible organizing forms, choose the reader-fit architecture, and add only the capability modules the goal requires.
 6. Verify: check currentness, access metadata, domain fit, and whether the result is more than a topic list.
 
 ## Handoff Files
 
 - sources.csv: add candidate sources with access metadata.
+- scaffold.md: maintain the domain judgment and evidence record; deliver the used scaffold as a labeled companion.
 - report.md: fill with the SoK report or artifact blueprint.
 - tasks.md: use as an agent work queue.
 - downloads/: place only legally downloadable open/free/user-provided materials.
@@ -436,6 +457,7 @@ pub fn build_tasks(mode: &str) -> String {
 ## Setup
 
 - [ ] Confirm field, learner, goal, and scope.
+- [ ] Create or reopen scaffold.md before synthesis and preserve it separately from report.md.
 - [ ] Record a provisional discovery lens without choosing the final report or visual form.
 - [ ] Decide whether broad-field decomposition is required.
 
@@ -452,6 +474,8 @@ pub fn build_tasks(mode: &str) -> String {
 
 ## Final Audit
 
+- [ ] The populated scaffold's domain judgment was checked before higher-level synthesis and updated after material evidence changes.
+- [ ] The used scaffold is included with the requested result as a labeled companion or appendix, with private execution context removed.
 - [ ] Source access metadata is complete.
 - [ ] Current claims use current sources and dates.
 - [ ] Output explains relations and warrants, not just topics.

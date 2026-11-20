@@ -1,5 +1,40 @@
 # SoK Output Contract
 
+## Mandatory Scaffold and Domain Judgment
+
+Every SoK result includes the scaffold used to produce it, regardless of task size
+or output format. Create it during framing and update it through source review;
+do not append a retrospective template to a finished answer.
+
+The scaffold must record, in proportion to the request:
+
+- Scope and reader goal, including relevant exclusions or assumptions.
+- Domain judgment: proposed and reviewed profile, the field's warrant standards,
+  and evidence-based reasons for retaining or changing the profile.
+- Core field-native elements and load-bearing relations.
+- Reviewed source references or locators, uncovered roles, and evidence limits.
+- Implications for the requested synthesis, architecture, evaluation, or learning
+  path, including consequential alternatives and uncertainties.
+
+Before higher-level synthesis, confirm that these entries are populated and
+grounded. Record a concise gate outcome with evidence references and limits.
+An unsupported profile remains preliminary and permits only correspondingly
+limited conclusions. This is an evidence and decision summary, not a transcript
+of private reasoning; CLI validation cannot certify the actual reasoning sequence.
+
+For file deliverables, retain `scaffold.md` separately from the requested result
+and link or attach it in the final response. A labeled appendix in a single-file
+deliverable is also acceptable. For chat-only requests, include the compact
+scaffold inline. Deliver the populated, updated scaffold actually consulted, not
+an empty generated canvas or a newly invented summary. Preserve material judgment
+revisions and their brief evidence-based reasons.
+
+Keep raw prompts, unnecessary personal context, private paths, run/work sidecars,
+and execution diagnostics out of the delivered companion. Removing this private
+machinery must preserve the substantive domain judgment and evidence limits.
+If the user asks only for a scaffold, that scaffold is the requested deliverable;
+no duplicate companion is needed.
+
 ## Semantic Obligations for Substantial Tasks
 
 A full SoK run must establish these findings before it chooses a public report shape:
@@ -26,7 +61,8 @@ Use [cli-workflow.md](cli-workflow.md) for executable resolution and artifact co
 and [agent-collaboration.md](agent-collaboration.md) for delegated, textbook, or corpus
 packages.
 
-Keep agent scaffolds and human-reader reports separate. Scaffolds may expose learner
+Keep agent scaffolds and human-reader reports separate, and deliver the scaffold
+companion under the contract above. Working scaffolds may expose learner
 profile, original goal, candidate lenses, assumptions, placeholders, rejected organizing
 forms, and quality-gate notes. Human-reader reports should hide that machinery, surface
 only interpretation-relevant scope notes, and replace scaffold placeholders with
@@ -215,7 +251,8 @@ claim support by itself.
 Follow [research-protocol.md](research-protocol.md#source-manifest-and-access) for
 bibliographic and acquisition metadata.
 
-For small requests, return only a short structure map, purpose-grouped source pointers
-when useful, a next-step path when requested, and a dated frontier or debate note only
+For small requests, return the compact used scaffold alongside a short structure
+map, purpose-grouped source pointers when useful, a next-step path when requested,
+and a dated frontier or debate note only
 when currentness matters. Specialized textbook, corpus, and delegated packages are
 defined in [agent-collaboration.md](agent-collaboration.md).

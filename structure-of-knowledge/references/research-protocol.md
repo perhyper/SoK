@@ -2,6 +2,10 @@
 
 ## Research Loop
 
+Start with the mandatory scaffold from `SKILL.md`. Record findings below in its
+domain judgment layer and review that layer before higher-level synthesis. Keep
+it current as the evidence changes and deliver it under the output contract.
+
 1. Establish names and boundaries through handbooks, textbooks, field
    encyclopedias, societies, venues, and graduate syllabi. Capture alternate
    names, subfields, historical terms, and a revisable domain profile.

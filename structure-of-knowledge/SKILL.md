@@ -21,15 +21,36 @@ The approach draws on Bruner's structure-of-knowledge curriculum tradition.
 - For delegation, textbook or corpus plans, or source downloads, also read
   [agent-collaboration.md](references/agent-collaboration.md).
 
-A narrow conceptual answer needs only the relevant guidance, not a CLI workspace
-or a full artifact package.
+A narrow conceptual answer may use a compact inline scaffold without a CLI
+workspace or a full artifact package. It must still satisfy the invariant below.
 
 Keep each user's sources, prompts, reports, and derived examples in their private task workspace. Do not copy them into shared project files, fixtures, documentation, or release artifacts.
+
+## Mandatory Scaffold Invariant
+
+Every SoK invocation must create a scaffold before substantive synthesis, including
+short answers and non-report deliverables. On continuation, reopen and update the
+existing scaffold before proceeding. Never reconstruct it only after the answer.
+
+Populate its domain judgment layer from source review and structure extraction:
+scope, revised domain profile and warrants, core elements and load-bearing
+relations, evidence references, and consequential uncertainties. Check this layer
+before choosing an architecture, applying an evaluative lens, or making higher-level
+recommendations. A field-name classification or empty CLI template does not pass.
+If evidence is insufficient, retain an explicitly preliminary judgment and limit
+the synthesis accordingly. Revise the layer when evidence changes.
+
+Deliver the actual scaffold used, updated to the final evidence state, alongside
+the requested result. Keep it a distinct labeled companion or appendix; for short
+chat answers include a compact inline scaffold. Follow the
+[scaffold contract](references/output-contract.md#mandatory-scaffold-and-domain-judgment)
+for minimum content and delivery. Separation from the report never means omission.
 
 ## Workflow
 
 1. **Frame the request.** Establish field, audience, entry point, depth, goal,
-   time budget, and format. Decompose broad fields into shared
+   time budget, language, and format. Create the scaffold at this stage.
+   Decompose broad fields into shared
    foundations and divergent paths. Ask one concise question only when ambiguity
    would materially change scope or architecture; otherwise state assumptions.
    Propose a revisable domain profile: formal, interpretive, empirical,
@@ -56,6 +77,7 @@ Keep each user's sources, prompts, reports, and derived examples in their privat
    fields, and measurement, uncertainty, and infrastructure in empirical ones.
    Distinguish prerequisites from fundamental ideas revisited at greater depth.
    Identify threshold concepts and misconceptions. Foundations may be difficult.
+   Populate and review the scaffold's domain judgment layer before proceeding.
 
 4. **Choose an architecture.** After source review and element extraction,
    compare at least two plausible organizing forms against the reader's goal.
@@ -72,9 +94,9 @@ Keep each user's sources, prompts, reports, and derived examples in their privat
    worked performances, and cases; contested fields need multiple lenses rather
    than an imposed hierarchy.
 
-6. **Compose and validate.** Keep working scaffolds separate from reader-facing
-   reports. Use `sok-report.json` as the downstream source of truth and HTML as
-   its public view. Preserve field-native elements; legacy concept/method arrays
+6. **Compose and validate.** Preserve the used scaffold as a required companion
+   to the reader-facing result. Use `sok-report.json` as the downstream source of
+   truth and HTML as its public view. Preserve field-native elements; legacy concept/method arrays
    are compatibility projections. Include literature, curriculum, frontier, and
    visual modules only when the goal warrants them. Relations require explicit
    author-owned data; do not infer them from layout, section order, or Mermaid.
@@ -88,3 +110,5 @@ Confirm that the artifact explains load-bearing relations and inquiry methods,
 not merely a topic list. Check dated currentness claims, usable source access,
 evidence support, and reader-fit architecture. Structured validation checks
 artifact contracts; the agent must still review the sources and reasoning.
+Verify that the domain judgment preceded higher-level synthesis and that the
+delivered scaffold is the one actually used, with working links or inline content.

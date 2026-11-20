@@ -8,6 +8,44 @@ fn version_identifies_the_rust_cli() {
 }
 
 #[test]
+fn init_preserves_a_separate_scaffold_when_the_report_is_replaced() {
+    for mode in ["research", "curriculum", "textbook", "model-tuning"] {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest_path = dir.path().join("init-run.json");
+        assert_eq!(
+            run_cli(vec![
+                "init".into(),
+                "--field".into(),
+                "synthetic field".into(),
+                "--mode".into(),
+                mode.into(),
+                "--out".into(),
+                dir.path().display().to_string(),
+                "--run-manifest".into(),
+                manifest_path.display().to_string(),
+            ])
+            .unwrap(),
+            0
+        );
+        let scaffold_path = dir.path().join("scaffold.md");
+        let report_path = dir.path().join("report.md");
+        let scaffold = fs::read_to_string(&scaffold_path).unwrap();
+        assert!(!scaffold.is_empty());
+        assert_eq!(fs::read_to_string(&report_path).unwrap(), scaffold);
+        fs::write(&report_path, "# Completed synthetic report\n").unwrap();
+        assert_eq!(fs::read_to_string(&scaffold_path).unwrap(), scaffold);
+
+        let manifest: run_manifest::RunManifest = report::read_json_file(&manifest_path).unwrap();
+        run_manifest::validate_run_manifest(&manifest).unwrap();
+        assert!(manifest.output_files.iter().any(|file| {
+            file.kind == "working-scaffold"
+                && fs::canonicalize(&file.path).unwrap()
+                    == fs::canonicalize(&scaffold_path).unwrap()
+        }));
+    }
+}
+
+#[test]
 fn agent_docs_resolve_and_verify_the_rust_cli() {
     let skill = fs::read_to_string(repo_path("structure-of-knowledge/SKILL.md")).unwrap();
     let collaboration = fs::read_to_string(repo_path(

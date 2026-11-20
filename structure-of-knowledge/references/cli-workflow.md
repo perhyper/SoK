@@ -24,6 +24,7 @@ SOK_CLI="${CODEX_HOME:-$HOME/.codex}/skills/structure-of-knowledge/bin/sok"
 
 Require the version suffix `(rust)`. If verification fails, report the limitation
 instead of using an unverified or stale executable.
+Installed skills contain only the compiled CLI, not Cargo sources.
 
 Before an unfamiliar command, run `"$SOK_CLI" <command> --help`; for ingestion,
 use `"$SOK_CLI" ingest last --help`. Follow the displayed flags rather than guessing.
@@ -32,7 +33,8 @@ also run through `cargo run --locked --manifest-path cli/Cargo.toml --bin sok --
 
 ## Artifact Lanes
 
-`init` creates a workspace with brief, tasks, report scaffold, source manifest,
+`init` creates a workspace with brief, tasks, a separate `scaffold.md`, a compatible
+`report.md` starting canvas, source manifest,
 downloads, notes, and logs. For example:
 
 ```bash
@@ -46,10 +48,19 @@ downloads, notes, and logs. For example:
 `ingest last`, which writes cataloged, non-supporting evidence candidates and
 **overwrites its output**. Keep reviewed evidence separately to avoid losing it.
 
-For an internal scaffold, use `scaffold`, maintain `sources.csv`, optionally
+For file-producing runs, create `scaffold.md` with `scaffold` or `init` before
+synthesis. Populate and consult its domain judgment layer, then write the requested
+result separately. Preserve `scaffold.md` while replacing the `report.md` starting
+canvas with the final narrative. For older workspaces with only `report.md`, save
+the working scaffold separately before composing the report. Short chat-only runs
+may use the inline scaffold defined in the output contract.
+
+For a working scaffold, use `scaffold`, maintain `sources.csv`, optionally
 ingest sources, then `lint --stage scaffold` and `export-json --stage scaffold`.
 Scaffold JSON may contain `internal_context`; do not render or deliver it as a
-finished report. `handoff-report` prepares it for another agent's completion.
+finished report. Deliver the populated Markdown scaffold as a labeled companion
+under the output contract; private scaffold JSON is not a substitute.
+`handoff-report` prepares it for another agent's completion.
 
 For a final report, supply field-specific Markdown, sources, and reviewed evidence:
 

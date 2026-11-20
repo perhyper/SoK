@@ -44,10 +44,10 @@ pub(crate) fn run_init(args: &[String]) -> Result<()> {
         &build_agent_brief(&field, &learner, &goal, &mode, weeks, &output_format),
     )?;
     write_text(out_dir.join("tasks.md"), &build_tasks(&mode))?;
-    write_text(
-        out_dir.join("report.md"),
-        &build_report_scaffold(&field, &learner, &goal, weeks),
-    )?;
+    let scaffold = build_report_scaffold(&field, &learner, &goal, weeks);
+    write_text(out_dir.join("scaffold.md"), &scaffold)?;
+    // Retain the historical report starting canvas without consuming the companion.
+    write_text(out_dir.join("report.md"), &scaffold)?;
     write_sources_csv(out_dir.join("sources.csv"))?;
 
     println!("Created SoK agent workspace: {}", out_dir.display());
@@ -55,6 +55,7 @@ pub(crate) fn run_init(args: &[String]) -> Result<()> {
         run_file("agent-pack", out_dir.join("sok-agent-pack.json")),
         run_file("agent-brief", out_dir.join("agent-brief.md")),
         run_file("tasks", out_dir.join("tasks.md")),
+        run_file("working-scaffold", out_dir.join("scaffold.md")),
         run_file("report-scaffold", out_dir.join("report.md")),
         run_file("source-manifest", out_dir.join("sources.csv")),
     ];
