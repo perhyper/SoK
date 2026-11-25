@@ -17,21 +17,26 @@ to research, explanation, learning, and downstream reuse.
 
 ## Cognitive Layers
 
-SoK was designed around multiple cognitive layers: levels of abstraction that
-connect a working scaffold to higher-level interpretations and adaptations. The
-scaffold establishes the research foundation—scope, sources, core elements,
-relationships, and evidence standards. Within it, domain judgment brings those
-findings together into an understanding of how the field holds together and what
-remains uncertain. Higher-level work builds on that understanding to choose an
-explanatory structure and adapt it into a report, curriculum, textbook plan, or
-research handoff for a particular reader and goal.
+SoK was designed with cognitive layers so that flexible, higher-level work stays
+grounded in a shared understanding of the field. The scaffold serves as the
+foundational source of truth: it records scope, reviewed evidence, core ideas,
+relationships, and the standards used to judge claims. Keeping this foundation
+explicit throughout the workflow helps the agent preserve evidence, assumptions,
+and uncertainty as it moves from research to interpretation and explanation.
 
-These layers support revision in both directions: new evidence can change the
-interpretation, while designing an explanation can reveal gaps that send the agent
-back to the scaffold. This makes SoK a layered research-reasoning system with its
-own organization, independent of any particular cognitive-architecture framework.
-The [research workflow](structure-of-knowledge/SKILL.md#workflow) describes how the
-agent moves between these levels.
+The higher layers let the agent reuse that understanding for flexible tasks shaped
+by the user's requirements and prompts, such as answering a question, comparing
+approaches, writing a report, or designing a curriculum. This separation supports
+different goals and formats while keeping the results traceable to their research
+foundation. New evidence or gaps revealed by a task can send the agent back to
+revise the scaffold and reconsider the work built on it.
+
+```mermaid
+flowchart LR
+    L1["Layer 1: Scaffold<br/>(evidence and field structure)"] --> L2["Layer 2: Synthesis<br/>(interpretation and explanation)"] --> L3["Layer 3: Adaptations<br/>(flexible tasks guided by user prompts)"]
+```
+
+See the [research workflow](structure-of-knowledge/SKILL.md#workflow) for details.
 
 ## What You Can Do with SoK
 
