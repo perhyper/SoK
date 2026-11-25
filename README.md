@@ -15,6 +15,24 @@ tradition: understanding a field involves its organizing ideas, their relationsh
 and the ways the field establishes and revises knowledge. SoK applies that approach
 to research, explanation, learning, and downstream reuse.
 
+## Cognitive Layers
+
+SoK was designed around multiple cognitive layers: levels of abstraction that
+connect a working scaffold to higher-level interpretations and adaptations. The
+scaffold establishes the research foundation—scope, sources, core elements,
+relationships, and evidence standards. Within it, domain judgment brings those
+findings together into an understanding of how the field holds together and what
+remains uncertain. Higher-level work builds on that understanding to choose an
+explanatory structure and adapt it into a report, curriculum, textbook plan, or
+research handoff for a particular reader and goal.
+
+These layers support revision in both directions: new evidence can change the
+interpretation, while designing an explanation can reveal gaps that send the agent
+back to the scaffold. This makes SoK a layered research-reasoning system with its
+own organization, independent of any particular cognitive-architecture framework.
+The [research workflow](structure-of-knowledge/SKILL.md#workflow) describes how the
+agent moves between these levels.
+
 ## What You Can Do with SoK
 
 | Goal | What SoK helps produce |
